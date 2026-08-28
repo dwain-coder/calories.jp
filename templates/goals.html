@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ t('goals') }} | {{ site_name }}{% endblock %}
+{% block content %}
+{% set media_slot = "goals" %}
+<h1>{{ t('goals') }}</h1>
+<p>{{ t('goals_intro') }}</p>
+{% include "partials/hero_media.html" %}
+
+<div class="card" id="goals" data-lang="{{ lang }}">
+  <div class="calc-controls goals-grid">
+    <label>{{ t('age') }}
+      <input type="number" id="g-age" value="30" min="15" max="100">
+    </label>
+    <label>{{ t('sex') }}
+      <select id="g-sex">
+        <option value="m">{{ t('male') }}</option>
+        <option value="f">{{ t('female') }}</option>
+      </select>
+    </label>
+    <label>{{ t('height_cm') }}
+      <input type="number" id="g-height" value="170" min="100" max="230">
+    </label>
+    <label>{{ t('weight_kg') }}
+      <input type="number" id="g-weight" value="65" min="30" max="250" step="0.5">
+    </label>
+    <label>{{ t('activity') }}
+      <select id="g-activity">
+        <option value="1.2">{{ t('act_sedentary') }}</option>
+        <option value="1.375" selected>{{ t('act_light') }}</option>
+        <option value="1.55">{{ t('act_moderate') }}</option>
+        <option value="1.725">{{ t('act_active') }}</option>
+      </select>
+    </label>
+    <label>{{ t('goal') }}
+      <select id="g-goal">
+        <option value="-500">{{ t('goal_lose') }}</option>
+        <option value="0" selected>{{ t('goal_maintain') }}</option>
+        <option value="300">{{ t('goal_gain') }}</option>
+      </select>
+    </label>
+  </div>
+
+  <p class="kcal-hero"><strong id="g-target">—</strong> <span class="unit">{{ t('kcal') }}</span>
+    <span class="per">/ {{ t('daily_target') }}</span></p>
+  <p class="calc-note" id="g-maint"></p>
+
+  <h2>{{ t('macro_targets') }}</h2>
+  <table class="nutrition-table">
+    <tbody>
+      <tr><td>{{ t('protein') }}</td><td id="g-p">—</td></tr>
+      <tr><td>{{ t('fat') }}</td><td id="g-f">—</td></tr>
+      <tr><td>{{ t('carbs') }}</td><td id="g-c">—</td></tr>
+    </tbody>
+  </table>
+</div>
+<script>window.GOALS_I18N = {maintenance: {{ t('maintenance') | tojson }}, kcal: {{ t('kcal') | tojson }}};</script>
+<script src="/static/goals.js" defer></script>
+{% endblock %}

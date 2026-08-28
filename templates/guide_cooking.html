@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ t('guide_cooking_title') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<nav class="breadcrumbs" aria-label="breadcrumbs">
+  {% for cname, curl in crumbs %}{% if curl %}<a href="{{ curl }}">{{ cname }}</a> ›{% else %}<span>{{ cname }}</span>{% endif %}{% endfor %}
+</nav>
+
+<article class="guide">
+  <h1>{{ t('guide_cooking_title') }}</h1>
+  <p class="guide-lead">{{ t('guide_cooking_lead', n=d.total) }}</p>
+  {% set media_slot = "guide-cooking" %}
+  {% include "partials/hero_media.html" %}
+  <p>{{ t('guide_cooking_why') }}</p>
+
+  <div class="card">
+    <div class="table-scroll">
+    <table class="nutrition-table">
+      <thead>
+        <tr><th>{{ t('name_col') }}</th><th>{{ t('lowest') }}</th><th>{{ t('highest') }}</th><th>{{ t('difference') }}</th></tr>
+      </thead>
+      <tbody>
+      {% for r in d.rows %}
+        <tr style="--c: {{ group_color(r.category) }}">
+          <td class="guide-food">
+            <span class="guide-dot" aria-hidden="true"></span>{{ r.base }}
+          </td>
+          <td><a href="/{{ lang }}/food/{{ r.low.slug }}">{{ r.low.prep }}</a>
+              <b>{{ r.low.kcal|round(0)|int }}</b></td>
+          <td><a href="/{{ lang }}/food/{{ r.high.slug }}">{{ r.high.prep }}</a>
+              <b>{{ r.high.kcal|round(0)|int }}</b></td>
+          <td class="guide-ratio">{{ r.ratio|round(1) }}{{ t('times') }}
+            <span class="guide-track" aria-hidden="true">
+              <span class="guide-fill" style="width: {{ (100 * r.ratio / d.rows[0].ratio)|round(0)|int }}%"></span>
+            </span>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="calc-note">{{ t('prep_note') }}</p>
+  </div>
+
+  <div class="insight insight-warn">{{ t('guide_cooking_caveat') }}</div>
+</article>
+{% endblock %}

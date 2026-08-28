@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ label }}{{ 'のカロリー一覧・比較' if lang == 'ja' else ' — Calories Compared' }} | {{ site_name }}{% endblock %}
+{% block content %}
+<nav class="breadcrumbs" aria-label="breadcrumbs">
+  {% for cname, curl in crumbs %}{% if curl %}<a href="{{ curl }}">{{ cname }}</a> ›{% else %}<span>{{ cname }}</span>{% endif %}{% endfor %}
+</nav>
+
+<h1>{{ label }}{{ 'のカロリー一覧' if lang == 'ja' else ' — calories compared' }}</h1>
+<p class="alt-name">{{ t('foods_in_category', n=d.n) }}{% if d.kcal_min is not none %} · {{ d.kcal_min|round(0)|int }}–{{ d.kcal_max|round(0)|int }} {{ t('kcal') }} / {{ t('per_100g') }}{% endif %}</p>
+{% if d.has_nutrition %}<p class="calc-note">{{ t('compare_intro') }}</p>{% endif %}
+
+<div class="card">
+<div class="table-scroll">
+<table class="nutrition-table sortable" id="cat-table">
+  <thead>
+    <tr>
+      <th data-sort="text">{{ t('name_col') }}</th>
+      {% if d.has_nutrition %}
+      <th data-sort="num">{{ t('calories') }}</th>
+      <th data-sort="num">{{ t('protein') }}</th>
+      <th data-sort="num">{{ t('fat') }}</th>
+      <th data-sort="num">{{ t('carbs') }}</th>
+      {% endif %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in d.rows %}
+    <tr>
+      <td><a href="/{{ lang }}/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">{{ r.name }}</a></td>
+      {% if d.has_nutrition %}
+      <td data-v="{{ r.energy_kcal if r.energy_kcal is not none else -1 }}">{{ r.energy_kcal|round(0)|int if r.energy_kcal is not none else '—' }}</td>
+      <td data-v="{{ r.protein_g if r.protein_g is not none else -1 }}">{{ r.protein_g|round(1) if r.protein_g is not none else '—' }}</td>
+      <td data-v="{{ r.fat_g if r.fat_g is not none else -1 }}">{{ r.fat_g|round(1) if r.fat_g is not none else '—' }}</td>
+      <td data-v="{{ r.carbohydrate_g if r.carbohydrate_g is not none else -1 }}">{{ r.carbohydrate_g|round(1) if r.carbohydrate_g is not none else '—' }}</td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+<script src="/static/sorttable.js" defer></script>
+{% endblock %}

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ site_name }}{% endblock %}</title>
+{% if meta_description is defined and meta_description %}<meta name="description" content="{{ meta_description }}">{% endif %}
+{% if noindex is defined and noindex %}<meta name="robots" content="noindex,follow">{% endif %}
+{% if canonical is defined %}<link rel="canonical" href="{{ canonical }}">{% endif %}
+{% if hreflangs is defined %}{% for hl, url in hreflangs %}
+<link rel="alternate" hreflang="{{ hl }}" href="{{ url }}">{% endfor %}{% endif %}
+<meta property="og:site_name" content="{{ site_name }}">
+<meta property="og:type" content="article">
+<meta property="og:title" content="{{ self.title() }}">
+{% if meta_description is defined and meta_description %}<meta property="og:description" content="{{ meta_description }}">{% endif %}
+{% if canonical is defined %}<meta property="og:url" content="{{ canonical }}">{% endif %}
+<meta property="og:locale" content="{{ 'ja_JP' if lang == 'ja' else 'en_US' }}">
+<meta name="theme-color" content="#FBFBF8">
+{% if jsonld is defined %}{% for j in jsonld %}
+<script type="application/ld+json">{{ j | safe }}</script>{% endfor %}{% endif %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/site.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='2' fill='%23B7282E'/></svg>">
+</head>
+<body>
+<a class="skip-link" href="#main">{{ t('skip_to_content') }}</a>
+<header class="site-header">
+  <div class="header-row">
+    <a class="brand" href="/{{ lang }}/">{% set parts = site_name.rsplit(".", 1) %}{{ parts[0] }}{% if parts|length > 1 %}<span class="brand-tld">.{{ parts[1] }}</span>{% endif %}</a>
+    <form class="header-search suggest-box" action="/{{ lang }}/search" method="get" role="search">
+      <input type="search" name="q" value="{{ q if q is defined else '' }}" placeholder="{{ t('search_placeholder') }}" aria-label="{{ t('search') }}" data-suggest="{{ lang }}" autocomplete="off">
+      <button type="submit">{{ t('search') }}</button>
+    </form>
+    <nav class="header-nav">
+      <a href="/{{ lang }}/foods">{{ t('food_database') }}</a>
+      <a href="/{{ lang }}/meal-calculator">{{ t('meal_calculator') }}</a>
+      <a href="/{{ lang }}/analyzer">{{ t('ai_analyzer') }}</a>
+      <a href="/{{ lang }}/goals">{{ t('goals') }}</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap" id="main">
+{% block content %}{% endblock %}
+</main>
+<footer class="site-footer">
+  <div class="wrap footer-cols">
+    <div>
+      <p class="footer-brand">{{ site_name }}</p>
+      <p>{{ t('footer_note') }}</p>
+    </div>
+    <div>
+      <h3>{{ t('tools') }}</h3>
+      <ul>
+        <li><a href="/{{ lang }}/meal-calculator">{{ t('meal_calculator') }}</a></li>
+        <li><a href="/{{ lang }}/analyzer">{{ t('ai_analyzer') }}</a></li>
+        <li><a href="/{{ lang }}/goals">{{ t('goals') }}</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3>{{ t('explore') }}</h3>
+      <ul>
+        <li><a href="/{{ lang }}/foods">{{ t('food_database') }}</a></li>
+        <li><a href="/{{ lang }}/guides/cooking-and-calories">{{ t('guide_cooking_title') }}</a></li>
+        <li><a href="/{{ lang }}/">{{ t('browse_categories') }}</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3>{{ t('about_data') }}</h3>
+      <ul>
+        <li><a href="/{{ lang }}/sources">{{ t('data_sources') }}</a></li>
+        <li><a href="/sitemap.xml">Sitemap</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+<script src="/static/suggest.js" defer></script>
+<script src="/static/ambient.js" defer></script>
+</body>
+</html>

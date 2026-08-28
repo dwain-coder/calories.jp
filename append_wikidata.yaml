@@ -1,0 +1,11 @@
+  - name: wikidata_japan_foods
+    url: "https://query.wikidata.org/sparql"
+    filename: "wikidata_japan_foods.json"
+    source: "Wikidata (SPARQL)"
+    downloader: "http"
+    license: "CC0 / Public Domain"
+    extract: false
+    estimated_size_mb: 1
+    priority: 8
+    enabled: true
+    notes: "API scrape of food instances with country of origin Japan (CC0 100% legal)."

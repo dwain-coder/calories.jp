@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% set meta_description = t('tagline') %}
+{% block title %}{{ site_name }} — {{ t('tagline') }}{% endblock %}
+{% block content %}
+{% set media_slot = "home-hero" %}
+<div class="hero-split">
+  <section class="hero">
+    <h1>{{ t('tagline_a') }} <span class="hl">{{ t('tagline_b') }}</span></h1>
+    <p class="hero-sub">{{ t('footer_note') }}</p>
+    <form class="hero-search suggest-box" action="/{{ lang }}/search" method="get" role="search">
+      <input type="search" name="q" placeholder="{{ t('search_placeholder') }}" aria-label="{{ t('search') }}" data-suggest="{{ lang }}" autocomplete="off">
+      <button type="submit">{{ t('search') }}</button>
+    </form>
+    <p class="examples">{{ t('try_examples') }}
+      <a href="/{{ lang }}/search?q=にわとり むね">鶏むね肉</a>
+      <a href="/{{ lang }}/search?q=精白米">白米</a>
+      <a href="/{{ lang }}/search?q=ぶた ロース">豚ロース</a>
+      <a href="/{{ lang }}/search?q=みそ">みそ</a>
+    </p>
+  </section>
+  {% include "partials/hero_media.html" %}
+</div>
+
+<section class="feature-strip">
+  <div class="feature">
+    <span class="feature-mark" aria-hidden="true">実測</span>
+    <div><h3>{{ t('feat_measured') }}</h3><p>{{ t('feat_measured_body') }}</p></div>
+  </div>
+  <div class="feature">
+    <span class="feature-mark" aria-hidden="true">出典</span>
+    <div><h3>{{ t('feat_source') }}</h3><p>{{ t('feat_source_body') }}</p></div>
+  </div>
+  <div class="feature">
+    <span class="feature-mark" aria-hidden="true">無料</span>
+    <div><h3>{{ t('feat_free') }}</h3><p>{{ t('feat_free_body') }}</p></div>
+  </div>
+</section>
+
+{% if data.atlas_count >= 200 %}
+<section class="atlas-section" id="atlas" data-lang="{{ lang }}" data-untranslated="{{ t('atlas_untranslated') }}">
+  <div class="atlas-head">
+    <h2>{{ t('atlas_title') }}</h2>
+    <p class="atlas-sub">{{ t('atlas_sub', n='<span class="atlas-count">…</span>') | safe }}</p>
+  </div>
+  <div class="atlas-stage">
+    <canvas aria-label="{{ t('atlas_title') }}" role="img"></canvas>
+    <span class="atlas-axis atlas-axis-p">{{ t('protein') }}</span>
+    <span class="atlas-axis atlas-axis-f">{{ t('fat') }}</span>
+    <span class="atlas-axis atlas-axis-c">{{ t('carbs') }}</span>
+    <div class="atlas-tip" hidden>
+      <span class="atlas-tip-name"></span>
+      <span class="atlas-tip-meta"></span>
+    </div>
+    <p class="atlas-fallback">{{ t('atlas_fallback') }}</p>
+  </div>
+  <div class="atlas-legend" role="group" aria-label="{{ t('browse_categories') }}"></div>
+  <p class="calc-note">{{ t('atlas_note') }}</p>
+</section>
+{% endif %}
+
+{% if data.categories %}
+<section>
+  <h2>{{ t('browse_categories') }}</h2>
+  <ul class="chip-row">
+    {% for c in data.categories %}
+    {% set cslug = cat_slug(lang, c.category) %}
+    {% if cslug %}
+    <li><a href="/{{ lang }}/category/{{ cslug | urlencode }}" style="--c: {{ group_color(c.category) }}">
+      <span class="chip-glyph" aria-hidden="true">{{ group_emoji(c.category) }}</span>
+      {{ mext_groups_en.get(c.category, c.category) if lang == 'en' else c.category }}<span class="count">{{ c.c }}</span></a></li>
+    {% endif %}
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="home-tools">
+  <a class="tool-card card" href="/{{ lang }}/meal-calculator">
+    <h2>{{ t('meal_calculator') }}</h2>
+    <p>{{ t('meal_calc_intro') }}</p>
+  </a>
+  <a class="tool-card card" href="/{{ lang }}/analyzer">
+    <h2>{{ t('ai_analyzer') }}</h2>
+    <p>{{ t('analyzer_intro') }}</p>
+  </a>
+  <a class="tool-card card" href="/{{ lang }}/goals">
+    <h2>{{ t('goals') }}</h2>
+    <p>{{ t('goals_intro') }}</p>
+  </a>
+</section>
+
+{% if data.foods %}
+<section>
+  <h2>{{ t('popular_foods') }}</h2>
+  <ul class="tile-list">
+    {% for f in data.foods %}
+    <li><a href="/{{ lang }}/food/{{ f.slug }}"><span>{{ f.name }}</span>{% if f.energy_kcal is not none %}<span class="kcal">{{ f.energy_kcal|round(0)|int }} kcal</span>{% endif %}</a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if data.dishes %}
+<section>
+  <h2>{{ t('regional_dishes') }}</h2>
+  <ul class="tile-list">
+    {% for f in data.dishes %}
+    <li><a href="/{{ lang }}/dish/{{ f.slug }}"><span>{{ f.name }}</span></a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+<script src="/static/atlas.js" defer></script>
+{% endblock %}

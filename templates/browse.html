@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ t('food_database') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('food_database') }}</h1>
+<p class="alt-name">{{ t('showing', a=((d.page - 1) * d.size + 1), b=([d.page * d.size, d.total]|min), n=d.total) }}</p>
+
+<form class="browse-controls" method="get" action="/{{ lang }}/foods">
+  <label>{{ t('sort_by') }}
+    <select name="sort" onchange="this.form.submit()">
+      <option value="name"{% if sort == 'name' %} selected{% endif %}>{{ t('sort_name') }}</option>
+      <option value="kcal_desc"{% if sort == 'kcal_desc' %} selected{% endif %}>{{ t('sort_kcal_desc') }}</option>
+      <option value="kcal_asc"{% if sort == 'kcal_asc' %} selected{% endif %}>{{ t('sort_kcal_asc') }}</option>
+      <option value="protein"{% if sort == 'protein' %} selected{% endif %}>{{ t('sort_protein') }}</option>
+    </select>
+  </label>
+  <noscript><button type="submit">{{ t('sort_by') }}</button></noscript>
+</form>
+
+<div class="card">
+<div class="table-scroll">
+<table class="nutrition-table">
+  <thead><tr><th>{{ t('name_col') }}</th><th>{{ t('calories') }}</th><th>{{ t('protein') }}</th><th>{{ t('fat') }}</th><th>{{ t('carbs') }}</th></tr></thead>
+  <tbody>
+  {% for r in d.rows %}
+    <tr>
+      <td><a href="/{{ lang }}/food/{{ r.slug }}">{{ r.name }}</a></td>
+      <td>{{ r.energy_kcal|round(0)|int if r.energy_kcal is not none else '—' }}</td>
+      <td>{{ r.protein_g|round(1) if r.protein_g is not none else '—' }}</td>
+      <td>{{ r.fat_g|round(1) if r.fat_g is not none else '—' }}</td>
+      <td>{{ r.carbohydrate_g|round(1) if r.carbohydrate_g is not none else '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+
+<nav class="pager" aria-label="pagination">
+  {% if prev_url %}<a rel="prev" href="{{ prev_url }}">← {{ t('prev') }}</a>{% endif %}
+  <span class="pager-pos">{{ d.page }} / {{ d.pages }}</span>
+  {% if next_url %}<a rel="next" href="{{ next_url }}">{{ t('next') }} →</a>{% endif %}
+</nav>
+{% endblock %}

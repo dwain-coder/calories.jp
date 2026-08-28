@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% set meta_description = t('sources_page_title') %}
+{% block title %}{{ t('sources_page_title') }} | {{ site_name }}{% endblock %}
+{% block content %}
+{% set media_slot = "sources" %}
+<h1>{{ t('sources_page_title') }}</h1>
+{% include "partials/hero_media.html" %}
+{% for source, attr in attribution.items() %}
+<section class="card">
+  <h2>{{ source }}</h2>
+  <p>{{ attr[lang] }}</p>
+  <p><a href="{{ attr.url }}" rel="noopener" target="_blank">{{ attr.url }}</a></p>
+</section>
+{% endfor %}
+<p class="calc-note">{{ t('footer_note') }}</p>
+{% endblock %}

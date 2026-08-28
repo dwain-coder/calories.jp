@@ -1,0 +1,12 @@
+<div class="provenance card">
+  <h2>{{ t('source') }}</h2>
+  <p class="source-name">{{ d.item.source }}</p>
+  <p class="license">{{ t('license') }}: {{ d.license }}</p>
+  {% set attr = seo.ATTRIBUTION.get(d.item.source) %}
+  {% if attr %}
+  <p class="attribution"><a href="{{ attr.url }}" rel="noopener" target="_blank">{{ attr[lang] }}</a></p>
+  {% endif %}
+  {% if d.names.get(lang, {}).get('kind') == 'translated' %}
+  <p class="mt-note">※ {{ t('machine_translated') }}</p>
+  {% endif %}
+</div>

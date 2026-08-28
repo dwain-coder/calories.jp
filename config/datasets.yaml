@@ -1,0 +1,139 @@
+datasets:
+  # Fully Free and Public Domain Sources
+  - name: usda_foodkeeper
+    url: "https://www.fsis.usda.gov/shared/data/EN/foodkeeper.json"
+    filename: "foodkeeper.json"
+    source: "USDA FSIS"
+    downloader: "http"
+    ignore_robots_txt: true
+    license: "CC0 / Public Domain"
+    extract: false
+    estimated_size_mb: 5
+    priority: 1
+    enabled: true
+    notes: "Raw shelf-life numbers for over 650 items."
+
+  - name: usda_fooddata_central
+    url: "https://fdc.nal.usda.gov/fdc-datasets/FoodData_Central_foundation_food_json_2026-04-30.zip"
+    filename: "FoodData_Central.zip"
+    source: "USDA FoodData Central"
+    downloader: "http"
+    license: "CC0 / Public Domain"
+    extract: true
+    extraction_type: "zip"
+    estimated_size_mb: 20
+    priority: 2
+    enabled: true
+    notes: "Public domain source for foundational nutritional data."
+
+  - name: openfoodfacts
+    url: "https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv"
+    filename: "en.openfoodfacts.org.products.csv"
+    source: "OpenFoodFacts"
+    downloader: "stream"
+    license: "ODbL"
+    extract: false
+    estimated_size_mb: 500
+    priority: 6
+    enabled: true
+    notes: "Massive barcode and nutrition dump (streamed and filtered for Japanese niche)."
+
+  - name: tokyo_nerima_food_labeling
+    url: "https://www.city.nerima.tokyo.jp/hokenfukushi/hoken/shokuhineisei/shokuhinhyoji/shokuhinhyouji/kigenhyoji.html"
+    filename: "nerima_kigenhyoji.md"
+    source: "Tokyo Nerima Ward"
+    downloader: "firecrawl"
+    firecrawl_mode: "crawl"
+    crawl_limit: 5
+    license: "Public Guidelines"
+    extract: false
+    estimated_size_mb: 2
+    priority: 5
+    enabled: true
+    notes: "Prefectural manual on food shelf-life setting."
+
+  - name: mext_food_composition_2023
+    url: "https://www.mext.go.jp/content/20260327-mxt_kagsei-mext-000029402_02.xlsx"
+    filename: "mext_00001_011.xlsx"
+    source: "MEXT"
+    downloader: "http"
+    license: "Government Standard Terms of Use (Requires Attribution)"
+    extract: false
+    estimated_size_mb: 20
+    priority: 3
+    enabled: true
+    notes: "Japanese Standard Tables of Food Composition (2023)"
+
+  - name: caa_food_labeling_standards
+    url: "https://www.caa.go.jp/policies/policy/food_labeling/food_labeling_act/"
+    filename: "food_labeling_standards"
+    source: "Consumer Affairs Agency"
+    downloader: "firecrawl"
+    license: "Government Standard Terms of Use"
+    extract: false
+    estimated_size_mb: 1
+    priority: 4
+    enabled: true
+    notes: "Official definitions between use-by and best-before dates scraped to Markdown."
+
+  # Government Principles & Guidelines
+  - name: maff_refrigerator_guide
+    url: "https://www.maff.go.jp/j/syoku/syoku_iku/magazine/41.html" 
+    filename: "maff_refrigerator_guide"
+    source: "MAFF"
+    downloader: "firecrawl"
+    license: "Government Standard Terms of Use"
+    extract: false
+    estimated_size_mb: 1
+    priority: 5
+    enabled: true
+    notes: "MAFF Refrigerator Smart Usage guide scraped to Markdown."
+
+  - name: maff_regional_cuisines
+    url: "https://www.maff.go.jp/j/keikaku/syokubunka/k_ryouri/"
+    filename: "maff_regional_cuisines"
+    source: "MAFF Our Regional Cuisines"
+    downloader: "http"
+    license: "Government Standard Terms of Use (Requires Attribution)"
+    extract: false
+    estimated_size_mb: 5
+    priority: 5
+    enabled: true
+    throttle_seconds: 1.0
+    notes: "1,365 regional dishes (47 prefectures) scraped from HTML. Text only, no embedded media. Set maff_areas/max_dishes for phased runs. Crawled by run_maff_cuisines.py."
+
+  - name: fda_food_code
+    url: "https://www.fda.gov/food/fda-food-code/food-code-2022"
+    filename: "fda_food_code.md"
+    source: "US FDA"
+    downloader: "firecrawl"
+    license: "Public Domain"
+    extract: false
+    estimated_size_mb: 2
+    priority: 4
+    enabled: true
+    notes: "US FDA Food Code 2022 for compliance checking."
+
+  - name: wikipedia_ja_food
+    url: "https://ja.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=Category:%E6%97%A5%E6%9C%AC%E3%81%AE%E9%A3%9F%E6%96%87%E5%8C%96&cmlimit=500&format=json"
+    filename: "wikipedia_ja_food.json"
+    source: "Wikipedia (JA)"
+    downloader: "http"
+    license: "CC BY-SA 4.0"
+    extract: false
+    estimated_size_mb: 1
+    priority: 7
+    enabled: true
+    notes: "API scrape of Japanese food culture categories."
+
+  - name: wikidata_japan_foods
+    url: "https://query.wikidata.org/sparql"
+    filename: "wikidata_japan_foods.json"
+    source: "Wikidata (SPARQL)"
+    downloader: "http"
+    license: "CC0 / Public Domain"
+    extract: false
+    estimated_size_mb: 1
+    priority: 8
+    enabled: true
+    notes: "API scrape of food instances with country of origin Japan (CC0 100% legal)."

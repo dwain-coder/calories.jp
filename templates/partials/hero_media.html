@@ -1,0 +1,35 @@
+{# Photographs and video for non-data pages only. Nothing renders when the
+   asset is absent, so the layout never depends on either. #}
+{% set v = media_video(media_slot, lang) %}
+{% set m = media_get(media_slot, lang) %}
+
+{% if v %}
+<div class="framed-media">
+  <figure class="circle-frame">
+    {% if v.kind == 'file' %}
+      {# Same origin: no third-party request, no cookies, no consent banner. #}
+      <video {% if v.poster %}poster="{{ v.poster }}"{% endif %}
+             muted loop playsinline preload="metadata" data-ambient
+             style="object-position: {{ v.focus }}"
+             {% if v.title %}aria-label="{{ v.title }}"{% endif %}>
+        <source src="{{ v.src }}" type="video/mp4">
+      </video>
+    {% else %}
+      <iframe src="{{ v.url }}" title="{{ v.title }}" loading="lazy"
+              referrerpolicy="strict-origin-when-cross-origin"
+              allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"
+              allowfullscreen></iframe>
+    {% endif %}
+  </figure>
+</div>
+{% elif m %}
+<div class="framed-media">
+  <figure class="circle-frame">
+    <picture>
+      {% if m.webp %}<source srcset="{{ m.webp }}" type="image/webp">{% endif %}
+      <img src="{{ m.src }}" alt="{{ m.alt }}" loading="lazy" decoding="async"
+           style="object-position: {{ m.focus }}">
+    </picture>
+  </figure>
+</div>
+{% endif %}

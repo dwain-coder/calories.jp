@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ t('search_results_for') }} {{ q }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('search_results_for') }} “{{ q }}”</h1>
+{% if results %}
+<ul class="result-list">
+  {% for r in results %}
+  <li class="card result">
+    <a href="/{{ lang }}/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">
+      <span class="result-title">{{ r.name }}</span>
+      {% if r.energy_kcal is not none %}<span class="kcal">{{ r.energy_kcal|round(0)|int }} kcal / 100g</span>{% endif %}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% elif q %}
+<p class="no-data">{{ t('no_results') }}</p>
+{% endif %}
+{% endblock %}

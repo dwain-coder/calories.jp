@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% set meta_description = page.meta_description %}
+{% block title %}{{ page.title }} | {{ site_name }}{% endblock %}
+{% block content %}
+<nav class="breadcrumbs" aria-label="breadcrumbs">
+  {% for cname, curl in crumbs %}{% if curl %}<a href="{{ curl }}">{{ cname }}</a> ›{% else %}<span>{{ cname }}</span>{% if not loop.last %} ›{% endif %}{% endif %}{% endfor %}
+</nav>
+
+<article class="dish-page">
+  <h1>{{ name }}</h1>
+  {% set other_name = d.names.get(other_lang, {}).get('primary') %}
+  {% if other_name %}<p class="alt-name">{{ t('japanese_name') if other_lang == 'ja' else t('english_name') }}: {{ other_name }}</p>{% endif %}
+  <p class="alt-name">{{ t('region') }}: {{ d.item.category }}</p>
+
+  {% if d.show_nutrition %}
+  <section class="card">
+    <h2>{{ t('nutrition_facts') }}</h2>
+    <p class="kcal-hero"><strong>{{ d.computed.totals.get('energy_kcal', 0)|round(0)|int }}</strong>
+      <span class="unit">{{ t('kcal') }}</span>
+      {% if d.jdi8 is not none %}<span class="jdi8-badge">{{ t('jdi8') }} <b>{{ d.jdi8 }}/8</b></span>{% endif %}
+    </p>
+    {% if d.pfc %}
+    <div class="pfc" role="img" aria-label="{{ t('pfc_label') }}: {{ t('protein') }} {{ d.pfc.p }}%, {{ t('fat') }} {{ d.pfc.f }}%, {{ t('carbs') }} {{ d.pfc.c }}%">
+      <div class="pfc-bar">
+        <span class="pfc-p" style="width: {{ d.pfc.p }}%"></span><span class="pfc-f" style="width: {{ d.pfc.f }}%"></span><span class="pfc-c" style="width: {{ d.pfc.c }}%"></span>
+      </div>
+      <div class="pfc-legend">
+        <span class="lp"><i></i>{{ t('protein') }} <b>{{ d.pfc.p }}%</b></span>
+        <span class="lf"><i></i>{{ t('fat') }} <b>{{ d.pfc.f }}%</b></span>
+        <span class="lc"><i></i>{{ t('carbs') }} <b>{{ d.pfc.c }}%</b></span>
+      </div>
+    </div>
+    {% endif %}
+    <div class="table-scroll">
+    <table class="nutrition-table">
+      <tbody>
+        <tr><td>{{ t('protein') }}</td><td>{{ d.computed.totals.get('protein_g', 0)|round(1) }} g</td></tr>
+        <tr><td>{{ t('fat') }}</td><td>{{ d.computed.totals.get('fat_g', 0)|round(1) }} g</td></tr>
+        <tr><td>{{ t('carbs') }}</td><td>{{ d.computed.totals.get('carbohydrate_g', 0)|round(1) }} g</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="calc-note">
+      {% if d.computed.n_resolved < d.computed.n_total %}
+        {{ t('computed_partial', n=d.computed.n_resolved, m=d.computed.n_total) }}
+      {% else %}
+        {{ t('computed_note') }}
+      {% endif %}
+    </p>
+    <details>
+      <summary>{{ t('ingredients') }} ({{ t('calories') }})</summary>
+      <div class="table-scroll">
+      <table class="nutrition-table">
+        <tbody>
+        {% for b in d.breakdown %}
+          <tr>
+            <td>{% if b.slug %}<a href="/{{ lang }}/food/{{ b.slug }}">{{ b.raw_name }}</a>{% else %}{{ b.raw_name }}{% endif %}</td>
+            <td>{{ b.grams|round(0)|int }} g</td>
+            <td>{{ b.kcal|round(0)|int }} kcal</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </details>
+  </section>
+  {% endif %}
+
+  {% if d.dish.recipe_ingredients %}
+  <section class="card">
+    <h2>{{ t('ingredients') }}</h2>
+    <div class="table-scroll">
+    <table class="nutrition-table">
+      <tbody>
+      {% for line in d.dish.recipe_ingredients.splitlines() if line.strip() %}
+        {% set parts = line.split('\t') %}
+        <tr><td>{{ parts[0] }}</td><td>{{ parts[1] if parts|length > 1 else '' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if d.dish.recipe_steps %}
+  <section class="card">
+    <h2>{{ t('steps') }}</h2>
+    <ol class="steps">
+      {% for s in d.dish.recipe_steps.splitlines() if s.strip() %}
+      <li>{{ s.strip().lstrip('0123456789. ') }}</li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+
+  {% for key, label in [('history', 'history'), ('occasion', 'occasion'), ('how_to_eat', 'how_to_eat')] %}
+    {% if d.dish.get(key) %}
+    <section class="card prose">
+      <h2>{{ t(label) }}</h2>
+      <p>{{ d.dish[key] }}</p>
+    </section>
+    {% endif %}
+  {% endfor %}
+
+  {% if d.related %}
+  <section class="related">
+    <h2>{{ t('related_foods') }}</h2>
+    <ul class="related-list">
+      {% for r in d.related %}
+      <li><a href="/{{ lang }}/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">{{ r.name }}</a></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% include "partials/attribution.html" %}
+</article>
+{% endblock %}

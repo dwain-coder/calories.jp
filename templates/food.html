@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% set meta_description = page.meta_description %}
+{% block title %}{{ page.title }} | {{ site_name }}{% endblock %}
+{% block content %}
+<nav class="breadcrumbs" aria-label="breadcrumbs">
+  {% for cname, curl in crumbs %}{% if curl %}<a href="{{ curl }}">{{ cname }}</a> ›{% else %}<span>{{ cname }}</span>{% if not loop.last %} ›{% endif %}{% endif %}{% endfor %}
+</nav>
+
+<article class="food-page">
+  <h1>{{ name }}</h1>
+  {% if d.qualified_name and d.qualified_name != name %}
+  <p class="qualified-name" title="{{ t('qualified_name_note') }}">{{ d.qualified_name }}</p>
+  {% endif %}
+  {% set other_name = d.names.get(other_lang, {}).get('primary') %}
+  {% if other_name %}<p class="alt-name" lang="{{ other_lang }}">{{ t('japanese_name') if other_lang == 'ja' else t('english_name') }}: {{ other_name }}</p>{% endif %}
+
+  {% if d.nutrition %}
+  <div class="food-hero" style="--c: {{ group_color(d.item.category) }}">
+    <div class="food-hero-figure">
+      {{ pfc_donut(d.pfc, 132, d.nutrition.energy_kcal) | safe }}
+      {{ fingerprint(d.nutrients, d.item.category, 168, t('nutrient_fingerprint')) | safe }}
+    </div>
+    <div class="food-hero-body">
+      <p class="kcal-hero">
+        <strong>{{ d.nutrition.energy_kcal|round(0)|int if d.nutrition.energy_kcal is not none else '—' }}</strong>
+        <span class="unit">{{ t('kcal') }}</span>
+        <span class="per">/ {{ t('per_100g') }}</span>
+        {% if d.jdi8 is not none %}<span class="jdi8-badge">{{ t('jdi8') }} <b>{{ d.jdi8 }}/8</b></span>{% endif %}
+      </p>
+
+      {% if d.pfc %}
+      <div class="pfc" role="img" aria-label="{{ t('pfc_label') }}: {{ t('protein') }} {{ d.pfc.p }}%, {{ t('fat') }} {{ d.pfc.f }}%, {{ t('carbs') }} {{ d.pfc.c }}%">
+        <div class="pfc-bar">
+          <span class="pfc-p" style="width: {{ d.pfc.p }}%"></span><span class="pfc-f" style="width: {{ d.pfc.f }}%"></span><span class="pfc-c" style="width: {{ d.pfc.c }}%"></span>
+        </div>
+        <div class="pfc-legend">
+          <span class="lp"><i></i>{{ t('protein') }} <b>{{ d.pfc.p }}%</b></span>
+          <span class="lf"><i></i>{{ t('fat') }} <b>{{ d.pfc.f }}%</b></span>
+          <span class="lc"><i></i>{{ t('carbs') }} <b>{{ d.pfc.c }}%</b></span>
+        </div>
+      </div>
+      {% endif %}
+      {% if d.nutrients %}<p class="fingerprint-note">{{ t('fingerprint_note') }}</p>{% endif %}
+    </div>
+  </div>
+
+  {% set calc_data = (dict(d.nutrition, salt_g=d.salt_g) if d.salt_g is not none else d.nutrition) | tojson %}
+  {% include "partials/calculator.html" %}
+
+  {% if d.preps %}
+  <section class="card">
+    <h2>{{ t('prep_compare') }}</h2>
+    <div class="table-scroll">
+    <table class="nutrition-table">
+      <thead><tr><th>{{ t('preparation') }}</th><th>{{ t('calories') }}</th><th>{{ t('protein') }}</th><th>{{ t('fat') }}</th><th>{{ t('carbs') }}</th></tr></thead>
+      <tbody>
+      {% for v in d.preps %}
+        <tr{% if v.is_current %} class="row-current"{% endif %}>
+          <td>{% if v.is_current %}<strong>{{ v.prep }}</strong> <span class="here-badge">{{ t('this_page') }}</span>{% else %}<a href="/{{ lang }}/food/{{ v.slug }}">{{ v.prep }}</a>{% endif %}</td>
+          <td>{{ v.energy_kcal|round(0)|int if v.energy_kcal is not none else '—' }}</td>
+          <td>{{ v.protein_g|round(1) if v.protein_g is not none else '—' }}</td>
+          <td>{{ v.fat_g|round(1) if v.fat_g is not none else '—' }}</td>
+          <td>{{ v.carbohydrate_g|round(1) if v.carbohydrate_g is not none else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="calc-note">{{ t('prep_note') }}</p>
+  </section>
+  {% endif %}
+
+  {% if d.nutrients %}
+  <details class="card nutrients-detail">
+    <summary>{{ t('full_nutrients') }} ({{ d.nutrients|length }})</summary>
+    <div class="table-scroll">
+    <table class="nutrition-table">
+      <tbody>
+      {% for nrow in d.nutrients %}
+        <tr>
+          <td>{{ nrow.name }}{% if lang == 'en' and nutrient_labels_en.get(nrow.code) %} <span class="nl-en">({{ nutrient_labels_en[nrow.code] }})</span>{% endif %}</td>
+          <td>{{ nrow.amount if nrow.amount is not none else '—' }} {{ nrow.unit or '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </details>
+  {% endif %}
+
+  {% if faq %}
+  <section class="card faq-block">
+    <h2>{{ t('faq_heading') }}</h2>
+    {% for q, a in faq %}
+    <details class="faq-item"{% if loop.first %} open{% endif %}>
+      <summary>{{ q }}</summary>
+      <p>{{ a }}</p>
+    </details>
+    {% endfor %}
+  </section>
+  {% endif %}
+  {% else %}
+  <p class="no-data">{{ t('no_nutrition') }}</p>
+  {% endif %}
+
+  {% if d.shelf_life %}
+  <section class="card">
+    <h2>{{ t('shelf_life') }}</h2>
+    <div class="table-scroll">
+    <table class="nutrition-table">
+      <tbody>
+      {% for s in d.shelf_life %}
+        <tr><td>{{ s.storage_method }}</td>
+            <td>{{ s.min_days }}–{{ s.max_days }} {{ t('days') }}</td>
+            <td>{{ s.tips or '' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if d.related %}
+  <section class="related">
+    <h2>{{ t('related_foods') }}</h2>
+    <ul class="related-list">
+      {% for r in d.related %}
+      <li><a href="/{{ lang }}/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">{{ r.name }}</a></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% include "partials/attribution.html" %}
+</article>
+{% endblock %}

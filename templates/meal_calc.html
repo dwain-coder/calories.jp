@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% set meta_description = t('meal_calc_intro') %}
+{% block title %}{{ t('meal_calculator') }} | {{ site_name }}{% endblock %}
+{% block content %}
+{% set media_slot = "meal-calculator" %}
+<h1>{{ t('meal_calculator') }}</h1>
+<p>{{ t('meal_calc_intro') }}</p>
+{% include "partials/hero_media.html" %}
+
+<section class="card meal-calc" id="meal-calc" data-lang="{{ lang }}">
+  <div class="meal-search">
+    <input type="search" id="meal-search-input" placeholder="{{ t('search_placeholder') }}" autocomplete="off">
+    <ul id="meal-search-results" class="dropdown" hidden></ul>
+  </div>
+  <div class="table-scroll">
+  <table class="nutrition-table" id="meal-table">
+    <thead>
+      <tr><th>{{ t('foods') }}</th><th>{{ t('quantity') }} (g)</th>
+          <th>{{ t('calories') }}</th><th>{{ t('protein') }}</th>
+          <th>{{ t('fat') }}</th><th>{{ t('carbs') }}</th><th></th></tr>
+    </thead>
+    <tbody id="meal-rows"></tbody>
+    <tfoot>
+      <tr id="meal-total-row">
+        <td>{{ t('total') }}</td><td id="tot-g">0</td><td id="tot-kcal">0</td>
+        <td id="tot-p">0</td><td id="tot-f">0</td><td id="tot-c">0</td><td></td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+  <p class="calc-note">{{ t('computed_note') }}</p>
+  <noscript><p class="no-data">This tool requires JavaScript.</p></noscript>
+</section>
+<script>
+window.MEAL_I18N = {remove: {{ t('remove') | tojson }}};
+</script>
+<script src="/static/meal_calc.js" defer></script>
+{% endblock %}
