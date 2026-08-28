@@ -51,10 +51,27 @@ The database is not in the repo (see below). Build it with the pipeline
 uv run python main.py build-site
 ```
 
-Deployment needs a persistent filesystem for the SQLite file — the corpus is
-hundreds of megabytes and the app reads it on every request, so a serverless
-platform with a read-only or size-capped bundle will not fit without moving the
-data to a hosted database first.
+## Deploying
+
+The repo carries `data/metadata/site.db` (18 MB): the rows the site actually
+serves, with OpenFoodFacts and Wikipedia removed. Rebuild it from a full corpus
+with `uv run python tools/export_site_db.py`. The Dockerfile ships it and
+defaults `DATABASE_PATH` to it, so a container host needs no volume.
+
+Environment:
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | Injected by most hosts; `serve` binds it, falling back to 8000 |
+| `DATABASE_PATH` | Defaults to the extract in the image; point it at a volume for the full corpus |
+| `SITE_DOMAIN_JA` | The public hostname. Canonical URLs, hreflang, robots and sitemaps all derive from it, and default to localhost when it is unset — set it before letting a crawler in |
+| `GEMINI_API_KEY` | Only the meal analyzer needs it; the rest of the site works without |
+| `SITE_CACHE_MAX_AGE` | Page cache seconds; unset means no-cache, which suits development |
+
+Sitemaps hold absolute URLs, so re-run `build-sitemaps` after the domain
+changes. The analyzer caches results in the database, which on an ephemeral
+container filesystem means the cache resets on redeploy — correct behaviour,
+just slower on the first request for a given photo.
 
 ## Data, licences and what is not here
 

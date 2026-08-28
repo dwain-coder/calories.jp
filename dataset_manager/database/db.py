@@ -3,7 +3,9 @@ import os
 from pathlib import Path
 from typing import Dict, Any, List
 
-DB_PATH = Path("data/metadata/dataset_manager.db")
+from ..api.database import DB_PATH as _DB_PATH
+
+DB_PATH = Path(_DB_PATH)
 
 def get_db_connection() -> sqlite3.Connection:
     os.makedirs(DB_PATH.parent, exist_ok=True)

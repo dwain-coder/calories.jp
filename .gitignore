@@ -16,8 +16,14 @@ wheels/
 # size (the OpenFoodFacts export alone is 6 GB, and GitHub rejects anything
 # over 100 MB), and licence — OpenFoodFacts is ODbL and is quarantined from
 # every published surface of this project. Rebuild with the pipeline instead.
-data/
-*.db
+#
+# The single exception is the deployable extract: site rows only, no
+# OpenFoodFacts and no Wikipedia, 18 MB. Built by tools/export_site_db.py.
+# Order matters here — the last matching rule wins.
+data/*
+!data/metadata/
+data/metadata/*
+!data/metadata/site.db
 *.db-shm
 *.db-wal
 
@@ -28,3 +34,6 @@ node_modules/
 docs/screenshots/
 docs/shots.json
 docs/handover.html
+
+# Superseded handover under the old brand name; kept locally, not in the repo.
+docs/Calorie-Atlas-handover.pdf

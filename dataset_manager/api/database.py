@@ -1,7 +1,11 @@
+import os
 import sqlite3
 from typing import List, Dict, Any, Optional
 
-DB_PATH = 'data/metadata/dataset_manager.db'
+# Single source of truth for where the corpus lives. Hosted deployments keep it
+# on a mounted volume rather than in the image, so the path is an env var:
+#   DATABASE_PATH=/data/dataset_manager.db
+DB_PATH = os.environ.get("DATABASE_PATH", "data/metadata/dataset_manager.db")
 
 def get_license_info(source: str) -> tuple[str, str]:
     if source == "OpenFoodFacts":

@@ -285,8 +285,10 @@ def transform():
     console.print("\n[bold green]Transformation pipeline complete.[/bold green]")
 
 @app.command()
-def serve(port: int = 8000):
+def serve(port: int = 0):
     """Run the FastAPI REST server."""
+    # Hosted platforms hand the port over in $PORT and health-check that port.
+    port = port or int(os.environ.get("PORT", 8000))
     import uvicorn
     console.print(f"[bold green]Starting API Server on port {port}...[/bold green]")
     uvicorn.run("dataset_manager.api.server:app", host="0.0.0.0", port=port, reload=False)

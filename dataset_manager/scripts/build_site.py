@@ -14,7 +14,8 @@ from ..calc.quantities import parse_recipe_lines
 from ..site import seo
 from ..site.i18n import LANGS
 
-DB_PATH = "data/metadata/dataset_manager.db"
+from ..api.database import DB_PATH
+
 FOOD_SOURCES = ("MEXT Standard Tables", "USDA FoodData Central")
 DISH_SOURCE = "MAFF Our Regional Cuisines"
 FDC_RAW = Path("data/extracted/usda_fooddata_central")
