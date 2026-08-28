@@ -67,6 +67,7 @@ Environment:
 | `SITE_DOMAIN_JA` | The public hostname. Canonical URLs, hreflang, robots and sitemaps all derive from it, and default to localhost when it is unset — set it before letting a crawler in |
 | `GEMINI_API_KEY` | Only the meal analyzer needs it; the rest of the site works without |
 | `SITE_CACHE_MAX_AGE` | Page cache seconds; unset means no-cache, which suits development |
+| `SITE_NOINDEX` | `1` while the site sits on a temporary hostname: robots.txt refuses everything and every page carries a noindex tag |
 
 Sitemaps hold absolute URLs, so re-run `build-sitemaps` after the domain
 changes. The analyzer caches results in the database, which on an ephemeral

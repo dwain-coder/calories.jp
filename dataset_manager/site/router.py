@@ -37,6 +37,12 @@ SITEMAP_DIR = Path("data/sitemaps")
 _MAX_AGE = int(os.environ.get("SITE_CACHE_MAX_AGE", "0"))
 CACHE = {"Cache-Control": f"public, max-age={_MAX_AGE}" if _MAX_AGE else "no-cache"}
 
+# Set SITE_NOINDEX=1 while the site is on a temporary hostname. A staging URL
+# that gets crawled becomes a duplicate of the real one, and the cleanup after
+# is worse than the wait: robots.txt refuses everything and every page carries
+# a noindex tag until this is switched off.
+SITE_NOINDEX = os.environ.get("SITE_NOINDEX", "").lower() in ("1", "true", "yes")
+
 
 def _check_lang(lang):
     if lang not in LANGS:
@@ -62,8 +68,11 @@ def _render(request, name, lang, ctx, headers=CACHE):
         "media_get": media.get,
         "media_video": media.video,
         "media_slot": None,          # pages that use imagery override this
+        "noindex": False,            # paginated pages override this
     }
     base.update(ctx)
+    if SITE_NOINDEX:
+        base["noindex"] = True
     return templates.TemplateResponse(request, name, base, headers=headers)
 
 
@@ -272,6 +281,8 @@ def sources_page(request: Request, lang: str):
 
 @router.get("/robots.txt", response_class=PlainTextResponse)
 def robots():
+    if SITE_NOINDEX:
+        return PlainTextResponse("User-agent: *\nDisallow: /", headers=CACHE)
     lines = ["User-agent: *", "Disallow: /items", "Disallow: /api/",
              "Disallow: /export/", "Disallow: /docs", "Allow: /"]
     for lang in LANGS:

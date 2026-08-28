@@ -234,6 +234,19 @@ class TestSitePages(unittest.TestCase):
         finally:
             analyzer._hits.clear()
 
+    def test_site_noindex_switch(self):
+        """SITE_NOINDEX shuts the whole site to crawlers, for temporary hosts."""
+        from dataset_manager.site import router
+        router.SITE_NOINDEX = True
+        try:
+            robots = client.get("/robots.txt").text
+            self.assertEqual(robots.split(), ["User-agent:", "*", "Disallow:", "/"])
+            self.assertIn('name="robots" content="noindex', client.get("/ja/").text)
+        finally:
+            router.SITE_NOINDEX = False
+        self.assertNotIn('name="robots" content="noindex', client.get("/ja/").text)
+        self.assertIn("Sitemap:", client.get("/robots.txt").text)
+
     def test_robots_and_sitemap_index(self):
         r = client.get("/robots.txt")
         self.assertEqual(r.status_code, 200)
