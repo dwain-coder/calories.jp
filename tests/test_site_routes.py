@@ -234,6 +234,27 @@ class TestSitePages(unittest.TestCase):
         finally:
             analyzer._hits.clear()
 
+    def test_every_page_name_is_japanese(self):
+        """A Japanese-only site should not show a page named in English.
+
+        The USDA names arrive in English and are translated on the way in; a
+        translation that silently fails leaves the raw description sitting in
+        a heading, a slug and a browse table.
+        """
+        import re
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """SELECT i.id, n.name FROM site_pages sp
+               JOIN items i ON i.id = sp.item_id
+               LEFT JOIN item_names n ON n.item_id = i.id
+                    AND n.lang = 'ja' AND n.is_primary = 1
+               WHERE sp.lang = 'ja'""").fetchall()
+        conn.close()
+        japanese = re.compile(r"[぀-ヿ一-鿿]")
+        bad = [(r["id"], r["name"]) for r in rows if not r["name"] or not japanese.search(r["name"])]
+        self.assertEqual(bad, [], f"{len(bad)} page names carry no Japanese")
+
     def test_site_noindex_switch(self):
         """SITE_NOINDEX shuts the whole site to crawlers, for temporary hosts."""
         from dataset_manager.site import router
