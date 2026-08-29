@@ -11,7 +11,7 @@
 
 <div class="card">
 <div class="table-scroll">
-<table class="nutrition-table sortable" id="cat-table">
+<table class="nutrition-table sortable stack-table" id="cat-table">
   <thead>
     <tr>
       <th data-sort="text">{{ t('name_col') }}</th>
@@ -28,10 +28,10 @@
     <tr>
       <td><a href="/{{ lang }}/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">{{ r.name }}</a></td>
       {% if d.has_nutrition %}
-      <td data-v="{{ r.energy_kcal if r.energy_kcal is not none else -1 }}">{{ r.energy_kcal|round(0)|int if r.energy_kcal is not none else '—' }}</td>
-      <td data-v="{{ r.protein_g if r.protein_g is not none else -1 }}">{{ r.protein_g|round(1) if r.protein_g is not none else '—' }}</td>
-      <td data-v="{{ r.fat_g if r.fat_g is not none else -1 }}">{{ r.fat_g|round(1) if r.fat_g is not none else '—' }}</td>
-      <td data-v="{{ r.carbohydrate_g if r.carbohydrate_g is not none else -1 }}">{{ r.carbohydrate_g|round(1) if r.carbohydrate_g is not none else '—' }}</td>
+      <td data-label="{{ t('calories') }}" data-v="{{ r.energy_kcal if r.energy_kcal is not none else -1 }}">{{ r.energy_kcal|round(0)|int if r.energy_kcal is not none else '—' }}</td>
+      <td data-label="{{ t('protein') }}" data-v="{{ r.protein_g if r.protein_g is not none else -1 }}">{{ r.protein_g|round(1) if r.protein_g is not none else '—' }}</td>
+      <td data-label="{{ t('fat') }}" data-v="{{ r.fat_g if r.fat_g is not none else -1 }}">{{ r.fat_g|round(1) if r.fat_g is not none else '—' }}</td>
+      <td data-label="{{ t('carbs') }}" data-v="{{ r.carbohydrate_g if r.carbohydrate_g is not none else -1 }}">{{ r.carbohydrate_g|round(1) if r.carbohydrate_g is not none else '—' }}</td>
       {% endif %}
     </tr>
   {% endfor %}

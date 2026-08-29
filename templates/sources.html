@@ -7,9 +7,9 @@
 {% include "partials/hero_media.html" %}
 {% for source, attr in attribution.items() %}
 <section class="card">
-  <h2>{{ source }}</h2>
+  <h2>{{ seo.source_label(source, lang) }}</h2>
   <p>{{ attr[lang] }}</p>
-  <p><a href="{{ attr.url }}" rel="noopener" target="_blank">{{ attr.url }}</a></p>
+  <p class="src-link"><a href="{{ attr.url }}" rel="noopener" target="_blank">{{ attr.url }}</a></p>
 </section>
 {% endfor %}
 <p class="calc-note">{{ t('footer_note') }}</p>

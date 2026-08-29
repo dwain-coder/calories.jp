@@ -99,11 +99,17 @@
     rowsEl.innerHTML = '';
     foods.forEach(function (fd, i) {
       var tr = document.createElement('tr');
+      // data-label feeds the stacked layout on narrow screens, where the
+      // column headings are not on screen next to the value.
+      var L = window.MEAL_I18N;
       tr.innerHTML =
         '<td>' + esc(fd.title) + '</td>' +
-        '<td><input type="number" min="0" step="any" value="' + fd.grams + '"></td>' +
-        '<td></td><td></td><td></td><td></td>' +
-        '<td><button class="remove-btn" title="' + esc(window.MEAL_I18N.remove) + '">×</button></td>';
+        '<td data-label="g"><input type="number" min="0" step="any" value="' + fd.grams + '"></td>' +
+        '<td data-label="' + esc(L.kcal) + '"></td>' +
+        '<td data-label="' + esc(L.protein) + '"></td>' +
+        '<td data-label="' + esc(L.fat) + '"></td>' +
+        '<td data-label="' + esc(L.carbs) + '"></td>' +
+        '<td><button class="remove-btn" title="' + esc(L.remove) + '">×</button></td>';
       updateRowCells(tr, fd);
       tr.querySelector('input').addEventListener('input', function (e) {
         var v = parseFloat(e.target.value);

@@ -13,7 +13,7 @@
     <ul id="meal-search-results" class="dropdown" hidden></ul>
   </div>
   <div class="table-scroll">
-  <table class="nutrition-table" id="meal-table">
+  <table class="nutrition-table stack-table" id="meal-table">
     <thead>
       <tr><th>{{ t('foods') }}</th><th>{{ t('quantity') }} (g)</th>
           <th>{{ t('calories') }}</th><th>{{ t('protein') }}</th>
@@ -22,8 +22,12 @@
     <tbody id="meal-rows"></tbody>
     <tfoot>
       <tr id="meal-total-row">
-        <td>{{ t('total') }}</td><td id="tot-g">0</td><td id="tot-kcal">0</td>
-        <td id="tot-p">0</td><td id="tot-f">0</td><td id="tot-c">0</td><td></td>
+        <td>{{ t('total') }}</td>
+        <td id="tot-g" data-label="g">0</td>
+        <td id="tot-kcal" data-label="{{ t('calories') }}">0</td>
+        <td id="tot-p" data-label="{{ t('protein') }}">0</td>
+        <td id="tot-f" data-label="{{ t('fat') }}">0</td>
+        <td id="tot-c" data-label="{{ t('carbs') }}">0</td><td></td>
       </tr>
     </tfoot>
   </table>
@@ -32,7 +36,11 @@
   <noscript><p class="no-data">This tool requires JavaScript.</p></noscript>
 </section>
 <script>
-window.MEAL_I18N = {remove: {{ t('remove') | tojson }}};
+window.MEAL_I18N = {remove: {{ t('remove') | tojson }},
+                    kcal: {{ t('calories') | tojson }},
+                    protein: {{ t('protein') | tojson }},
+                    fat: {{ t('fat') | tojson }},
+                    carbs: {{ t('carbs') | tojson }}};
 </script>
 <script src="/static/meal_calc.js" defer></script>
 {% endblock %}

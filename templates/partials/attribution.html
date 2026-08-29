@@ -1,6 +1,6 @@
 <div class="provenance card">
   <h2>{{ t('source') }}</h2>
-  <p class="source-name">{{ d.item.source }}</p>
+  <p class="source-name">{{ seo.source_label(d.item.source, lang) }}</p>
   <p class="license">{{ t('license') }}: {{ d.license }}</p>
   {% set attr = seo.ATTRIBUTION.get(d.item.source) %}
   {% if attr %}

@@ -137,7 +137,12 @@
     // Fit vertically, and horizontally too on narrow screens. Dividing x by
     // the aspect ratio is what keeps the triangle equilateral rather than
     // stretched to the canvas.
-    var scale = Math.min(0.90 / Y_HALF, (0.95 / X_HALF) * aspect);
+    // The axis labels sit inside the stage, so the triangle has to leave
+    // room for them. A phone has less of both, and there the apex was
+    // printing through the たんぱく質 label.
+    var narrow = (canvas.clientWidth || 0) < 520;
+    var margin = narrow ? 0.78 : 0.90;
+    var scale = Math.min(margin / Y_HALF, ((narrow ? 0.86 : 0.95) / X_HALF) * aspect);
     return { aspect: aspect, scale: scale, offsetY: -Y_MID * scale };
   }
 

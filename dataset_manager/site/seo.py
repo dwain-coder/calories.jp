@@ -31,21 +31,29 @@ def hreflang_links(pages):
 
 ATTRIBUTION = {
     "MEXT Standard Tables": {
+        "name_ja": "文部科学省 日本食品標準成分表",
+        "name_en": "MEXT Standard Tables of Food Composition",
         "ja": "出典：文部科学省「日本食品標準成分表2023年版（八訂）」",
         "en": "Source: Standard Tables of Food Composition in Japan 2023 (8th rev.), MEXT",
         "url": "https://www.mext.go.jp/a_menu/syokuhinseibun/",
     },
     "MAFF Our Regional Cuisines": {
+        "name_ja": "農林水産省 うちの郷土料理",
+        "name_en": "MAFF Our Regional Cuisines",
         "ja": "出典：農林水産省「うちの郷土料理」",
         "en": "Source: \"Our Regional Cuisines\", Ministry of Agriculture, Forestry and Fisheries (MAFF)",
         "url": "https://www.maff.go.jp/j/keikaku/syokubunka/k_ryouri/",
     },
     "USDA FoodData Central": {
+        "name_ja": "米国農務省 FoodData Central",
+        "name_en": "USDA FoodData Central",
         "ja": "出典：USDA FoodData Central（パブリックドメイン）",
         "en": "Source: USDA FoodData Central (public domain)",
         "url": "https://fdc.nal.usda.gov/",
     },
     "USDA FoodKeeper": {
+        "name_ja": "米国農務省 FoodKeeper",
+        "name_en": "USDA FoodKeeper",
         "ja": "出典：USDA FoodKeeper（パブリックドメイン）",
         "en": "Source: USDA FoodKeeper (public domain)",
         "url": "https://www.foodsafety.gov/keep-food-safe/foodkeeper-app",
@@ -153,3 +161,16 @@ def sitemap_xml(entries):
         lines.append("</url>")
     lines.append("</urlset>")
     return "\n".join(lines)
+
+
+def source_label(source, lang):
+    """The source name as a reader of this language would write it.
+
+    The keys of ATTRIBUTION are internal identifiers and are English; showing
+    them raw put "MEXT Standard Tables" at the top of a card on a site that is
+    otherwise entirely Japanese.
+    """
+    entry = ATTRIBUTION.get(source)
+    if not entry:
+        return source
+    return entry.get(f"name_{lang}") or entry.get("name_en") or source

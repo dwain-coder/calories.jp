@@ -51,16 +51,16 @@
   <section class="card">
     <h2>{{ t('prep_compare') }}</h2>
     <div class="table-scroll">
-    <table class="nutrition-table">
+    <table class="nutrition-table stack-table">
       <thead><tr><th>{{ t('preparation') }}</th><th>{{ t('calories') }}</th><th>{{ t('protein') }}</th><th>{{ t('fat') }}</th><th>{{ t('carbs') }}</th></tr></thead>
       <tbody>
       {% for v in d.preps %}
         <tr{% if v.is_current %} class="row-current"{% endif %}>
           <td>{% if v.is_current %}<strong>{{ v.prep }}</strong> <span class="here-badge">{{ t('this_page') }}</span>{% else %}<a href="/{{ lang }}/food/{{ v.slug }}">{{ v.prep }}</a>{% endif %}</td>
-          <td>{{ v.energy_kcal|round(0)|int if v.energy_kcal is not none else '—' }}</td>
-          <td>{{ v.protein_g|round(1) if v.protein_g is not none else '—' }}</td>
-          <td>{{ v.fat_g|round(1) if v.fat_g is not none else '—' }}</td>
-          <td>{{ v.carbohydrate_g|round(1) if v.carbohydrate_g is not none else '—' }}</td>
+          <td data-label="{{ t('calories') }}">{{ v.energy_kcal|round(0)|int if v.energy_kcal is not none else '—' }}</td>
+          <td data-label="{{ t('protein') }}">{{ v.protein_g|round(1) if v.protein_g is not none else '—' }}</td>
+          <td data-label="{{ t('fat') }}">{{ v.fat_g|round(1) if v.fat_g is not none else '—' }}</td>
+          <td data-label="{{ t('carbs') }}">{{ v.carbohydrate_g|round(1) if v.carbohydrate_g is not none else '—' }}</td>
         </tr>
       {% endfor %}
       </tbody>

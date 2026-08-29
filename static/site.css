@@ -495,17 +495,16 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 
 .atlas-tip-muted { background: var(--ink-soft); }
 
-/* Wide data tables scroll inside their card instead of bleeding off a phone. */
+/* Wide data tables scroll inside their card rather than bleeding off a phone.
+   Tables carrying .stack-table restack on narrow screens instead, and no
+   longer need a minimum width to stay readable. */
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -0.2rem; }
-.table-scroll > .nutrition-table { min-width: 30rem; }
-.table-scroll > #meal-table { min-width: 34rem; }
 @media (max-width: 700px) {
   .card { padding-left: 0.85rem; padding-right: 0.85rem; }
-  .nutrition-table td, .nutrition-table th { white-space: nowrap; }
-  /* the name column is the one that may wrap */
-  .nutrition-table td:first-child, .nutrition-table th:first-child {
-    white-space: normal; min-width: 9rem;
-  }
+  .nutrition-table td:not(:first-child) { white-space: nowrap; }
+  .nutrition-table td:first-child, .nutrition-table th:first-child { white-space: normal; }
+  /* the fingerprint and the energy ring sit side by side until they cannot */
+  .food-hero-figure { flex-wrap: wrap; }
 }
 
 /* Headline highlight — the reference design splits the line with accent colour */
@@ -560,3 +559,109 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 }
 /* Ambient loops start from ambient.js, which checks prefers-reduced-motion —
    the autoplay attribute would ignore it, and CSS cannot stop playback. */
+
+/* ================================================================ mobile
+   Phone layout. Three rules keep everything inside the viewport:
+   grid and flex children get min-width: 0 (their default of auto lets a
+   long input or heading push the whole page sideways), long URLs may break
+   anywhere, and wide tables restack instead of scrolling out of sight. */
+
+/* A grid cell is as wide as its widest child unless told otherwise, and a
+   search input's intrinsic width is around 380px — that alone was pushing
+   the home hero past the edge of a phone. */
+.hero-split .hero, .hero-split > * { min-width: 0; }
+.hero-search, .header-search { max-width: 100%; }
+.hero-search input, .header-search input, .meal-search input { min-width: 0; }
+
+/* Attribution links are raw URLs with no spaces in them. */
+.src-link, .sources-list a, .attribution a { overflow-wrap: anywhere; }
+
+@media (max-width: 700px) {
+  /* The header was three stacked rows — a third of a phone screen, and it
+     is sticky, so it stayed there. The nav scrolls sideways on one line. */
+  .header-row { padding: 0.5rem 0.9rem; gap: 0.4rem 0.9rem; }
+  .header-nav {
+    flex-wrap: nowrap; overflow-x: auto; width: 100%;
+    scrollbar-width: none; -ms-overflow-style: none;
+    padding-bottom: 0.1rem;
+  }
+  .header-nav::-webkit-scrollbar { display: none; }
+  .header-nav a { white-space: nowrap; }
+
+  /* Photographs are atmosphere; they should not cost a whole screen. */
+  .hero-split .circle-frame, .framed-media .circle-frame { width: min(260px, 68vw); }
+  .hero-split { padding: 1.5rem 1.1rem; border-radius: 20px; }
+}
+
+@media (max-width: 640px) {
+  /* Restack wide tables: one row becomes a name line plus a row of
+     labelled figures, so nothing is cut off and nothing needs scrolling. */
+  /* A wrapper around a restacking table has nothing left to scroll. */
+  .table-scroll:has(> .stack-table) { overflow-x: visible; margin: 0; }
+  .stack-table { min-width: 0; width: 100%; }
+  .stack-table:not(.sortable) thead { display: none; }
+  /* A sortable table keeps its headings — they are the sort controls — but
+     as a wrapped row of chips rather than a table row. */
+  .stack-table.sortable thead, .stack-table.sortable thead tr { display: block; }
+  .stack-table.sortable thead tr {
+    display: flex; flex-wrap: wrap; gap: 0.3rem; border-bottom: none; padding-bottom: 0.5rem;
+  }
+  .stack-table.sortable thead th {
+    border: 1px solid var(--hairline); border-radius: var(--pill);
+    padding: 0.25rem 0.65rem; font-size: 0.76rem; background: var(--paper-raised);
+  }
+  .stack-table tbody tr, .stack-table tfoot tr {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 0.1rem 0.4rem; padding: 0.6rem 0; align-items: end;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .stack-table tbody td, .stack-table tfoot td {
+    border: none; padding: 0; white-space: normal; text-align: left;
+    font-family: var(--font-data); font-size: 0.88rem;
+  }
+  .stack-table tbody td:first-child, .stack-table tfoot td:first-child {
+    grid-column: 1 / -1; font-family: var(--font-body); font-size: 0.98rem;
+  }
+  /* beats .nutrition-table td:last-child, which right-aligns the last column
+     — correct in a table, wrong once the cells are a labelled row */
+  .stack-table tbody td:last-child, .stack-table tfoot td:last-child { text-align: left; }
+  /* Highlighting the cells leaves the grid gaps unpainted, which reads as
+     stripes; the row is what is being highlighted. */
+  .stack-table tr.row-current { background: var(--verified-bg); border-radius: var(--radius-sm); }
+  .stack-table tr.row-current td { background: none; }
+  .stack-table td[data-label]::before {
+    content: attr(data-label); display: block;
+    font-family: var(--font-body); font-size: 0.66rem; font-weight: 400;
+    color: var(--ink-faint); line-height: 1.4;
+  }
+  /* Four figures across five tracks reads as a ragged row; give the name
+     line the leftover track instead by starting the figures at column 1. */
+  .stack-table tbody tr { grid-template-columns: repeat(4, 1fr); }
+  .stack-table tfoot tr { grid-template-columns: repeat(4, 1fr); font-weight: 700; }
+
+  /* The guide compares two states, then states the ratio on its own line. */
+  .guide .stack-table tbody tr { grid-template-columns: repeat(2, 1fr); }
+  .guide .stack-table .guide-ratio { grid-column: 1 / -1; }
+
+  /* The meal calculator has a quantity field and a remove button as well. */
+  #meal-table tbody tr, #meal-table tfoot tr { grid-template-columns: repeat(5, 1fr); }
+  #meal-table tbody td:first-child { grid-column: 1 / 5; grid-row: 1; }
+  #meal-table tbody td:last-child { grid-column: 5; grid-row: 1; justify-self: end; }
+  #meal-table tbody td input { width: 100%; min-width: 0; }
+  #meal-table tfoot td:last-child { display: none; }
+  /* The accent rule belongs to the total row, not to each figure in it —
+     as separate cell borders it drew as a dashed-looking set of segments. */
+  #meal-total-row td { border-top: none; }
+  #meal-table tfoot tr { border-top: 2px solid var(--accent); padding-top: 0.5rem; }
+}
+
+@media (max-width: 700px) {
+  /* Touch targets. Inline links inside prose stay as they are — enlarging
+     those would break the line — but the ones people actually aim at with a
+     thumb get a taller hit area than their text. */
+  .header-nav a, .footer-cols a { display: inline-block; padding: 0.3rem 0; }
+  .stack-table tbody td:first-child a,
+  .food-list a, .dish-list a, .search-results a { display: inline-block; padding: 0.2rem 0; }
+  .atlas-chip { min-height: 34px; }
+  .pager a { padding: 0.5rem 0.8rem; }
+}

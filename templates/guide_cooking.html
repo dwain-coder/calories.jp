@@ -14,7 +14,7 @@
 
   <div class="card">
     <div class="table-scroll">
-    <table class="nutrition-table">
+    <table class="nutrition-table stack-table">
       <thead>
         <tr><th>{{ t('name_col') }}</th><th>{{ t('lowest') }}</th><th>{{ t('highest') }}</th><th>{{ t('difference') }}</th></tr>
       </thead>
@@ -24,11 +24,11 @@
           <td class="guide-food">
             <span class="guide-dot" aria-hidden="true"></span>{{ r.base }}
           </td>
-          <td><a href="/{{ lang }}/food/{{ r.low.slug }}">{{ r.low.prep }}</a>
+          <td data-label="{{ t('lowest') }}"><a href="/{{ lang }}/food/{{ r.low.slug }}">{{ r.low.prep }}</a>
               <b>{{ r.low.kcal|round(0)|int }}</b></td>
-          <td><a href="/{{ lang }}/food/{{ r.high.slug }}">{{ r.high.prep }}</a>
+          <td data-label="{{ t('highest') }}"><a href="/{{ lang }}/food/{{ r.high.slug }}">{{ r.high.prep }}</a>
               <b>{{ r.high.kcal|round(0)|int }}</b></td>
-          <td class="guide-ratio">{{ r.ratio|round(1) }}{{ t('times') }}
+          <td class="guide-ratio" data-label="{{ t('difference') }}">{{ r.ratio|round(1) }}{{ t('times') }}
             <span class="guide-track" aria-hidden="true">
               <span class="guide-fill" style="width: {{ (100 * r.ratio / d.rows[0].ratio)|round(0)|int }}%"></span>
             </span>
