@@ -674,3 +674,10 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   .atlas-chip { min-height: 34px; }
   .pager a { padding: 0.5rem 0.8rem; }
 }
+
+/* The analyzer on the home page: same widget as its own page, introduced
+   rather than dropped in bare. */
+.home-analyzer { margin: 1.6rem 0; }
+.home-analyzer .analyzer-lede { color: var(--ink-soft); margin: 0.2rem 0 1rem; max-width: 58ch; }
+.analyzer-more { margin: 0.5rem 0 0; font-size: 0.9rem; }
+.analyzer-more a { color: var(--ink-soft); }

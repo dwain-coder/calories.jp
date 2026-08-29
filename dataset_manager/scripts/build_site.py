@@ -32,7 +32,7 @@ def _llm_json(prompt, model=None):
     """One litellm call returning a parsed JSON object (same pattern as
     utils/translate.py)."""
     import litellm
-    model = model or os.environ.get("HELM_LLM_MODEL", "gemini/gemini-2.5-flash")
+    model = model or os.environ.get("HELM_LLM_MODEL", "gemini/gemini-3.6-flash")
     resp = litellm.completion(
         model=model,
         messages=[{"role": "user", "content": prompt}],

@@ -90,11 +90,27 @@ from .models import AIEstimationResponse, AIRecipeResponse
 import json
 import re
 
+# Bump when Google retires the current one; GEMINI_MODEL overrides it.
+DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
+
+
 def get_gemini_client():
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
     return genai.Client(api_key=api_key)
+
+
+def gemini_model():
+    """The vision/text model to call, in one place.
+
+    Google retires model ids and refuses them for new keys, so this is an env
+    var rather than a literal. HELM_LLM_MODEL is accepted too — it is the
+    LiteLLM name used by the offline scripts and carries a "gemini/" prefix
+    that the google-genai client does not want.
+    """
+    name = os.environ.get("GEMINI_MODEL") or os.environ.get("HELM_LLM_MODEL") or DEFAULT_GEMINI_MODEL
+    return name.split("/", 1)[1] if name.startswith("gemini/") else name
 
 @app.post("/items/{item_id}/estimate", response_model=AIEstimationResponse)
 def estimate_item(item_id: int):
@@ -120,7 +136,7 @@ def estimate_item(item_id: int):
     """
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model=gemini_model(),
             contents=prompt,
         )
         
@@ -158,7 +174,7 @@ def get_recipe(item_id: int):
     """
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model=gemini_model(),
             contents=prompt,
         )
         

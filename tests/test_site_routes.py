@@ -255,6 +255,37 @@ class TestSitePages(unittest.TestCase):
         bad = [(r["id"], r["name"]) for r in rows if not r["name"] or not japanese.search(r["name"])]
         self.assertEqual(bad, [], f"{len(bad)} page names carry no Japanese")
 
+    def test_gemini_model_resolution(self):
+        """Google retires model ids, so the name is configuration.
+
+        LiteLLM's "gemini/" prefix must be stripped: google-genai wants the
+        bare id, and one Railway variable should serve both callers.
+        """
+        import os
+        from dataset_manager.api import server
+        saved = {k: os.environ.get(k) for k in ("GEMINI_MODEL", "HELM_LLM_MODEL")}
+        try:
+            os.environ.pop("GEMINI_MODEL", None)
+            os.environ.pop("HELM_LLM_MODEL", None)
+            self.assertEqual(server.gemini_model(), server.DEFAULT_GEMINI_MODEL)
+            os.environ["HELM_LLM_MODEL"] = "gemini/gemini-3.6-flash"
+            self.assertEqual(server.gemini_model(), "gemini-3.6-flash")
+            os.environ["GEMINI_MODEL"] = "gemini-3.6-pro"
+            self.assertEqual(server.gemini_model(), "gemini-3.6-pro")
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+    def test_analyzer_widget_on_home(self):
+        """The analyzer runs on the home page as well as its own."""
+        home = client.get("/ja/").text
+        self.assertIn('id="analyzer"', home)
+        self.assertIn("analyzer.js", home)
+        self.assertEqual(home.count('id="analyzer"'), 1)   # the script binds one
+
     def test_site_noindex_switch(self):
         """SITE_NOINDEX shuts the whole site to crawlers, for temporary hosts."""
         from dataset_manager.site import router

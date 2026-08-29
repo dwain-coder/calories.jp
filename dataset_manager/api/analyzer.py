@@ -118,12 +118,12 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
 
     _rate_limit(request.client.host if request.client else "unknown")
 
-    from .server import get_gemini_client  # reuse existing client + key handling
+    from .server import get_gemini_client, gemini_model  # reuse client + key handling
     from google.genai import types
     client = get_gemini_client()
     try:
         resp = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=gemini_model(),
             contents=[
                 types.Part.from_bytes(data=data, mime_type=mime),
                 VISION_PROMPT,

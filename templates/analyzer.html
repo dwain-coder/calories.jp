@@ -7,37 +7,5 @@
 <p>{{ t('analyzer_intro') }}</p>
 {% include "partials/hero_media.html" %}
 
-<section class="card" id="analyzer" data-lang="{{ lang }}">
-  <label class="upload-label">
-    {{ t('upload_photo') }}
-    <input type="file" id="analyzer-file" accept="image/jpeg,image/png,image/webp">
-  </label>
-  <p id="analyzer-status" hidden>{{ t('analyzing') }}</p>
-  <div id="analyzer-result"></div>
-  <noscript><p class="no-data">This tool requires JavaScript.</p></noscript>
-</section>
-<script>
-window.ANALYZER_I18N = {
-  verified: {{ t('verified_db') | tojson }},
-  estimate: {{ t('ai_estimate') | tojson }},
-  confidence: {{ t('confidence') | tojson }},
-  unmatched: {{ t('unmatched') | tojson }},
-  total: {{ t('total') | tojson }},
-  kcal: {{ t('kcal') | tojson }},
-  protein: {{ t('protein') | tojson }},
-  fat: {{ t('fat') | tojson }},
-  carbs: {{ t('carbs') | tojson }},
-  salt: {{ t('salt') | tojson }},
-  detected: {{ t('detected_foods') | tojson }},
-  micros: {{ t('micronutrients') | tojson }},
-  microsNote: {{ t('micros_note', n='{n}') | tojson }},
-  notes: {{ t('health_notes') | tojson }},
-  print: {{ t('print_report') | tojson }},
-  ofDv: {{ t('of_dv') | tojson }},
-  stepIdentify: {{ t('step_identify') | tojson }},
-  stepMatch: {{ t('step_match') | tojson }},
-  stepCalc: {{ t('step_calc') | tojson }}
-};
-</script>
-<script src="/static/analyzer.js" defer></script>
+{% include "partials/analyzer_widget.html" %}
 {% endblock %}
