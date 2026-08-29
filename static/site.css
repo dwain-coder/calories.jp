@@ -550,11 +550,20 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 }
 .calc-controls input:focus, .meal-search input:focus { border-color: var(--accent); }
 
-/* Video sits in the same circular frame as a photograph. */
+/* Video sits in the same circular frame as a photograph.
+
+   border-radius alone is not enough: a playing video is promoted to its own
+   compositor layer, and mobile Chrome draws that layer square, ignoring the
+   rounded corners of the element — the clip has to be one the compositor
+   itself applies. clip-path and a radial mask both are, so the frame holds
+   on Android as well as on the desktop. */
 .circle-frame video,
 .circle-frame iframe {
   display: block; width: 100%; height: 100%;
   border-radius: 50%; object-fit: cover; border: 0;
+  clip-path: circle(50% at 50% 50%);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 99%, transparent 100%);
+  mask-image: radial-gradient(circle at 50% 50%, #000 99%, transparent 100%);
   background: var(--peach);
 }
 /* Ambient loops start from ambient.js, which checks prefers-reduced-motion —
