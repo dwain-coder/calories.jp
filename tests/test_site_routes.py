@@ -286,6 +286,13 @@ class TestSitePages(unittest.TestCase):
         self.assertIn("analyzer.js", home)
         self.assertEqual(home.count('id="analyzer"'), 1)   # the script binds one
 
+    def test_home_analyzer_hands_off_to_its_page(self):
+        """Uploading on the home page opens the report where it fits."""
+        home = client.get("/ja/").text
+        self.assertIn('data-redirect="/ja/analyzer"', home)
+        # the analyzer page itself must not redirect, or it would loop
+        self.assertNotIn("data-redirect", client.get("/ja/analyzer").text)
+
     def test_site_noindex_switch(self):
         """SITE_NOINDEX shuts the whole site to crawlers, for temporary hosts."""
         from dataset_manager.site import router

@@ -480,6 +480,22 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   .site-header, .site-footer, .upload-label, .no-print, .skip-link { display: none !important; }
   body { background: #fff; }
   .card { border-color: #000; }
+
+  /* On the analyzer page, the printed page is the report: the photograph,
+     the dishes with their ingredients, the totals and the notes. Everything
+     that frames the report on screen — the page heading, the intro, the
+     ambient video, the upload control, breadcrumbs — is furniture, and
+     furniture is not what someone is trying to keep. */
+  body:has(#analyzer-result) #main > *:not(#analyzer):not(.home-analyzer),
+  .analyzer-widget > *:not(#analyzer-result),
+  .home-analyzer .analyzer-more,
+  #analyzer .framed-media, #analyzer-status { display: none !important; }
+  .analyzer-widget, .home-analyzer { margin: 0; padding: 0; border: none; box-shadow: none; }
+  .analyzed-photo { max-width: 8cm; margin: 0 0 0.6cm; }
+  .analyzed-photo img { border: 1px solid #000; }
+  .dish-block { break-inside: avoid; }
+  .micro-grid { grid-template-columns: repeat(4, 1fr); }
+  .report-h { break-after: avoid; }
 }
 
 /* skip link */
@@ -699,3 +715,10 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 .dish-meta { color: var(--ink-faint); font-size: 0.85rem; margin: 0.3rem 0 0.6rem; }
 .db-link { font-size: 0.85em; color: var(--ink-soft); }
 .row-unmatched td:first-child { color: var(--ink-faint); }
+
+/* The photograph the report was read from. */
+.analyzed-photo { margin: 0 0 1rem; max-width: 320px; }
+.analyzed-photo img {
+  display: block; width: 100%; height: auto;
+  border-radius: var(--radius); border: 1.5px solid var(--hairline);
+}

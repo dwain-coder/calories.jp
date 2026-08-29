@@ -78,6 +78,11 @@ STRINGS = {
         "servings_seen": "{n} servings in the photo",
         "dish_partial": "{n} of {m} ingredients matched the database",
         "ingredient_unmatched": "no database match — not counted in the totals",
+        "analyzed_photo_alt": "The meal photograph these figures were read from",
+        "ingredient": "Ingredient",
+        "analyzer_totals_note": ("Calculated from database per-100g values times the "
+                                 "AI-estimated quantities. The quantities are estimates, "
+                                 "not measurements."),
         "upload_photo": "Upload photo",
         "analyzing": "Analyzing…",
         "ai_estimate": "AI estimate",
@@ -244,6 +249,9 @@ STRINGS = {
         "servings_seen": "写真は{n}人分",
         "dish_partial": "材料{m}件のうち{n}件をデータベースと照合",
         "ingredient_unmatched": "データベース未照合のため合計に含みません",
+        "analyzed_photo_alt": "解析した食事の写真",
+        "ingredient": "材料",
+        "analyzer_totals_note": "データベースの100gあたりの成分値に、AIが推定した分量を掛けて算出しています。分量は推定値であり実測ではありません。",
         "upload_photo": "写真をアップロード",
         "analyzing": "解析中…",
         "ai_estimate": "AI推定",

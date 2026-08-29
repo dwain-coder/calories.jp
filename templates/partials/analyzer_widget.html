@@ -1,6 +1,7 @@
 {# The meal analyzer, shared by its own page and the home page. One instance
    per page: analyzer.js binds to the single #analyzer element. #}
-<section class="card analyzer-widget" id="analyzer" data-lang="{{ lang }}">
+<section class="card analyzer-widget" id="analyzer" data-lang="{{ lang }}"
+         {% if redirect_to %}data-redirect="{{ redirect_to }}"{% endif %}>
   {% if heading %}<h2>{{ t('ai_analyzer') }}</h2>
   <p class="analyzer-lede">{{ t('analyzer_intro') }}</p>{% endif %}
   <label class="upload-label">
@@ -36,7 +37,9 @@ window.ANALYZER_I18N = {
   perServing: {{ t('per_serving') | tojson }},
   servingsSeen: {{ t('servings_seen', n='{n}') | tojson }},
   dishPartial: {{ t('dish_partial', n='{n}', m='{m}') | tojson }},
-  unmatchedNote: {{ t('ingredient_unmatched') | tojson }}
+  unmatchedNote: {{ t('ingredient_unmatched') | tojson }},
+  photoAlt: {{ t('analyzed_photo_alt') | tojson }},
+  ingredient: {{ t('ingredient') | tojson }}
 };
 </script>
 <script src="/static/analyzer.js" defer></script>

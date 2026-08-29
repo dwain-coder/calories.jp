@@ -319,7 +319,7 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
         "micronutrients": micronutrients,
         "micros_from": n_micro,
         "insights": insights,
-        "totals_note": "Deterministic calculation from database per-100g values and AI-estimated quantities. Quantities are AI estimates, not measurements.",
+        "totals_note": t(lang, "analyzer_totals_note"),
         "missing_fields": missing,
         "cached": False,
     }

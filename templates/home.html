@@ -77,7 +77,7 @@
 {# A photo is the shortest route into the database, so the analyzer runs
    here rather than only behind a link. #}
 <section class="home-analyzer">
-  {% with heading = true %}{% include "partials/analyzer_widget.html" %}{% endwith %}
+  {% with heading = true, redirect_to = '/' ~ lang ~ '/analyzer' %}{% include "partials/analyzer_widget.html" %}{% endwith %}
   <p class="analyzer-more"><a href="/{{ lang }}/analyzer">{{ t('analyzer_open_full') }}</a></p>
 </section>
 

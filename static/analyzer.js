@@ -10,6 +10,10 @@
   var resultEl = document.getElementById('analyzer-result');
   var I = window.ANALYZER_I18N;
   var stepTimer = null;
+  // Set on the home-page copy of the widget: analysis happens there, the
+  // report opens on the analyzer page, where there is room for it.
+  var redirectTo = root.getAttribute('data-redirect');
+  var HANDOFF = 'analyzer:pending';
 
   function esc(s) {
     var d = document.createElement('div');
@@ -33,6 +37,38 @@
     statusEl.hidden = true;
   }
 
+  // A view-sized copy of the photo to show above the report. The upload
+  // itself is the untouched file; this is only for display, and small enough
+  // to survive the handoff to the other page.
+  function preview(file) {
+    return new Promise(function (resolve) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        var max = 900;
+        var scale = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        try { resolve(c.toDataURL('image/jpeg', 0.75)); } catch (e) { resolve(null); }
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+  }
+
+  function handOff(data, photo) {
+    try {
+      sessionStorage.setItem(HANDOFF, JSON.stringify({ data: data, photo: photo }));
+      location.href = redirectTo;
+      return true;
+    } catch (e) {
+      return false;      // private mode, or the photo did not fit: render here
+    }
+  }
+
   fileEl.addEventListener('change', function () {
     var f = fileEl.files[0];
     if (!f) return;
@@ -42,19 +78,39 @@
     }
     startSteps();
     resultEl.innerHTML = '';
+    try { sessionStorage.removeItem(HANDOFF); } catch (e) { /* nothing stored */ }
     var fd = new FormData();
     fd.append('image', f);
-    fetch('/api/meal-analyzer?lang=' + lang, { method: 'POST', body: fd })
-      .then(function (r) {
-        if (!r.ok) return r.json().then(function (e) { throw new Error(e.detail || r.status); });
-        return r.json();
+    Promise.all([
+      fetch('/api/meal-analyzer?lang=' + lang, { method: 'POST', body: fd })
+        .then(function (r) {
+          if (!r.ok) return r.json().then(function (e) { throw new Error(e.detail || r.status); });
+          return r.json();
+        }),
+      preview(f)
+    ])
+      .then(function (both) {
+        var data = both[0], photo = both[1];
+        if (redirectTo && handOff(data, photo)) return;   // navigating away
+        renderResult(data, photo);
       })
-      .then(renderResult)
       .catch(function (e) {
         resultEl.innerHTML = '<p class="analyzer-error">' + esc(e.message) + '</p>';
       })
       .finally(stopSteps);
   });
+
+  // Arriving from the home page: the analysis is already done and waiting.
+  (function resumeHandoff() {
+    if (redirectTo) return;                 // this is the sending page
+    var raw = null;
+    try { raw = sessionStorage.getItem(HANDOFF); } catch (e) { return; }
+    if (!raw) return;
+    try {
+      var held = JSON.parse(raw);
+      renderResult(held.data, held.photo);
+    } catch (e) { /* leave the page as it is */ }
+  })();
 
   function bar(label, value, unit, dv) {
     var pct = dv ? Math.min(100, Math.round(value / dv * 100)) : 0;
@@ -65,8 +121,15 @@
       (dv ? ' <em>' + Math.round(value / dv * 100) + '%</em>' : '') + '</span></div>';
   }
 
-  function renderResult(d) {
+  function renderResult(d, photo) {
     var html = '';
+
+    // The photograph the figures were read from, so the report stands alone
+    // on screen and on paper.
+    if (photo) {
+      html += '<figure class="analyzed-photo"><img src="' + photo + '" alt="' +
+        esc(I.photoAlt) + '"></figure>';
+    }
 
     // Totals + macro bars vs daily values.
     if (d.totals && d.totals.energy_kcal != null) {
@@ -116,7 +179,9 @@
         }
         if (meta.length) html += '<p class="dish-meta">' + meta.join(' · ') + '</p>';
 
-        html += '<table class="nutrition-table stack-table"><tbody>';
+        html += '<table class="nutrition-table stack-table"><thead><tr>' +
+          '<th>' + esc(I.ingredient) + '</th><th>g</th><th>' + esc(I.kcal) + '</th>' +
+          '<th>' + esc(I.protein) + '</th><th>' + esc(I.fat) + '</th></tr></thead><tbody>';
         (dish.component_indexes || []).forEach(function (ix) {
           var c = d.components[ix];
           if (!c) return;
