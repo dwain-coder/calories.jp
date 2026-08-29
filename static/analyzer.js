@@ -83,23 +83,70 @@
       html += '<p class="calc-note">' + esc(d.totals_note) + '</p>';
     }
 
-    // Foods detected.
-    if (d.components.length) {
-      html += '<h2 class="report-h">' + esc(I.detected) + '</h2>';
-      html += '<table class="nutrition-table"><tbody>';
-      d.components.forEach(function (c) {
-        var name = lang === 'ja' ? (c.identified.name_ja || c.identified.name_en)
-                                 : (c.identified.name_en || c.identified.name_ja);
-        html += '<tr><td><a href="' + esc(c.db_match.url) + '">' + esc(name) + '</a><br>' +
-          '<span class="badge-db">' + esc(c.db_match.source) + '</span> ' +
-          '<span class="badge-ai">' + esc(I.estimate) + ' · ' + esc(I.confidence) + ': ' + esc(c.identified.confidence) + '</span></td>' +
-          '<td>' + fmt(c.ai_estimate.estimated_grams) + ' g</td>' +
-          '<td>' + (c.calculated ? '<strong>' + fmt(c.calculated.energy_kcal) + ' ' + esc(I.kcal) + '</strong>' : '—') + '</td>' +
-          '<td>P:' + (c.calculated ? fmt(c.calculated.protein_g) : '—') + 'g</td></tr>';
-      });
-      html += '</tbody></table>';
+    // Per serving, when the photo holds more than one portion of one dish.
+    if (d.per_serving && d.per_serving.energy_kcal != null) {
+      html += '<p class="per-serving">' + esc(I.perServing) + ': <strong>' +
+        Math.round(d.per_serving.energy_kcal) + '</strong> ' + esc(I.kcal) +
+        ' <span class="per-serving-note">(' +
+        esc(I.servingsSeen).replace('{n}', d.servings) + ')</span></p>';
     }
-    d.unmatched.forEach(function (u) {
+
+    // Dishes, each broken into the ingredients it was costed from.
+    var dishes = d.dishes || [];
+    if (dishes.length) {
+      html += '<h2 class="report-h">' + esc(I.breakdown) + '</h2>';
+      dishes.forEach(function (dish, di) {
+        var title = lang === 'ja' ? (dish.name_ja || dish.name_en) : (dish.name_en || dish.name_ja);
+        html += '<section class="dish-block">';
+        if (title) {
+          html += '<h3 class="dish-name">' + esc(title);
+          if (dish.totals && dish.totals.energy_kcal != null) {
+            html += '<span class="dish-kcal">' + Math.round(dish.totals.energy_kcal) +
+              ' ' + esc(I.kcal) + '</span>';
+          }
+          html += '</h3>';
+        }
+        var meta = [];
+        if (dish.grams) meta.push(fmt(dish.grams) + ' g');
+        if (dish.per_serving && dish.per_serving.energy_kcal != null) {
+          meta.push(esc(I.perServing) + ' ' + Math.round(dish.per_serving.energy_kcal) + ' ' + esc(I.kcal));
+        }
+        if (dish.n_total && dish.n_matched < dish.n_total) {
+          meta.push(esc(I.dishPartial).replace('{n}', dish.n_matched).replace('{m}', dish.n_total));
+        }
+        if (meta.length) html += '<p class="dish-meta">' + meta.join(' · ') + '</p>';
+
+        html += '<table class="nutrition-table stack-table"><tbody>';
+        (dish.component_indexes || []).forEach(function (ix) {
+          var c = d.components[ix];
+          if (!c) return;
+          var name = lang === 'ja' ? (c.identified.name_ja || c.identified.name_en)
+                                   : (c.identified.name_en || c.identified.name_ja);
+          html += '<tr><td>' + esc(name) +
+            '<br><a class="db-link" href="' + esc(c.db_match.url) + '">' + esc(c.db_match.title) + '</a> ' +
+            '<span class="badge-ai">' + esc(I.confidence) + ': ' + esc(c.identified.confidence) + '</span></td>' +
+            '<td data-label="g">' + fmt(c.ai_estimate.estimated_grams) + '</td>' +
+            '<td data-label="' + esc(I.kcal) + '">' + (c.calculated ? fmt(c.calculated.energy_kcal) : '—') + '</td>' +
+            '<td data-label="' + esc(I.protein) + '">' + (c.calculated ? fmt(c.calculated.protein_g) : '—') + '</td>' +
+            '<td data-label="' + esc(I.fat) + '">' + (c.calculated ? fmt(c.calculated.fat_g) : '—') + '</td></tr>';
+        });
+        // Ingredients the database does not hold: named, never costed.
+        (d.unmatched || []).forEach(function (u) {
+          if (u.dish_index !== di) return;
+          var name = lang === 'ja' ? (u.name_ja || u.name_en) : (u.name_en || u.name_ja);
+          html += '<tr class="row-unmatched"><td>' + esc(name) +
+            '<br><span class="badge-ai">' + esc(I.unmatchedNote) + '</span></td>' +
+            '<td data-label="g">' + (u.estimated_grams ? fmt(u.estimated_grams) : '—') + '</td>' +
+            '<td data-label="' + esc(I.kcal) + '">—</td>' +
+            '<td data-label="' + esc(I.protein) + '">—</td>' +
+            '<td data-label="' + esc(I.fat) + '">—</td></tr>';
+        });
+        html += '</tbody></table></section>';
+      });
+    }
+    // Anything the model saw outside a dish block.
+    (d.unmatched || []).forEach(function (u) {
+      if (u.dish_index != null && dishes.length) return;
       var name = lang === 'ja' ? (u.name_ja || u.name_en) : (u.name_en || u.name_ja);
       html += '<p><span class="badge-ai">' + esc(I.unmatched) + '</span> ' + esc(name) + '</p>';
     });

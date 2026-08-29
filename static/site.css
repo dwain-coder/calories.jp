@@ -681,3 +681,21 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 .home-analyzer .analyzer-lede { color: var(--ink-soft); margin: 0.2rem 0 1rem; max-width: 58ch; }
 .analyzer-more { margin: 0.5rem 0 0; font-size: 0.9rem; }
 .analyzer-more a { color: var(--ink-soft); }
+
+/* ---------------------------------------------- analyzer dish breakdown
+   A photographed dish is costed from its ingredients, so the report shows
+   the ingredients: what was recognised, what it was matched to, and the
+   figures that came from that match. Anything unmatched stays visible and
+   stays uncosted — a dash, never a guess. */
+.per-serving { margin: 0.2rem 0 0.9rem; font-size: 1.05rem; }
+.per-serving-note { color: var(--ink-faint); font-size: 0.85rem; font-weight: 400; }
+.dish-block { margin: 1rem 0 1.4rem; }
+.dish-name {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem;
+  font-size: 1.1rem; margin: 0 0 0.2rem;
+  border-bottom: 2px solid var(--peach-deep); padding-bottom: 0.35rem;
+}
+.dish-kcal { font-family: var(--font-data); font-weight: 700; white-space: nowrap; }
+.dish-meta { color: var(--ink-faint); font-size: 0.85rem; margin: 0.3rem 0 0.6rem; }
+.db-link { font-size: 0.85em; color: var(--ink-soft); }
+.row-unmatched td:first-child { color: var(--ink-faint); }

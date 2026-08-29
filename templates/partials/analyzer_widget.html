@@ -31,7 +31,12 @@ window.ANALYZER_I18N = {
   ofDv: {{ t('of_dv') | tojson }},
   stepIdentify: {{ t('step_identify') | tojson }},
   stepMatch: {{ t('step_match') | tojson }},
-  stepCalc: {{ t('step_calc') | tojson }}
+  stepCalc: {{ t('step_calc') | tojson }},
+  breakdown: {{ t('dish_breakdown') | tojson }},
+  perServing: {{ t('per_serving') | tojson }},
+  servingsSeen: {{ t('servings_seen', n='{n}') | tojson }},
+  dishPartial: {{ t('dish_partial', n='{n}', m='{m}') | tojson }},
+  unmatchedNote: {{ t('ingredient_unmatched') | tojson }}
 };
 </script>
 <script src="/static/analyzer.js" defer></script>
