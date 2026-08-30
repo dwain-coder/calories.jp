@@ -67,10 +67,21 @@ def main():
         conn.execute(f"DELETE FROM {table}")
     conn.commit()
 
-    print("vacuuming")
+    # Compact by writing a fresh file rather than VACUUM in place. A plain
+    # VACUUM rebuilds the pages but cannot always truncate the file it is
+    # sitting in — on Windows an export came out holding 19 MB of pages in a
+    # 606 MB file — and a deploy artefact that is thirty times its own size is
+    # not something to ship on trust.
+    print("compacting")
+    tmp = out.with_suffix(".compact.db")
+    tmp.unlink(missing_ok=True)
     conn.isolation_level = None
-    conn.execute("VACUUM")
+    conn.execute("VACUUM INTO ?", (str(tmp),))
     conn.close()
+    out.unlink()
+    tmp.replace(out)
+    for leftover in (out.with_name(out.name + "-wal"), out.with_name(out.name + "-shm")):
+        leftover.unlink(missing_ok=True)
     print(f"-> {out} ({out.stat().st_size/1048576:.0f} MB)")
 
 

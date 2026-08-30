@@ -22,6 +22,13 @@
   }
   function fmt(v) { return v == null ? '—' : (Math.round(v * 10) / 10); }
 
+  // The model's own confidence in what it recognised. It says nothing about
+  // the composition values, which are measurements either way, so it is
+  // worded as a judgement of the identification rather than of the figures.
+  function confidence(level) {
+    return {high: I.confHigh, medium: I.confMedium, low: I.confLow}[level] || level;
+  }
+
   function startSteps() {
     var steps = [I.stepIdentify, I.stepMatch, I.stepCalc];
     var i = 0;
@@ -189,7 +196,7 @@
                                    : (c.identified.name_en || c.identified.name_ja);
           html += '<tr><td>' + esc(name) +
             '<br><a class="db-link" href="' + esc(c.db_match.url) + '">' + esc(c.db_match.title) + '</a> ' +
-            '<span class="badge-ai">' + esc(I.confidence) + ': ' + esc(c.identified.confidence) + '</span></td>' +
+            '<span class="badge-ai">' + esc(I.confidence) + ': ' + esc(confidence(c.identified.confidence)) + '</span></td>' +
             '<td data-label="g">' + fmt(c.ai_estimate.estimated_grams) + '</td>' +
             '<td data-label="' + esc(I.kcal) + '">' + (c.calculated ? fmt(c.calculated.energy_kcal) : '—') + '</td>' +
             '<td data-label="' + esc(I.protein) + '">' + (c.calculated ? fmt(c.calculated.protein_g) : '—') + '</td>' +

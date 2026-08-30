@@ -89,7 +89,10 @@ STRINGS = {
         "ai_estimate": "AI estimate",
         "verified_db": "Verified database value",
         "estimated_quantity": "Estimated quantity",
-        "confidence": "Confidence",
+        # The model's confidence in having recognised the food, not any
+        # statement about the database figures, which are measurements.
+        "confidence": "AI identification",
+        "conf_high": "confident", "conf_medium": "fairly confident", "conf_low": "unsure",
         "matched_item": "Matched database item",
         "unmatched": "Not matched to database",
         "confidence_high": "High",
@@ -316,7 +319,8 @@ STRINGS = {
         "ai_estimate": "AI推定",
         "verified_db": "データベース値（検証済み）",
         "estimated_quantity": "推定分量",
-        "confidence": "信頼度",
+        "confidence": "AIの判別",
+        "conf_high": "確からしい", "conf_medium": "やや不確か", "conf_low": "不確か",
         "matched_item": "照合されたデータ",
         "unmatched": "データベース未照合",
         "confidence_high": "高",
