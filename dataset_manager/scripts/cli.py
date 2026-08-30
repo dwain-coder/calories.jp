@@ -325,10 +325,11 @@ def build_pages_cmd():
 def build_links_cmd(
     limit: Optional[int] = typer.Option(None, help="Cap dishes processed (testing)"),
     report: bool = typer.Option(False, help="Print coverage report only"),
+    rebuild: bool = typer.Option(False, help="Discard existing links and re-resolve"),
 ):
     """Parse MAFF recipe ingredients and resolve them to MEXT items."""
     from . import build_site
-    build_site.build_links(limit=limit, report=report)
+    build_site.build_links(limit=limit, report=report, rebuild=rebuild)
 
 
 @app.command("build-search")

@@ -14,7 +14,7 @@ import time
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 
 from ..calc.nutrition import meal_insights, scale, sum_components
-from ..site import queries
+from ..site import foodterms, queries
 from ..site.i18n import LANGS, MACRO_DV, MICRO_DV, t
 from .database import DB_PATH, get_license_info
 
@@ -175,14 +175,29 @@ def _upgrade_cached(result):
 
 
 def _match_food(name_ja, name_en, lang):
-    """Best clean-corpus match (MEXT > FDC priority is applied inside search)."""
+    """Best clean-corpus match (MEXT > FDC priority is applied inside search).
+
+    A model names food the way a cook does — 「牛肉（加熱）」 — and the tables do
+    not, so the everyday name is translated into the tables' vocabulary before
+    searching. Without it the beef in a photo matched nothing and silently left
+    the totals.
+    """
+    if name_ja and foodterms.is_ignorable(name_ja):
+        return None                     # water: a real ingredient, no nutrition
+    tried = []
     for q in (name_ja, name_en):
         if not q:
             continue
-        hits = queries.search(q, lang, limit=3)
-        foods = [h for h in hits if h["page_type"] == "food"]
-        if foods:
-            return foods[0]
+        tried.extend(foodterms.search_terms(q) if q == name_ja else [q])
+    for q in tried:
+        foods = [h for h in queries.search(q, lang, limit=5) if h["page_type"] == "food"]
+        if not foods:
+            continue
+        # The composition tables are laboratory analyses of Japanese foods; the
+        # USDA rows are a fallback for what they do not cover, so a MEXT hit
+        # wins even when it ranks lower.
+        mext = [h for h in foods if h["source"] == "MEXT Standard Tables"]
+        return (mext or foods)[0]
     return None
 
 

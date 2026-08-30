@@ -164,6 +164,10 @@ def get_dish_page_data(page):
         nut_by_item,
     )
     computed["n_total"] = len(links)
+    # The weight the figures are for. MAFF recipes are written for a household
+    # pot — けの汁 starts with 2kg of daikon — so a bare calorie number reads as
+    # a portion and is wrong by an order of magnitude.
+    computed["grams"] = round(sum(ln["grams"] for ln in usable if ln["grams"]), 1)
     show_nutrition = (
         len(links) > 0
         and computed["n_resolved"] >= 2

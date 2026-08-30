@@ -11,7 +11,7 @@ from pathlib import Path
 
 from ..database.site_schema import create_site_tables
 from ..calc.quantities import parse_recipe_lines
-from ..site import seo
+from ..site import foodterms, seo
 from ..site.i18n import LANGS
 
 from ..api.database import DB_PATH
@@ -357,13 +357,14 @@ KANJI_TO_KANA = {
 
 
 def _mext_candidates(conn, raw_name, limit=6):
-    terms = [raw_name]
-    for k, v in KANJI_TO_KANA.items():
-        if k in raw_name:
-            terms.append(v)
-            break
+    """Rows the tables might mean by this recipe line, best guess first.
+
+    Ordering matters: the first term comes from foodterms, which knows that
+    醤油 means こいくちしょうゆ and that 米 is not そば米, so the deterministic
+    pick below is right far more often than a bare substring search was.
+    """
     seen, out = set(), []
-    for term in terms:
+    for term in foodterms.search_terms(raw_name) or [raw_name]:
         for r in conn.execute(
             """SELECT nm.item_id, nm.name FROM item_names nm
                JOIN items i ON i.id = nm.item_id
@@ -373,17 +374,26 @@ def _mext_candidates(conn, raw_name, limit=6):
             (f"%{term}%", limit)):
             if r["item_id"] not in seen:
                 seen.add(r["item_id"])
-                out.append({"id": r["item_id"], "name": r["name"]})
+                out.append({"id": r["item_id"], "name": r["name"], "term": term})
+        if out:
+            break               # a curated term matched; deeper guesses are worse
     return out[:limit]
 
 
-def build_links(limit=None, report=False):
+def build_links(limit=None, report=False, rebuild=False):
     conn = get_conn()
     create_site_tables(conn)
     if report:
         _links_report(conn)
         conn.close()
         return
+
+    if rebuild:
+        # The links are derived data: parsed recipe lines matched to table rows.
+        # Rebuilding is how an improved matcher reaches dishes linked earlier.
+        n = conn.execute("DELETE FROM recipe_ingredient_links").rowcount
+        conn.commit()
+        print(f"cleared {n} existing links")
 
     dishes = conn.execute(
         """SELECT i.id, rd.recipe_ingredients FROM items i
@@ -398,10 +408,25 @@ def build_links(limit=None, report=False):
     pending_llm = []  # (dish_id, line_no, raw_name, candidates)
     for d in dishes:
         for line_no, name, qty, grams in parse_recipe_lines(d["recipe_ingredients"]):
+            if foodterms.is_ignorable(name):
+                continue        # water and ice: a recipe line, not a nutrition one
             cands = _mext_candidates(conn, name)
+            # A curated word — 醤油, 米, 鶏肉 — resolves to a row we have already
+            # decided about, so its best candidate is taken without a model.
+            # Only when the curated term is what actually matched: 大豆's target
+            # once matched nothing, the search fell through to the bare word,
+            # and 600g of soybeans was costed as 600g of soybean oil.
+            alias = foodterms.alias_target(name)
+            if cands and alias and cands[0].get("term") == alias:
+                conn.execute(
+                    """INSERT OR IGNORE INTO recipe_ingredient_links
+                       (dish_item_id, line_no, raw_name, raw_quantity, grams,
+                        mext_item_id, confidence, method)
+                       VALUES (?, ?, ?, ?, ?, ?, 0.85, 'alias')""",
+                    (d["id"], line_no, name, qty, grams, cands[0]["id"]))
             # Deterministic pick: single candidate whose name starts with the
             # mapped/base term is a confident exact-ish match.
-            if len(cands) == 1:
+            elif len(cands) == 1:
                 conn.execute(
                     """INSERT OR IGNORE INTO recipe_ingredient_links
                        (dish_item_id, line_no, raw_name, raw_quantity, grams,

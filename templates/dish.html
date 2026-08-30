@@ -17,6 +17,7 @@
     <h2>{{ t('nutrition_facts') }}</h2>
     <p class="kcal-hero"><strong>{{ d.computed.totals.get('energy_kcal', 0)|round(0)|int }}</strong>
       <span class="unit">{{ t('kcal') }}</span>
+      <span class="per">{{ t('whole_recipe', g=d.computed.grams|round(0)|int) }}</span>
       {% if d.jdi8 is not none %}<span class="jdi8-badge">{{ t('jdi8') }} <b>{{ d.jdi8 }}/8</b></span>{% endif %}
     </p>
     {% if d.pfc %}
