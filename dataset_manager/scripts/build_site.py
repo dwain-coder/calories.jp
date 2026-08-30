@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sqlite3
+import time
 import unicodedata
 from pathlib import Path
 
@@ -28,17 +29,47 @@ def get_conn():
     return conn
 
 
+# Gemini's free tier allows 20 requests a minute, and the first run of
+# build-links spent its whole budget in fifteen seconds: batches 16 to 53 all
+# came back 429 and their ingredients were left unresolved, which looked
+# indistinguishable from "no match found". Requests are spaced out, and a
+# refusal is waited out rather than thrown away.
+# 4s is 15 requests a minute against a limit of 20. The spare five are for
+# retries, which are themselves requests: pacing at exactly the limit still
+# tripped it, and each trip costs a full minute of waiting.
+LLM_MIN_INTERVAL = float(os.environ.get("LLM_MIN_INTERVAL", "4.0"))
+LLM_MAX_TRIES = int(os.environ.get("LLM_MAX_TRIES", "5"))
+_last_call = [0.0]
+_RETRY_AFTER = re.compile(r"retry in ([\d.]+)(m?s)")
+
+
 def _llm_json(prompt, model=None):
     """One litellm call returning a parsed JSON object (same pattern as
-    utils/translate.py)."""
+    utils/translate.py), paced and retried against the free-tier quota."""
     import litellm
     model = model or os.environ.get("HELM_LLM_MODEL", "gemini/gemini-3.6-flash")
-    resp = litellm.completion(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-    )
-    return json.loads(resp.choices[0].message.content)
+    for attempt in range(LLM_MAX_TRIES):
+        wait = LLM_MIN_INTERVAL - (time.monotonic() - _last_call[0])
+        if wait > 0:
+            time.sleep(wait)
+        _last_call[0] = time.monotonic()
+        try:
+            resp = litellm.completion(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+            )
+            return json.loads(resp.choices[0].message.content)
+        except Exception as e:
+            text = str(e)
+            transient = "429" in text or "RateLimit" in text or "ServiceUnavailable" in text
+            if not transient or attempt == LLM_MAX_TRIES - 1:
+                raise
+            # The API says how long to wait; believe it, and add a little.
+            m = _RETRY_AFTER.search(text)
+            delay = float(m.group(1)) / (1000 if m.group(2) == "ms" else 1) if m else 2 ** attempt
+            print(f"    quota reached, waiting {delay + 1:.0f}s")
+            time.sleep(delay + 1)
 
 
 # ---------------------------------------------------------------- names
@@ -443,6 +474,21 @@ def build_links(limit=None, report=False, rebuild=False):
                 if grams is not None:  # only worth LLM effort if it can count toward totals
                     pending_llm.append((d["id"], line_no, name, cands))
     conn.commit()
+
+    # Lines left unresolved by an earlier run — a quota stop, an interruption —
+    # are picked up again here. Without this, re-running does nothing at all:
+    # every dish already has links, so the loop above finds no work, and the
+    # only way to reach those ingredients would be to rebuild all of them.
+    already = {(d, l) for d, l, *_ in pending_llm}
+    for r in conn.execute(
+        """SELECT dish_item_id, line_no, raw_name FROM recipe_ingredient_links
+           WHERE mext_item_id IS NULL AND grams IS NOT NULL
+           ORDER BY dish_item_id, line_no"""):
+        key = (r["dish_item_id"], r["line_no"])
+        if key in already:
+            continue
+        pending_llm.append((r["dish_item_id"], r["line_no"], r["raw_name"],
+                            _mext_candidates(conn, r["raw_name"])))
 
     print(f"LLM resolution needed: {len(pending_llm)} ingredient lines")
     batch_size = 25
