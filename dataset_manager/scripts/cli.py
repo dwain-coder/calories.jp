@@ -326,9 +326,15 @@ def build_links_cmd(
     limit: Optional[int] = typer.Option(None, help="Cap dishes processed (testing)"),
     report: bool = typer.Option(False, help="Print coverage report only"),
     rebuild: bool = typer.Option(False, help="Discard existing links and re-resolve"),
+    refresh_aliases: bool = typer.Option(
+        False, "--refresh-aliases",
+        help="Re-point existing links at the curated vocabulary's current answer"),
 ):
     """Parse MAFF recipe ingredients and resolve them to MEXT items."""
     from . import build_site
+    if refresh_aliases:
+        build_site.refresh_aliases()
+        return
     build_site.build_links(limit=limit, report=report, rebuild=rebuild)
 
 

@@ -411,6 +411,40 @@ def _mext_candidates(conn, raw_name, limit=6):
     return out[:limit]
 
 
+def refresh_aliases():
+    """Re-apply the curated vocabulary to links that already exist.
+
+    When a word is decided about — 「いんげん」 means the green pod, not the
+    dried bean at twelve times the calories — every dish already linked with
+    the old reading is still wrong. Rebuilding would fix it too, but throws
+    away the model's work; this only touches lines the vocabulary now answers
+    differently, and needs no API calls.
+    """
+    conn = get_conn()
+    rows = conn.execute(
+        """SELECT l.id, l.raw_name, l.mext_item_id, nm.name AS current
+           FROM recipe_ingredient_links l
+           LEFT JOIN item_names nm ON nm.item_id = l.mext_item_id
+                AND nm.lang = 'ja' AND nm.is_primary = 1""").fetchall()
+    changed = 0
+    for r in rows:
+        target = foodterms.alias_target(r["raw_name"])
+        if not target or target == r["current"]:
+            continue
+        cands = _mext_candidates(conn, r["raw_name"])
+        if not cands or cands[0].get("term") != target or cands[0]["id"] == r["mext_item_id"]:
+            continue
+        print(f"  {r['raw_name'][:20]:22} {str(r['current'])[:28]:30} -> {cands[0]['name'][:30]}")
+        conn.execute(
+            "UPDATE recipe_ingredient_links SET mext_item_id = ?, confidence = 0.85,"
+            " method = 'alias' WHERE id = ?", (cands[0]["id"], r["id"]))
+        changed += 1
+    conn.commit()
+    conn.close()
+    print(f"refresh-aliases: {changed} links re-pointed")
+    return changed
+
+
 def build_links(limit=None, report=False, rebuild=False):
     conn = get_conn()
     create_site_tables(conn)

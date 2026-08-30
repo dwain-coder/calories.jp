@@ -100,6 +100,16 @@ class TestIngredientVocabulary(unittest.TestCase):
         """No alias may invent a match for something the tables lack."""
         self.assertIsNone(_match_food("ズィーグルンプフ", None, "ja"))
 
+    def test_ingen_is_the_pod_not_the_dried_bean(self):
+        """Caught by reviewing what the model picked: it read 「いんげん」 as
+        the dried kidney bean, 280 kcal/100g, where a recipe means the green
+        pod at 23. Both readings must be reachable, and the common one has to
+        be the default."""
+        self.assertIn("さやいんげん", foodterms.alias_target("いんげん"))
+        self.assertIn("全粒", foodterms.alias_target("いんげん豆"))
+        pod = _match_food("いんげん", None, "ja")
+        self.assertLess(pod["energy_kcal"], 60)
+
 
 if __name__ == "__main__":
     unittest.main()
