@@ -47,6 +47,9 @@
       {% else %}
         {{ t('computed_note') }}
       {% endif %}
+      {% if d.computed.n_assumed %}
+        {{ t('computed_assumed', n=d.computed.n_assumed) }}
+      {% endif %}
     </p>
     <details>
       <summary>{{ t('ingredients') }} ({{ t('calories') }})</summary>

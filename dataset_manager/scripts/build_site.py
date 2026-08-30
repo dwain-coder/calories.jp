@@ -11,7 +11,7 @@ import unicodedata
 from pathlib import Path
 
 from ..database.site_schema import create_site_tables
-from ..calc.quantities import parse_recipe_lines
+from ..calc.quantities import parse_quantity_detail, parse_recipe_lines
 from ..site import foodterms, seo
 from ..site.i18n import LANGS
 
@@ -445,6 +445,35 @@ def refresh_aliases():
     return changed
 
 
+def refresh_quantities():
+    """Re-parse every stored quantity string with the current parser.
+
+    The matches are expensive and the quantities are free, so improving the
+    parser should not mean re-asking a model about the ingredients. Only rows
+    whose grams actually change are written.
+    """
+    conn = get_conn()
+    create_site_tables(conn)
+    rows = conn.execute(
+        """SELECT id, raw_name, raw_quantity, grams FROM recipe_ingredient_links
+           WHERE raw_quantity IS NOT NULL""").fetchall()
+    changed = gained = 0
+    for r in rows:
+        grams, source = parse_quantity_detail(r["raw_quantity"], r["raw_name"])
+        if grams == r["grams"]:
+            continue
+        if r["grams"] is None and grams is not None:
+            gained += 1
+        conn.execute(
+            "UPDATE recipe_ingredient_links SET grams = ?, grams_source = ? WHERE id = ?",
+            (grams, source, r["id"]))
+        changed += 1
+    conn.commit()
+    conn.close()
+    print(f"refresh-quantities: {changed} rows updated, {gained} lines gained a weight")
+    return changed
+
+
 def build_links(limit=None, report=False, rebuild=False):
     conn = get_conn()
     create_site_tables(conn)
@@ -472,7 +501,7 @@ def build_links(limit=None, report=False, rebuild=False):
 
     pending_llm = []  # (dish_id, line_no, raw_name, candidates)
     for d in dishes:
-        for line_no, name, qty, grams in parse_recipe_lines(d["recipe_ingredients"]):
+        for line_no, name, qty, grams, gsource in parse_recipe_lines(d["recipe_ingredients"]):
             if foodterms.is_ignorable(name):
                 continue        # water and ice: a recipe line, not a nutrition one
             cands = _mext_candidates(conn, name)
@@ -486,25 +515,25 @@ def build_links(limit=None, report=False, rebuild=False):
                 conn.execute(
                     """INSERT OR IGNORE INTO recipe_ingredient_links
                        (dish_item_id, line_no, raw_name, raw_quantity, grams,
-                        mext_item_id, confidence, method)
-                       VALUES (?, ?, ?, ?, ?, ?, 0.85, 'alias')""",
-                    (d["id"], line_no, name, qty, grams, cands[0]["id"]))
+                        grams_source, mext_item_id, confidence, method)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, 0.85, 'alias')""",
+                    (d["id"], line_no, name, qty, grams, gsource, cands[0]["id"]))
             # Deterministic pick: single candidate whose name starts with the
             # mapped/base term is a confident exact-ish match.
             elif len(cands) == 1:
                 conn.execute(
                     """INSERT OR IGNORE INTO recipe_ingredient_links
                        (dish_item_id, line_no, raw_name, raw_quantity, grams,
-                        mext_item_id, confidence, method)
-                       VALUES (?, ?, ?, ?, ?, ?, 0.9, 'exact')""",
-                    (d["id"], line_no, name, qty, grams, cands[0]["id"]))
+                        grams_source, mext_item_id, confidence, method)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, 0.9, 'exact')""",
+                    (d["id"], line_no, name, qty, grams, gsource, cands[0]["id"]))
             else:
                 conn.execute(
                     """INSERT OR IGNORE INTO recipe_ingredient_links
                        (dish_item_id, line_no, raw_name, raw_quantity, grams,
-                        mext_item_id, confidence, method)
-                       VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL)""",
-                    (d["id"], line_no, name, qty, grams))
+                        grams_source, mext_item_id, confidence, method)
+                       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL)""",
+                    (d["id"], line_no, name, qty, grams, gsource))
                 if grams is not None:  # only worth LLM effort if it can count toward totals
                     pending_llm.append((d["id"], line_no, name, cands))
     conn.commit()

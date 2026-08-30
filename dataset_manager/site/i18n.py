@@ -68,6 +68,9 @@ STRINGS = {
         "remove": "Remove",
         "total": "Total",
         "computed_note": "Calculated from database ingredient values.",
+        "computed_assumed": ("{n} ingredient(s) were given as a count rather than a "
+                             "weight, and use a standard weight for one — a carrot, "
+                             "a slice of fried tofu."),
         "whole_recipe": "/ whole recipe, {g} g of ingredients",
         "computed_partial": "Calculated from {n} of {m} ingredients (others had no measurable quantity or database match).",
         "no_nutrition": "No verified nutrition data available for this item.",
@@ -300,6 +303,7 @@ STRINGS = {
         "remove": "削除",
         "total": "合計",
         "computed_note": "データベースの成分値から算出。",
+        "computed_assumed": "うち{n}件は分量が個数で書かれているため、1個あたりの標準的な重量を用いています。",
         "whole_recipe": "／レシピ全量（材料 {g} g）",
         "computed_partial": "{m}品目中{n}品目の材料から算出（他は分量不明またはデータ未対応）。",
         "no_nutrition": "この項目には検証済みの栄養データがありません。",

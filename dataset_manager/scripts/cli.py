@@ -329,11 +329,17 @@ def build_links_cmd(
     refresh_aliases: bool = typer.Option(
         False, "--refresh-aliases",
         help="Re-point existing links at the curated vocabulary's current answer"),
+    refresh_quantities: bool = typer.Option(
+        False, "--refresh-quantities",
+        help="Re-parse stored quantity strings with the current parser"),
 ):
     """Parse MAFF recipe ingredients and resolve them to MEXT items."""
     from . import build_site
     if refresh_aliases:
         build_site.refresh_aliases()
+        return
+    if refresh_quantities:
+        build_site.refresh_quantities()
         return
     build_site.build_links(limit=limit, report=report, rebuild=rebuild)
 

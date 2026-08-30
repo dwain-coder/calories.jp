@@ -39,6 +39,9 @@ SITE_DDL = [
         raw_name TEXT NOT NULL,
         raw_quantity TEXT,
         grams REAL,
+        -- 'measure' when the recipe stated a weight or a standard spoon/cup,
+        -- 'unit' when it said "2 carrots" and a reference weight was applied.
+        grams_source TEXT,
         mext_item_id INTEGER REFERENCES items(id),
         confidence REAL,
         method TEXT,
@@ -75,8 +78,19 @@ SITE_DDL = [
 ]
 
 
+# Columns added after the tables first shipped. CREATE TABLE IF NOT EXISTS
+# leaves an existing table alone, so a new column needs saying so explicitly.
+MIGRATIONS = (
+    ("recipe_ingredient_links", "grams_source", "TEXT"),
+)
+
+
 def create_site_tables(conn):
     cur = conn.cursor()
     for ddl in SITE_DDL:
         cur.execute(ddl)
+    for table, column, coltype in MIGRATIONS:
+        have = {r[1] for r in cur.execute(f"PRAGMA table_info({table})")}
+        if column not in have:
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
     conn.commit()

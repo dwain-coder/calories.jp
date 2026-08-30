@@ -5,6 +5,15 @@ excluded from the public surface."""
 from ..api.database import get_connection, get_license_info
 from ..calc.nutrition import dish_nutrition
 
+
+def _row_get(row, key, default=None):
+    """sqlite3.Row has no .get, and a database built before a column existed
+    does not have it at all."""
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
 MIN_LINK_CONFIDENCE = 0.7
 DISH_COVERAGE_THRESHOLD = 0.6
 
@@ -168,6 +177,12 @@ def get_dish_page_data(page):
     # pot — けの汁 starts with 2kg of daikon — so a bare calorie number reads as
     # a portion and is wrong by an order of magnitude.
     computed["grams"] = round(sum(ln["grams"] for ln in usable if ln["grams"]), 1)
+    # Weights the recipe did not state. 「にんじん1本」 is a count, and a carrot
+    # is about 150 g rather than exactly 150 g, so the page says how much of
+    # its total rests on that assumption.
+    computed["n_assumed"] = sum(
+        1 for ln in usable
+        if ln["grams"] is not None and _row_get(ln, "grams_source") == "unit")
     show_nutrition = (
         len(links) > 0
         and computed["n_resolved"] >= 2
