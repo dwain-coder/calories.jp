@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% set meta_description = t('about_meta') %}
+{% block title %}{{ t('about_title') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('about_title') }}</h1>
+<p class="guide-lead">{{ t('about_lead') }}</p>
+
+<section class="card">
+  <h2>{{ t('about_what') }}</h2>
+  <p>{{ t('about_what_body', foods=counts.foods, dishes=counts.dishes, nutrients=counts.nutrients) }}</p>
+</section>
+
+<section class="card">
+  <h2>{{ t('about_how') }}</h2>
+  <ul class="about-list">
+    <li>{{ t('about_how_measured') }}</li>
+    <li>{{ t('about_how_calculated') }}</li>
+    <li>{{ t('about_how_ai') }}</li>
+    <li>{{ t('about_how_never') }}</li>
+  </ul>
+  <p class="calc-note">{{ t('about_sources_link') }} <a href="/{{ lang }}/sources">{{ t('data_sources') }}</a></p>
+</section>
+
+<section class="card">
+  <h2>{{ t('about_operator') }}</h2>
+  <table class="nutrition-table">
+    <tbody>
+      <tr><td>{{ t('about_site_name') }}</td><td>{{ site_name }}</td></tr>
+      <tr><td>{{ t('about_operator_name') }}</td><td>{{ operator }}</td></tr>
+      {% if contact_email %}
+      <tr><td>{{ t('about_contact') }}</td>
+          <td><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></td></tr>
+      {% endif %}
+      <tr><td>{{ t('about_started') }}</td><td>2026</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>{{ t('about_disclaimer') }}</h2>
+  <p>{{ t('about_disclaimer_body') }}</p>
+</section>
+{% endblock %}

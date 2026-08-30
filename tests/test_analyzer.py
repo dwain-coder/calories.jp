@@ -56,6 +56,66 @@ def analyze(payload):
     return r
 
 
+class TestMatching(unittest.TestCase):
+    """Reported from the live site: a plate of pork was costed as beef, and a
+    plate of fried rice was costed as dry grain at twice its calories."""
+
+    def test_pork_never_resolves_to_beef(self):
+        from dataset_manager.api.analyzer import _match_food
+        for name in ("豚肉", "豚もも肉 生", "カットした豚肉（生）", "豚バラ肉"):
+            m = _match_food(name, None, "ja")
+            self.assertIsNotNone(m, name)
+            self.assertNotIn("うし", m["name"], f"{name} matched beef: {m['name']}")
+            self.assertIn("ぶた", m["name"], name)
+
+    def test_beef_never_resolves_to_pork(self):
+        from dataset_manager.api.analyzer import _match_food
+        m = _match_food("牛もも肉", None, "ja")
+        self.assertIn("うし", m["name"])
+
+    def test_unqualified_meat_keeps_its_fat(self):
+        """赤肉 is the trimmed-lean analysis; a photographed cut is not trimmed,
+        and the lean row under-counts it by a third."""
+        from dataset_manager.api.analyzer import _match_food
+        m = _match_food("豚肉", None, "ja")
+        self.assertIn("脂身つき", m["name"])
+        self.assertGreater(m["energy_kcal"], 200)
+
+    def test_rice_on_a_plate_is_cooked_rice(self):
+        from dataset_manager.api.analyzer import _match_food
+        cooked = _match_food("白米（生）", None, "ja", cooked=True)
+        self.assertIn("水稲めし", cooked["name"])
+        self.assertLess(cooked["energy_kcal"], 200)
+        # a recipe still means the dry grain when it says 米
+        raw = _match_food("白米", None, "ja", cooked=False)
+        self.assertIn("水稲穀粒", raw["name"])
+        self.assertGreater(raw["energy_kcal"], 300)
+
+    def test_dish_name_decides_the_cooked_reading(self):
+        """Only when the name actually says so. 「肉じゃが」 is simmered but does
+        not say it anywhere, and no word list will ever cover every dish name —
+        that case is left to the model naming its components as served."""
+        from dataset_manager.site import foodterms
+        for cooked in ("スパイス炒めご飯", "野菜炒め", "牛丼", "チャーハン", "味噌汁"):
+            self.assertTrue(foodterms.is_cooked_dish(cooked), cooked)
+        for raw in ("刺身盛り合わせ", "サラダ", "フルーツ"):
+            self.assertFalse(foodterms.is_cooked_dish(raw), raw)
+
+    def test_fried_rice_totals_are_not_doubled(self):
+        """The reported plate: 250 g rice + 15 g oil came to 988 kcal."""
+        payload = {"dishes": [{
+            "dish_ja": "スパイス炒めご飯", "dish_en": "spiced fried rice", "servings_visible": 1,
+            "components": [
+                {"name_ja": "白米（生）", "name_en": "white rice, raw",
+                 "estimated_grams": 250, "confidence": "high"},
+                {"name_ja": "サラダ油", "name_en": "vegetable oil",
+                 "estimated_grams": 15, "confidence": "medium"},
+            ]}]}
+        d = analyze(payload).json()
+        self.assertLess(d["totals"]["energy_kcal"], 700)
+        self.assertGreater(d["totals"]["energy_kcal"], 400)
+
+
 class TestDishBreakdown(unittest.TestCase):
     def test_composite_dish_is_costed_from_its_ingredients(self):
         d = analyze(LASAGNA).json()

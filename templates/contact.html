@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% set meta_description = t('contact_meta') %}
+{% block title %}{{ t('contact_title') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('contact_title') }}</h1>
+<p class="guide-lead">{{ t('contact_lead') }}</p>
+
+<section class="card">
+  <h2>{{ t('contact_reach') }}</h2>
+  {% if contact_email %}
+  <p class="contact-address"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+  <p class="calc-note">{{ t('contact_reply_note') }}</p>
+  {% else %}
+  {# No address configured: say so rather than render an empty page. Set
+     CONTACT_EMAIL to switch this on. #}
+  <p class="no-data">{{ t('contact_none') }}</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>{{ t('contact_useful') }}</h2>
+  <ul class="about-list">
+    <li>{{ t('contact_wrong_number') }}</li>
+    <li>{{ t('contact_missing_food') }}</li>
+    <li>{{ t('contact_licence') }}</li>
+  </ul>
+  <p class="calc-note">{{ t('contact_not_advice') }}</p>
+</section>
+{% endblock %}

@@ -88,11 +88,23 @@ ALIASES = {
     "パン": ["角形食パン 食パン"],
 
     # --- meat, fish, eggs, dairy
-    "牛肉": ["乳用肥育牛肉 もも 赤肉 生"], "牛もも肉": ["乳用肥育牛肉 もも 赤肉 生"],
+    # Cuts default to 脂身つき, with the fat left on. 赤肉 is the trimmed lean
+    # analysis and it is much lighter — pork もも is 119 kcal/100g lean against
+    # 171 with its fat — so using it as the default for an unqualified word
+    # under-counts every photograph of meat, which visibly has fat on it.
+    "牛肉": ["乳用肥育牛肉 かたロース 脂身つき 生"],
+    "牛もも肉": ["乳用肥育牛肉 もも 脂身つき 生"],
+    "牛赤身肉": ["乳用肥育牛肉 もも 赤肉 生"],
     "牛バラ肉": ["乳用肥育牛肉 ばら 脂身つき 生"], "牛ひき肉": ["うし ひき肉 生"],
-    "豚肉": ["ぶた 大型種肉 もも 赤肉 生"], "豚もも肉": ["ぶた 大型種肉 もも 赤肉 生"],
+    "豚肉": ["ぶた 大型種肉 かたロース 脂身つき 生"],
+    "豚もも肉": ["ぶた 大型種肉 もも 脂身つき 生"],
+    "豚赤身肉": ["ぶた 大型種肉 もも 赤肉 生"],
     "豚バラ肉": ["ぶた 大型種肉 ばら 脂身つき 生"], "豚ひき肉": ["ぶた ひき肉 生"],
-    "豚こま": ["ぶた 大型種肉 もも 赤肉 生"], "豚薄切り肉": ["ぶた 大型種肉 もも 赤肉 生"],
+    "豚こま": ["ぶた 大型種肉 かたロース 脂身つき 生"],
+    "豚薄切り肉": ["ぶた 大型種肉 かたロース 脂身つき 生"],
+    "豚肩ロース": ["ぶた 大型種肉 かたロース 脂身つき 生"],
+    "角切り豚肉": ["ぶた 大型種肉 かたロース 脂身つき 生"],
+    "カレー用豚肉": ["ぶた 大型種肉 かたロース 脂身つき 生"],
     "鶏肉": ["にわとり 若どり もも 皮つき 生"], "とり肉": ["にわとり 若どり もも 皮つき 生"],
     "鶏もも肉": ["にわとり 若どり もも 皮つき 生"], "鶏むね肉": ["にわとり 若どり むね 皮つき 生"],
     "鶏ささみ": ["にわとり 若どり ささみ 生"], "ささみ": ["にわとり 若どり ささみ 生"],
@@ -165,8 +177,32 @@ ALIASES = {
 STATES = ("水煮", "ゆで", "茹で", "蒸し", "焼き", "生", "乾", "油いため", "素揚げ",
           "揚げ", "煮", "冷凍", "缶詰", "塩漬", "干し", "皮なし", "皮つき")
 
+# Raw analysis -> the cooked one, for callers looking at a plate of food.
+#
+# A recipe says 米 and means the dry grain; a photograph of fried rice shows
+# the same food after it has absorbed its own weight in water. Charging the
+# plate at the dry rate more than doubles it — 250 g of rice on a plate is 390
+# kcal cooked and 855 raw. The analyzer asks for this swap, the recipe linker
+# does not.
+COOKED_FORM = {
+    "こめ 水稲穀粒 精白米 うるち米": "こめ 水稲めし 精白米 うるち米",
+    "こめ 水稲穀粒 玄米": "こめ 水稲めし 玄米",
+    "こめ 水稲穀粒 精白米 もち米": "こめ 水稲めし 精白米 もち米",
+}
+
+# Words in a dish name that mean the food reached the plate cooked.
+COOKED_DISH = ("炒め", "焼き", "煮", "揚げ", "蒸し", "茹で", "ゆで", "丼", "カレー",
+               "チャーハン", "炒飯", "ピラフ", "リゾット", "おにぎり", "寿司", "すし",
+               "雑炊", "おかゆ", "粥", "スープ", "汁", "鍋", "定食", "弁当", "ご飯", "ライス")
+
 _PARENS = re.compile(r"[（(\[【].*?[）)\]】]")
 _SEP = re.compile(r"[・,、/／]+")
+
+
+def is_cooked_dish(name):
+    """Does this dish name describe food that was cooked before serving?"""
+    n = normalise(name)
+    return any(word in n for word in COOKED_DISH)
 
 
 def normalise(name):
@@ -193,11 +229,16 @@ def _strip_noise(s):
     return " ".join(s.split())
 
 
-def search_terms(name):
+def search_terms(name, cooked=False):
     """Search strings to try for one ingredient, most specific first.
 
     The caller runs them through the ordinary site search and takes the first
     hit, so a bad guess costs a query, never a wrong number.
+
+    `cooked` says the food is being read off a plate rather than out of a
+    recipe, which decides the raw/cooked reading of a staple: see COOKED_FORM.
+    A vision model will happily call the rice in a bowl of fried rice
+    「白米（生）」, because that is the ingredient it was made from.
     """
     base = normalise(name)
     if not base or is_ignorable(base):
@@ -206,6 +247,8 @@ def search_terms(name):
 
     def add(t):
         t = t.strip()
+        if cooked:
+            t = COOKED_FORM.get(t, t)
         if t and t not in seen:
             seen.add(t)
             terms.append(t)
@@ -248,6 +291,36 @@ def search_terms(name):
         if len(part) >= 2:
             add(part)
     return terms
+
+
+# Foods that must never be substituted for one another. The tables write meat
+# in kana (ぶた, うし, にわとり) and a cook writes it in kanji, so a name that
+# loses its animal — 「もも肉 生」 — hits whichever row the index likes, and beef
+# was served for pork with nothing to flag it. Different animal, different
+# answer: refuse the match rather than quietly answer the wrong question.
+KINDS = {
+    "pork": ("ぶた", "豚", "ポーク", "とんかつ"),
+    "beef": ("うし", "牛", "ビーフ", "和牛"),
+    "chicken": ("にわとり", "鶏", "チキン", "とり肉", "ささみ"),
+    "sheep": ("めんよう", "羊", "ラム", "マトン"),
+    "horse": ("うま肉", "馬肉", "馬刺"),
+    "duck": ("あひる", "かも", "鴨"),
+}
+
+
+def kind_of(name):
+    """Which animal this name is about, or None when it does not say."""
+    n = normalise(name).replace(" ", "")
+    for kind, words in KINDS.items():
+        if any(w in n for w in words):
+            return kind
+    return None
+
+
+def conflicts(query, candidate):
+    """True when the two names are about different animals."""
+    a, b = kind_of(query), kind_of(candidate)
+    return bool(a and b and a != b)
 
 
 def alias_target(name):

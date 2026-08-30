@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% set meta_description = t('privacy_meta') %}
+{% block title %}{{ t('privacy_title') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('privacy_title') }}</h1>
+<p class="guide-lead">{{ t('privacy_lead') }}</p>
+
+<section class="card">
+  <h2>{{ t('privacy_collect') }}</h2>
+  <ul class="about-list">
+    <li>{{ t('privacy_no_account') }}</li>
+    <li>{{ t('privacy_logs') }}</li>
+    <li>{{ t('privacy_local') }}</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>{{ t('privacy_photos') }}</h2>
+  <p>{{ t('privacy_photos_body') }}</p>
+  <p>{{ t('privacy_photos_cache') }}</p>
+</section>
+
+<section class="card">
+  <h2>{{ t('privacy_third_party') }}</h2>
+  <ul class="about-list">
+    <li>{{ t('privacy_tp_gemini') }}</li>
+    {% if has_ads %}<li>{{ t('privacy_tp_ads') }}</li>{% endif %}
+    {% if has_analytics %}<li>{{ t('privacy_tp_analytics') }}</li>{% endif %}
+  </ul>
+  {% if not has_ads and not has_analytics %}
+  <p class="calc-note">{{ t('privacy_tp_none') }}</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>{{ t('privacy_rights') }}</h2>
+  <p>{{ t('privacy_rights_body') }}
+    {% if contact_email %}<a href="mailto:{{ contact_email }}">{{ contact_email }}</a>{% endif %}
+  </p>
+</section>
+
+<section class="card">
+  <h2>{{ t('privacy_changes') }}</h2>
+  <p>{{ t('privacy_changes_body') }}</p>
+  <p class="calc-note">{{ t('privacy_updated', date=updated) }}</p>
+</section>
+{% endblock %}

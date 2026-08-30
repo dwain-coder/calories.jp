@@ -279,6 +279,52 @@ def sources_page(request: Request, lang: str):
     })
 
 
+# Who runs the site, what it does with a visitor's data, and how to be reached.
+# Ad and affiliate networks require all three before they approve a site, and a
+# site publishing nutrition figures has no business being anonymous. The two
+# facts only the owner can supply come from the environment rather than being
+# written into the repository.
+SITE_OPERATOR = os.environ.get("SITE_OPERATOR", "")
+CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "")
+# Flipped on when those scripts are actually added, so the privacy policy never
+# claims a tracker the site does not run, nor stays silent about one it does.
+HAS_ADS = os.environ.get("SITE_ADS", "").lower() in ("1", "true", "yes")
+HAS_ANALYTICS = os.environ.get("SITE_ANALYTICS", "").lower() in ("1", "true", "yes")
+POLICY_UPDATED = os.environ.get("POLICY_UPDATED", "2026-08-30")
+
+
+def _standing_page(request, lang, name, extra=None):
+    """The pages that describe the site rather than the data."""
+    ctx = {
+        "operator": SITE_OPERATOR or t(lang, "operator_unset"),
+        "contact_email": CONTACT_EMAIL,
+        "canonical": seo.base_url(lang) + f"/{lang}/{name}",
+        "alternates": {l: seo.base_url(l) + f"/{l}/{name}" for l in LANGS},
+    }
+    ctx.update(extra or {})
+    return _render(request, f"{name}.html", lang, ctx)
+
+
+@router.get("/{lang}/about", response_class=HTMLResponse)
+def about_page(request: Request, lang: str):
+    _check_lang(lang)
+    return _standing_page(request, lang, "about", {"counts": queries.corpus_counts(lang)})
+
+
+@router.get("/{lang}/privacy", response_class=HTMLResponse)
+def privacy_page(request: Request, lang: str):
+    _check_lang(lang)
+    return _standing_page(request, lang, "privacy", {
+        "has_ads": HAS_ADS, "has_analytics": HAS_ANALYTICS, "updated": POLICY_UPDATED,
+    })
+
+
+@router.get("/{lang}/contact", response_class=HTMLResponse)
+def contact_page(request: Request, lang: str):
+    _check_lang(lang)
+    return _standing_page(request, lang, "contact")
+
+
 @router.get("/robots.txt", response_class=PlainTextResponse)
 def robots():
     if SITE_NOINDEX:

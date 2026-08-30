@@ -67,6 +67,15 @@ ingredient name with its state when that changes the food (raw, boiled, fried,
 dried). Give the Japanese name and the English one. No brand names, no dish
 names inside components.
 
+Two things decide whether the figures come out right:
+
+* Name the food in the state it is IN THE PHOTOGRAPH, not the state it was
+  bought in. Rice in a bowl is ご飯, never 米 or 白米 — the dry grain holds
+  twice the calories of the same weight cooked. Boiled noodles are ゆで.
+* Always name the animal or species. 「もも肉」 could be any animal, and the
+  table will answer about the wrong one; write 「豚もも肉」 or 「鶏もも肉」.
+  Say whether meat has its fat on it (脂身つき) or is trimmed lean (赤肉).
+
 Estimate the edible grams of each component as served in the photograph — what
 is on the plate, not the recipe for a whole tray — and be conservative.
 servings_visible is how many portions the photograph shows, usually 1.
@@ -174,13 +183,16 @@ def _upgrade_cached(result):
     return result
 
 
-def _match_food(name_ja, name_en, lang):
+def _match_food(name_ja, name_en, lang, cooked=False):
     """Best clean-corpus match (MEXT > FDC priority is applied inside search).
 
     A model names food the way a cook does — 「牛肉（加熱）」 — and the tables do
     not, so the everyday name is translated into the tables' vocabulary before
     searching. Without it the beef in a photo matched nothing and silently left
     the totals.
+
+    `cooked` passes the dish's own state down: rice on a plate is ご飯, even
+    when the model calls it 白米.
     """
     if name_ja and foodterms.is_ignorable(name_ja):
         return None                     # water: a real ingredient, no nutrition
@@ -188,9 +200,13 @@ def _match_food(name_ja, name_en, lang):
     for q in (name_ja, name_en):
         if not q:
             continue
-        tried.extend(foodterms.search_terms(q) if q == name_ja else [q])
+        tried.extend(foodterms.search_terms(q, cooked=cooked) if q == name_ja else [q])
+    asked = name_ja or name_en or ""
     for q in tried:
         foods = [h for h in queries.search(q, lang, limit=5) if h["page_type"] == "food"]
+        # Serving beef for pork is worse than serving nothing: the figures look
+        # authoritative and are about a different animal.
+        foods = [h for h in foods if not foodterms.conflicts(asked, h["name"])]
         if not foods:
             continue
         # The composition tables are laboratory analyses of Japanese foods; the
@@ -240,11 +256,14 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
     components, unmatched, parts, dishes = [], [], [], []
     for di, dish in enumerate(dishes_in):
         dish_parts, dish_component_ix, dish_unmatched = [], [], 0
+        # 「スパイス炒めご飯」 tells us its rice was cooked, whatever the model
+        # called the grain, and the grams estimated are of the cooked food.
+        cooked = foodterms.is_cooked_dish(dish["dish_ja"] or dish["dish_en"] or "")
         for f in dish["components"]:
             name_ja, name_en = f.get("name_ja"), f.get("name_en")
             grams = _positive(f.get("estimated_grams"))
             conf = f.get("confidence", "low")
-            match = _match_food(name_ja, name_en, lang)
+            match = _match_food(name_ja, name_en, lang, cooked=cooked)
             if not match:
                 dish_unmatched += 1
                 unmatched.append({"name_ja": name_ja, "name_en": name_en,

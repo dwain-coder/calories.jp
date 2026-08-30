@@ -273,6 +273,28 @@ CURATED_HOME_FOODS = (
 )
 
 
+def corpus_counts(lang="ja"):
+    """What the site actually holds, for the pages that describe it.
+
+    Counted rather than written down: an About page quoting a number that has
+    drifted from the database is worse than one quoting none.
+    """
+    conn = get_connection()
+    counts = {
+        r["page_type"]: r["c"] for r in conn.execute(
+            "SELECT page_type, COUNT(*) c FROM site_pages WHERE lang = ? GROUP BY page_type",
+            (lang,))
+    }
+    nutrients = conn.execute(
+        """SELECT MAX(c) m FROM (SELECT COUNT(*) c FROM nutrients GROUP BY item_id)""").fetchone()
+    conn.close()
+    return {
+        "foods": counts.get("food", 0),
+        "dishes": counts.get("dish", 0),
+        "nutrients": (nutrients["m"] if nutrients else 0) or 0,
+    }
+
+
 def home_data(lang):
     conn = get_connection()
     counts = {

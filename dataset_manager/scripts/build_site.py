@@ -594,7 +594,7 @@ def build_sitemaps():
         page_entries = [
             {"loc": seo.base_url(lang) + f"/{lang}/{p}"}
             for p in ("", "foods", "meal-calculator", "analyzer", "goals", "sources",
-                      "guides/cooking-and-calories")
+                      "guides/cooking-and-calories", "about", "privacy", "contact")
         ]
         write(f"sitemap-pages-{lang}", page_entries)
     conn.close()

@@ -722,3 +722,12 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   display: block; width: 100%; height: auto;
   border-radius: var(--radius); border: 1.5px solid var(--hairline);
 }
+
+/* ------------------------------------------------ standing pages
+   About, privacy, contact: prose, not data. Lists breathe more than the
+   dense tables do, and the contact address is the one thing on its page
+   someone is looking for. */
+.about-list { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+.about-list li { margin: 0.5rem 0; line-height: 1.75; }
+.contact-address { font-size: 1.15rem; margin: 0.2rem 0 0.4rem; }
+.contact-address a { font-family: var(--font-data); }
