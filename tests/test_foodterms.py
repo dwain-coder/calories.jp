@@ -100,6 +100,16 @@ class TestIngredientVocabulary(unittest.TestCase):
         """No alias may invent a match for something the tables lack."""
         self.assertIsNone(_match_food("ズィーグルンプフ", None, "ja"))
 
+    def test_nested_brackets_come_off(self):
+        """MAFF groups seasonings under labels that contain their own
+        parentheses. A non-greedy strip stopped at the first closing character
+        of any kind and left 「】塩」, so salt — a curated word — matched
+        nothing, and the line went to the model to be declined."""
+        self.assertEqual(foodterms.normalise("【調味料A（合わせ酢）】塩"), "塩")
+        self.assertEqual(foodterms.alias_target("【調味料A（合わせ酢）】塩"), "食塩")
+        self.assertEqual(foodterms.alias_target("【調味料A（合わせ酢）】酢"), "穀物酢")
+        self.assertEqual(foodterms.normalise("しそ（塩づけ）（刻み）"), "しそ")
+
     def test_ingen_is_the_pod_not_the_dried_bean(self):
         """Caught by reviewing what the model picked: it read 「いんげん」 as
         the dried kidney bean, 280 kcal/100g, where a recipe means the green

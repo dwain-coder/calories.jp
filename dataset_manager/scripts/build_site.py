@@ -516,7 +516,7 @@ def build_links(limit=None, report=False, rebuild=False):
     already = {(d, l) for d, l, *_ in pending_llm}
     for r in conn.execute(
         """SELECT dish_item_id, line_no, raw_name FROM recipe_ingredient_links
-           WHERE mext_item_id IS NULL AND grams IS NOT NULL
+           WHERE mext_item_id IS NULL AND grams IS NOT NULL AND method IS NULL
            ORDER BY dish_item_id, line_no"""):
         key = (r["dish_item_id"], r["line_no"])
         if key in already:
@@ -554,6 +554,16 @@ def build_links(limit=None, report=False, rebuild=False):
                        SET mext_item_id = ?, confidence = ?, method = 'llm'
                        WHERE dish_item_id = ? AND line_no = ? AND mext_item_id IS NULL""",
                     (cid, float(conf or 0.75), dish_id, line_no))
+            else:
+                # "None of these candidates is this food" is an answer, and a
+                # useful one: recorded so the next run does not pay to ask the
+                # same question again. A resume that re-asks every declined
+                # line spends its whole budget learning nothing — 300 lines,
+                # zero matches, which is how this was found.
+                conn.execute(
+                    """UPDATE recipe_ingredient_links SET method = 'llm-none'
+                       WHERE dish_item_id = ? AND line_no = ? AND mext_item_id IS NULL""",
+                    (dish_id, line_no))
         conn.commit()
         print(f"  {min(i + batch_size, len(pending_llm))}/{len(pending_llm)}")
     conn.close()
