@@ -731,3 +731,20 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 .about-list li { margin: 0.5rem 0; line-height: 1.75; }
 .contact-address { font-size: 1.15rem; margin: 0.2rem 0 0.4rem; }
 .contact-address a { font-family: var(--font-data); }
+
+/* ------------------------------------------- value provenance
+   MEXT publishes some values in parentheses (its own estimate, not an
+   analysis of this food) and others as Tr (a trace: present, too small to
+   quantify). Both were being rendered as plain numbers, which claimed more
+   than the source does. They are marked, not hidden — the figure is still
+   the figure. */
+.val-estimated {
+  /* A text decoration rather than a border: the calculator rewrites these
+     cells with textContent on every quantity change, which would drop a
+     nested span, and a border-bottom on a td fights the row rule. */
+  text-decoration: underline dotted var(--ink-faint);
+  text-underline-offset: 4px;
+  cursor: help;
+}
+.val-trace { color: var(--ink-soft); font-family: var(--font-data); cursor: help; }
+.quality-key { border-top: 1px solid var(--hairline); padding-top: 0.6rem; margin-top: 0.4rem; }

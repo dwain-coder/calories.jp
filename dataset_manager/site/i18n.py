@@ -44,6 +44,13 @@ STRINGS = {
         "grams": "g",
         "nutrition_facts": "Nutrition Facts",
         "full_nutrients": "All nutrients",
+        # What the source says about each figure. MEXT parenthesises values it
+        # estimated rather than analysed, and writes Tr for a trace amount.
+        "quality_key": "( ) is a value MEXT estimated rather than analysed. Tr means a trace amount, too small to quantify — not zero.",
+        "quality_estimated_full": "Estimated by MEXT, not analysed for this food",
+        "quality_trace_full": "Trace amount — present, too small to quantify",
+        "quality_estimated_short": "estimated",
+        "quality_macro_note": "Figures marked with a dotted underline are MEXT estimates rather than analyses of this food.",
         "serving_calculator": "Serving calculator",
         "quantity": "Quantity",
         "source": "Source",
@@ -116,7 +123,9 @@ STRINGS = {
         "about_what": "What this site is",
         "about_what_body": "{foods} foods and {dishes} regional dishes, each carrying up to {nutrients} measured nutrients. Every figure comes from a public government table, with the source shown beside it.",
         "about_how": "How the figures are produced",
-        "about_how_measured": "Composition values are laboratory measurements published by MEXT and MAFF. They are reproduced as published, not rounded or adjusted.",
+        "about_how_measured": ("Composition values are published by MEXT and MAFF and are reproduced as "
+                               "published, not rounded or adjusted. Where MEXT marks a value as its own "
+                               "estimate rather than an analysis of that food, this site marks it too."),
         "about_how_calculated": "Serving sizes, meal totals and daily-value percentages are arithmetic on those published values, computed the same way every time.",
         "about_how_ai": "The photo analyzer uses AI for two things only: naming what is in the picture and estimating how many grams. Both are labelled as estimates. The nutrition then comes from the database.",
         "about_how_never": "AI is never used to produce a nutrition value. An ingredient the database does not hold is shown without figures rather than guessed at.",
@@ -279,6 +288,13 @@ STRINGS = {
         "grams": "g",
         "nutrition_facts": "栄養成分表",
         "full_nutrients": "全成分を表示",
+        # 成分表が数値に付けている意味。（　）は文部科学省による推計値、
+        # Trは微量で、0とは異なる。
+        "quality_key": "（　）内の数値は文部科学省による推計値です。Trは微量（含まれていますが、量として表せない）を示し、0ではありません。",
+        "quality_estimated_full": "推計値（この食品について分析した値ではありません）",
+        "quality_trace_full": "微量（含まれていますが、量として表せません）",
+        "quality_estimated_short": "推計値",
+        "quality_macro_note": "点線の下線が付いた数値は、この食品について分析した値ではなく、文部科学省による推計値です。",
         "serving_calculator": "分量計算",
         "quantity": "分量",
         "source": "出典",
@@ -345,7 +361,7 @@ STRINGS = {
         "about_what": "このサイトの内容",
         "about_what_body": "食品{foods}件と郷土料理{dishes}件を掲載し、1件あたり最大{nutrients}項目の成分値を収録しています。すべての数値は公的機関が公表する成分表に基づき、出典を併記しています。",
         "about_how": "数値の算出方法",
-        "about_how_measured": "成分値は文部科学省・農林水産省が公表する分析値です。丸めや調整をせず、公表されたまま掲載しています。",
+        "about_how_measured": "成分値は文部科学省・農林水産省が公表する値を、丸めや調整をせずそのまま掲載しています。文部科学省が推計値として公表している数値は、本サイトでも推計値として明示します。",
         "about_how_calculated": "分量あたりの換算、合計、基準値に対する割合は、その公表値を用いた計算です。同じ入力には必ず同じ結果を返します。",
         "about_how_ai": "AI食事解析でAIが行うのは、写真に写る食品の判別と分量（g）の推定の2つだけです。いずれも推定値として明示し、栄養成分値はデータベースから取得します。",
         "about_how_never": "栄養成分値をAIが生成することはありません。データベースに該当がない材料は、数値を推定せず「未照合」として表示します。",

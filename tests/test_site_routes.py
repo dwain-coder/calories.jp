@@ -147,6 +147,35 @@ class TestSitePages(unittest.TestCase):
         self.assertIn("noindex", r2.text)  # paginated pages are not indexed
         self.assertNotEqual(r.text, r2.text)
 
+    def test_values_carry_the_source_qualifiers(self):
+        """MEXT marks its own estimates with parentheses and traces with Tr.
+        Both were stored as plain numbers, so 21,415 estimates read as
+        measurements on a site whose claim is that they are not."""
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        counts = dict(conn.execute(
+            "SELECT quality, COUNT(*) FROM nutrients GROUP BY quality").fetchall())
+        self.assertGreater(counts.get("estimated", 0), 10000)
+        self.assertGreater(counts.get("trace", 0), 1000)
+        self.assertIsNone(counts.get(None), "every nutrient value should carry a quality")
+        # a food whose table has estimated values shows the mark and the key
+        row = conn.execute(
+            """SELECT sp.slug FROM site_pages sp JOIN nutrients n ON n.item_id = sp.item_id
+               WHERE sp.lang='ja' AND n.quality='estimated' LIMIT 1""").fetchone()
+        conn.close()
+        html = client.get(f"/food/{row['slug']}").text
+        self.assertIn("val-estimated", html)
+        self.assertIn("推計値", html)
+
+    def test_food_code_is_stored(self):
+        """食品番号 is the key MEXT indexes its other publications by."""
+        conn = sqlite3.connect(DB_PATH)
+        n = conn.execute(
+            "SELECT COUNT(*) FROM items WHERE source='MEXT Standard Tables'"
+            " AND source_url LIKE 'mext_%'").fetchone()[0]
+        conn.close()
+        self.assertEqual(n, 2538)
+
     def test_food_page_has_faq_and_dv(self):
         row = _one(
             """SELECT sp.slug FROM site_pages sp JOIN nutrition n ON n.item_id = sp.item_id

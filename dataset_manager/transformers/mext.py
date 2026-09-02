@@ -82,20 +82,37 @@ CODE_ROW_LABEL = "成分識別子"
 
 
 def clean_amount(v) -> Optional[float]:
-    """MEXT value tokens: 'Tr'->0 (trace), '-'->None (not measured),
-    '(n)'->n (estimated), strip footnote '*'. Non-numeric -> None."""
+    """Just the number. See clean_value for what the number is worth."""
+    return clean_value(v)[0]
+
+
+def clean_value(v):
+    """A MEXT cell as (amount, quality).
+
+    The tables say more than a number. Parentheses mark a value MEXT estimated
+    rather than analysed — calculated from a related food, or borrowed from a
+    similar one — and 'Tr' means present in trace amounts, which is not the
+    same claim as zero. Both were being flattened into a plain float, so a
+    site whose whole point is showing measured values was showing 22,414
+    estimates as measurements and 3,081 traces as hard zeros.
+
+    quality is 'measured', 'estimated' or 'trace'; a value that was not
+    determined at all is (None, None) and is stored as nothing, as before.
+    """
     if v is None or (isinstance(v, float) and pd.isna(v)):
-        return None
-    s = str(v).strip().replace("*", "").replace("（", "(").replace("）", ")")
-    s = s.strip("() ").strip()
+        return None, None
+    raw = str(v).strip().replace("*", "").replace("（", "(").replace("）", ")")
+    estimated = raw.startswith("(") and raw.endswith(")")
+    s = raw.strip("() ").strip()
     if s in ("", "-", "−"):
-        return None
-    if s.lower() in ("tr", "(tr)"):
-        return 0.0
+        return None, None
+    if s.lower() == "tr":
+        # A parenthesised trace is still a trace: both say "a little, not none".
+        return 0.0, "trace"
     try:
-        return float(s)
+        return float(s), ("estimated" if estimated else "measured")
     except ValueError:
-        return None
+        return None, None
 
 
 class MEXTTransformer(BaseTransformer):
@@ -136,14 +153,20 @@ class MEXTTransformer(BaseTransformer):
             group_code = str(row[GROUP_COL]).strip().split(".")[0].zfill(2)
             category = FOOD_GROUPS.get(group_code, group_code)
 
-            item_id = self._insert_item(str(name).strip(), category, source, url)
+            # 食品番号 — the key MEXT indexes every other publication by (the
+            # amino acid, fatty acid and carbohydrate books, and the errata).
+            # Stored the way FDC items already are: "mext_01001".
+            food_code = str(row[NUMBER_COL]).strip()
+            item_url = f"mext_{food_code}" if food_code and food_code != "nan" else url
+
+            item_id = self._insert_item(str(name).strip(), category, source, item_url)
 
             by_code = {}
             for col, code, jp_name, unit in NUTRIENT_COLS:
-                amount = clean_amount(row[col])
+                amount, quality = clean_value(row[col])
                 if amount is None:
                     continue
-                nutrient_rows.append((item_id, code, jp_name, unit, amount))
+                nutrient_rows.append((item_id, code, jp_name, unit, amount, quality))
                 by_code[code] = amount
 
             macro_rows.append((
@@ -156,7 +179,8 @@ class MEXTTransformer(BaseTransformer):
             items_added += 1
 
         cur.executemany(
-            "INSERT INTO nutrients (item_id, code, name, unit, amount) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO nutrients (item_id, code, name, unit, amount, quality)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
             nutrient_rows,
         )
         cur.executemany(
@@ -169,6 +193,12 @@ class MEXTTransformer(BaseTransformer):
 
 def demo():
     """Self-check for the value cleaner."""
+    assert clean_value("12.3") == (12.3, "measured")
+    assert clean_value("(11.3)") == (11.3, "estimated")
+    assert clean_value("（0）") == (0.0, "estimated")
+    assert clean_value("Tr") == (0.0, "trace")
+    assert clean_value("(Tr)") == (0.0, "trace")
+    assert clean_value("-") == (None, None)
     assert clean_amount("Tr") == 0.0
     assert clean_amount("(12)") == 12.0
     assert clean_amount("（0）") == 0.0

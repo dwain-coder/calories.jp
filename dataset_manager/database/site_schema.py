@@ -82,6 +82,9 @@ SITE_DDL = [
 # leaves an existing table alone, so a new column needs saying so explicitly.
 MIGRATIONS = (
     ("recipe_ingredient_links", "grams_source", "TEXT"),
+    # 'measured' | 'estimated' | 'trace' — MEXT marks estimates in parentheses
+    # and traces as Tr, and both were being stored as plain numbers.
+    ("nutrients", "quality", "TEXT"),
 )
 
 

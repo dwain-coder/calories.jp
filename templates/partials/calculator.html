@@ -23,25 +23,26 @@
     <thead><tr><th></th><th id="calc-per">100 g</th><th>{{ t('dv_col') }}</th></tr></thead>
     <tbody>
       <tr><td>{{ t('energy') }}</td>
-          <td data-field="energy_kcal">{{ d.nutrition.energy_kcal|round(1) if d.nutrition.energy_kcal is not none else '—' }} kcal</td>
+          <td data-field="energy_kcal"{% if d.macro_quality.get('energy_kcal') %} class="val-estimated" title="{{ t('quality_estimated_full') }}"{% endif %}>{{ d.nutrition.energy_kcal|round(1) if d.nutrition.energy_kcal is not none else '—' }} kcal</td>
           <td data-dv="energy_kcal" data-dvbase="{{ macro_dv.energy_kcal }}">{{ (d.nutrition.energy_kcal / macro_dv.energy_kcal * 100)|round(0)|int if d.nutrition.energy_kcal is not none else '—' }}%</td></tr>
       <tr><td>{{ t('protein') }}</td>
-          <td data-field="protein_g">{{ d.nutrition.protein_g|round(1) if d.nutrition.protein_g is not none else '—' }} g</td>
+          <td data-field="protein_g"{% if d.macro_quality.get('protein_g') %} class="val-estimated" title="{{ t('quality_estimated_full') }}"{% endif %}>{{ d.nutrition.protein_g|round(1) if d.nutrition.protein_g is not none else '—' }} g</td>
           <td data-dv="protein_g" data-dvbase="{{ macro_dv.protein_g }}">{{ (d.nutrition.protein_g / macro_dv.protein_g * 100)|round(0)|int if d.nutrition.protein_g is not none else '—' }}%</td></tr>
       <tr><td>{{ t('fat') }}</td>
-          <td data-field="fat_g">{{ d.nutrition.fat_g|round(1) if d.nutrition.fat_g is not none else '—' }} g</td>
+          <td data-field="fat_g"{% if d.macro_quality.get('fat_g') %} class="val-estimated" title="{{ t('quality_estimated_full') }}"{% endif %}>{{ d.nutrition.fat_g|round(1) if d.nutrition.fat_g is not none else '—' }} g</td>
           <td data-dv="fat_g" data-dvbase="{{ macro_dv.fat_g }}">{{ (d.nutrition.fat_g / macro_dv.fat_g * 100)|round(0)|int if d.nutrition.fat_g is not none else '—' }}%</td></tr>
       <tr><td>{{ t('carbs') }}</td>
-          <td data-field="carbohydrate_g">{{ d.nutrition.carbohydrate_g|round(1) if d.nutrition.carbohydrate_g is not none else '—' }} g</td>
+          <td data-field="carbohydrate_g"{% if d.macro_quality.get('carbohydrate_g') %} class="val-estimated" title="{{ t('quality_estimated_full') }}"{% endif %}>{{ d.nutrition.carbohydrate_g|round(1) if d.nutrition.carbohydrate_g is not none else '—' }} g</td>
           <td data-dv="carbohydrate_g" data-dvbase="{{ macro_dv.carbohydrate_g }}">{{ (d.nutrition.carbohydrate_g / macro_dv.carbohydrate_g * 100)|round(0)|int if d.nutrition.carbohydrate_g is not none else '—' }}%</td></tr>
       {% if d.salt_g is not none %}
       <tr><td>{{ t('salt') }}</td>
-          <td data-field="salt_g">{{ d.salt_g|round(2) }} g</td>
+          <td data-field="salt_g"{% if d.macro_quality.get('salt_g') %} class="val-estimated" title="{{ t('quality_estimated_full') }}"{% endif %}>{{ d.salt_g|round(2) }} g</td>
           <td data-dv="salt_g" data-dvbase="{{ macro_dv.salt_g }}">{{ (d.salt_g / macro_dv.salt_g * 100)|round(0)|int }}%</td></tr>
       {% endif %}
     </tbody>
   </table>
   </div>
   <p class="calc-note">{{ t('dv_note') }}</p>
+  {% if d.macro_quality %}<p class="calc-note">{{ t('quality_macro_note') }}</p>{% endif %}
   <script src="/static/calc.js" defer></script>
 </section>

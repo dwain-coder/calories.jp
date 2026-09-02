@@ -90,7 +90,7 @@ def get_food_page_data(page):
     )
     nutrients = [
         dict(r) for r in conn.execute(
-            "SELECT code, name, unit, amount FROM nutrients WHERE item_id = ? ORDER BY id",
+            "SELECT code, name, unit, amount, quality FROM nutrients WHERE item_id = ? ORDER BY id",
             (item_id,))
     ]
     portions = [
@@ -106,6 +106,17 @@ def get_food_page_data(page):
     jdi8 = conn.execute("SELECT score FROM jdi8_scores WHERE item_id = ?", (item_id,)).fetchone()
     # 食塩相当量 (salt equivalent) — expected on Japanese nutrition labels.
     salt_g = next((n["amount"] for n in nutrients if n["code"] == "NACL_EQ"), None)
+    # Which of the headline figures MEXT estimated rather than analysed. Energy
+    # never is, but protein, fat and carbohydrate are on 12-14% of foods, and
+    # those are exactly the numbers the calculator and the FAQ quote.
+    _macro_codes = {"energy_kcal": "ENERC_KCAL", "protein_g": "PROT-", "fat_g": "FAT-",
+                    "carbohydrate_g": "CHOCDF-", "salt_g": "NACL_EQ"}
+    quality_by_code = {n["code"]: n["quality"] for n in nutrients}
+    macro_quality = {
+        field: quality_by_code.get(code)
+        for field, code in _macro_codes.items()
+        if quality_by_code.get(code) and quality_by_code.get(code) != "measured"
+    }
     # Related: same source+category neighbors that have pages in this lang.
     related = [
         dict(r) for r in conn.execute(
@@ -133,7 +144,8 @@ def get_food_page_data(page):
         "item": item, "names": names, "nutrition": nutrition,
         "nutrients": nutrients, "portions": portions, "shelf_life": shelf_life,
         "jdi8": jdi8["score"] if jdi8 else None,
-        "salt_g": salt_g, "pfc": pfc_energy_split(nutrition),
+        "salt_g": salt_g, "macro_quality": macro_quality,
+        "pfc": pfc_energy_split(nutrition),
         "preps": preps, "qualified_name": qualified_name,
         "related": related, "alternates": alternates,
         "license": lic, "license_warning": warning,

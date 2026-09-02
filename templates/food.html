@@ -79,12 +79,25 @@
       {% for nrow in d.nutrients %}
         <tr>
           <td>{{ nrow.name }}{% if lang == 'en' and nutrient_labels_en.get(nrow.code) %} <span class="nl-en">({{ nutrient_labels_en[nrow.code] }})</span>{% endif %}</td>
-          <td>{{ nrow.amount if nrow.amount is not none else '—' }} {{ nrow.unit or '' }}</td>
+          {# The source says what each figure is worth: a parenthesised value is
+             MEXT's own estimate, Tr means a trace rather than none. Shown as
+             the tables show it, not flattened into a bare number. #}
+          <td>
+            {%- if nrow.quality == 'trace' -%}
+              <span class="val-trace" title="{{ t('quality_trace_full') }}">Tr</span>
+            {%- elif nrow.amount is none -%}—
+            {%- elif nrow.quality == 'estimated' -%}
+              <span class="val-estimated" title="{{ t('quality_estimated_full') }}">({{ nrow.amount }})</span> {{ nrow.unit or '' }}
+            {%- else -%}
+              {{ nrow.amount }} {{ nrow.unit or '' }}
+            {%- endif -%}
+          </td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
     </div>
+    <p class="calc-note quality-key">{{ t('quality_key') }}</p>
   </details>
   {% endif %}
 
