@@ -59,6 +59,33 @@
   {% set calc_data = (dict(d.nutrition, salt_g=d.salt_g) if d.salt_g is not none else d.nutrition) | tojson %}
   {% include "partials/calculator.html" %}
 
+  {% if d.ranks or d.notable %}
+  <section class="card context-card">
+    <h2>{{ t('context_heading') }}</h2>
+    {% if d.ranks %}
+    <ul class="rank-list">
+      {% for r in d.ranks %}
+      <li>
+        <span class="rank-label">{{ t(r.label_key) }}</span>
+        <span class="rank-bar" aria-hidden="true"><i style="width: {{ r.percentile }}%"></i></span>
+        <span class="rank-text">{{ t('rank_line', label=t(r.label_key), category=d.item.category,
+                                    peers=r.peers, pct=100 - r.percentile) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if d.notable %}
+    <h3 class="notable-heading">{{ t('notable_heading') }}</h3>
+    <ul class="notable-list">
+      {% for n in d.notable %}
+      <li>{{ t('notable_line', label=n.label, amount=n.amount, unit=n.unit, pct=n.dv_pct) }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <p class="calc-note">{{ t('context_note') }}</p>
+  </section>
+  {% endif %}
+
   {% if d.preps %}
   <section class="card">
     <h2>{{ t('prep_compare') }}</h2>

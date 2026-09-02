@@ -194,9 +194,11 @@
           if (!c) return;
           var name = lang === 'ja' ? (c.identified.name_ja || c.identified.name_en)
                                    : (c.identified.name_en || c.identified.name_ja);
-          html += '<tr><td>' + esc(name) +
+          var doubt = c.ai_estimate.implausible;
+          html += '<tr' + (doubt ? ' class="row-unmatched"' : '') + '><td>' + esc(name) +
             '<br><a class="db-link" href="' + esc(c.db_match.url) + '">' + esc(c.db_match.title) + '</a> ' +
-            '<span class="badge-ai">' + esc(I.confidence) + ': ' + esc(confidence(c.identified.confidence)) + '</span></td>' +
+            '<span class="badge-ai">' + esc(I.confidence) + ': ' + esc(confidence(c.identified.confidence)) + '</span>' +
+            (doubt ? '<br><span class="badge-ai">' + esc(I.quantityDoubted) + '</span>' : '') + '</td>' +
             '<td data-label="g">' + fmt(c.ai_estimate.estimated_grams) + '</td>' +
             '<td data-label="' + esc(I.kcal) + '">' + (c.calculated ? fmt(c.calculated.energy_kcal) : '—') + '</td>' +
             '<td data-label="' + esc(I.protein) + '">' + (c.calculated ? fmt(c.calculated.protein_g) : '—') + '</td>' +

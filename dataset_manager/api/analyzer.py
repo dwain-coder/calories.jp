@@ -14,7 +14,7 @@ import time
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 
 from ..calc.nutrition import meal_insights, scale, sum_components
-from ..site import foodterms, queries
+from ..site import foodterms, queries, servings
 from ..site.i18n import LANGS, MACRO_DV, MICRO_DV, t
 from .database import DB_PATH, get_license_info
 
@@ -183,6 +183,32 @@ def _upgrade_cached(result):
     return result
 
 
+# What one plate can hold. The model estimates grams from a photograph and is
+# occasionally wildly out — a bowl of rice read as 2 kg — and a single bad
+# estimate silently multiplies the meal's calories. These are deliberately
+# loose: the job is to catch the absurd, not to second-guess a large portion.
+MAX_COMPONENT_G = 1500.0        # one ingredient on one plate
+MAX_MEAL_G = 4000.0             # everything visible in one photograph
+SERVING_MULTIPLE = 8.0          # vs a known serving for that food
+
+
+def _implausible(name_ja, grams, match):
+    """Why this quantity cannot be right, or None if it can.
+
+    Returns a reason key rather than dropping the component: the food was
+    still recognised, and saying "this quantity looks wrong" is more use than
+    quietly leaving it out of the total.
+    """
+    if grams is None:
+        return None
+    if grams > MAX_COMPONENT_G:
+        return "too_much"
+    serving = servings.for_food(match["name"]) if match else servings.for_food(name_ja or "")
+    if serving and grams > serving["grams"] * SERVING_MULTIPLE:
+        return "many_servings"
+    return None
+
+
 def _match_food(name_ja, name_en, lang, cooked=False):
     """Best clean-corpus match (MEXT > FDC priority is applied inside search).
 
@@ -272,7 +298,10 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
                 continue
             nut = queries.food_nutrition_json(match["item_id"])
             per100 = nut["per_100g"] if nut else None
-            scaled = scale(per100, grams) if (per100 and grams) else None
+            # A quantity that cannot be right is not multiplied into the
+            # totals; the component still appears, with the reason shown.
+            doubt = _implausible(name_ja, grams, match)
+            scaled = scale(per100, grams) if (per100 and grams and not doubt) else None
             if scaled:
                 parts.append(scaled)
                 dish_parts.append(scaled)
@@ -281,7 +310,8 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
             components.append({
                 "dish_index": di,
                 "identified": {"name_ja": name_ja, "name_en": name_en, "confidence": conf},
-                "ai_estimate": {"estimated_grams": grams, "estimated": True},
+                "ai_estimate": {"estimated_grams": grams, "estimated": True,
+                                "implausible": doubt},
                 "db_match": {
                     "item_id": match["item_id"],
                     # the display name, not the page title: "うし ひき肉 生"

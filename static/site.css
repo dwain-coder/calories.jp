@@ -762,3 +762,24 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 .nutrient-group[open] > summary::before { content: "▾"; }
 .nutrient-group .count { color: var(--ink-faint); font-weight: 400; font-size: 0.85rem; }
 .nutrients-detail > h2 .count { color: var(--ink-faint); font-weight: 400; font-size: 0.9rem; }
+
+/* Where a food sits among its neighbours. A fact about the composition
+   tables, so it is shown as a measurement would be: the bar is the rank, the
+   sentence says what the rank is of. */
+.context-card .rank-list { list-style: none; margin: 0.4rem 0 0; padding: 0; }
+.context-card .rank-list li {
+  display: grid; grid-template-columns: 6rem 1fr; gap: 0.3rem 0.8rem;
+  align-items: center; padding: 0.45rem 0; border-top: 1px solid var(--hairline);
+}
+.context-card .rank-list li:first-child { border-top: none; }
+.rank-label { font-weight: 700; }
+.rank-bar { background: var(--peach); border-radius: var(--pill); height: 0.5rem; overflow: hidden; }
+.rank-bar i { display: block; height: 100%; background: var(--accent); }
+.rank-text { grid-column: 1 / -1; color: var(--ink-soft); font-size: 0.88rem; }
+.notable-heading { font-size: 1rem; margin: 1rem 0 0.3rem; }
+.notable-list { margin: 0; padding-left: 1.1rem; }
+.notable-list li { margin: 0.3rem 0; }
+@media (min-width: 620px) {
+  .context-card .rank-list li { grid-template-columns: 6rem 10rem 1fr; }
+  .rank-text { grid-column: auto; }
+}

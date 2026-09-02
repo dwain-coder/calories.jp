@@ -5,6 +5,7 @@ excluded from the public surface."""
 from ..api.database import get_connection, get_license_info
 from ..calc.nutrition import dish_nutrition
 from . import servings
+from .i18n import MICRO_DV
 
 
 def _row_get(row, key, default=None):
@@ -137,6 +138,8 @@ def get_food_page_data(page):
         (item_id,)).fetchone()
     qualified_name = qual["name"] if qual else None
     alternates = get_alternates(conn, item_id)
+    ranks = nutrient_ranks(conn, item, nutrition)
+    notable = notable_nutrients(conn, item_id, MICRO_DV.get(lang) or MICRO_DV["ja"])
     conn.close()
     ja_name = (names.get("ja") or {}).get("primary") or item["name"]
     preps = prep_variants(item_id, lang, ja_name)
@@ -153,11 +156,77 @@ def get_food_page_data(page):
         "nutrients": nutrients, "portions": portions, "shelf_life": shelf_life,
         "jdi8": jdi8["score"] if jdi8 else None,
         "salt_g": salt_g, "macro_quality": macro_quality, "serving": serving,
+        "ranks": ranks, "notable": notable,
         "pfc": pfc_energy_split(nutrition),
         "preps": preps, "qualified_name": qualified_name,
         "related": related, "alternates": alternates,
         "license": lic, "license_warning": warning,
     }
+
+
+# Facts about where a food sits among its neighbours. Not advice, and not a
+# health claim: "higher in protein than 92% of 肉類" is a statement about the
+# composition table, which is the only thing this site is in a position to
+# say. Computed per request — a handful of counting queries over 2,538 rows,
+# about 5 ms — rather than precomputed into a table that a later import could
+# leave stale.
+RANKED = (
+    ("energy_kcal", "calories"),
+    ("protein_g", "protein"),
+    ("fat_g", "fat"),
+    ("carbohydrate_g", "carbs"),
+)
+MIN_PEERS = 20          # below this a percentile says more than it knows
+
+
+def nutrient_ranks(conn, item, nutrition):
+    """[{field, label_key, percentile, peers}] within the food's own group."""
+    if not nutrition or not item["category"] or item["category"] == "foundation":
+        return []
+    out = []
+    for field, label_key in RANKED:
+        value = nutrition.get(field)
+        if value is None:
+            continue
+        row = conn.execute(
+            f"""SELECT COUNT(*) AS peers,
+                       SUM(CASE WHEN n.{field} < ? THEN 1 ELSE 0 END) AS below
+                FROM nutrition n JOIN items i ON i.id = n.item_id
+                WHERE i.category = ? AND i.source = ? AND n.{field} IS NOT NULL""",
+            (value, item["category"], item["source"])).fetchone()
+        if not row or (row["peers"] or 0) < MIN_PEERS:
+            continue
+        out.append({
+            "field": field, "label_key": label_key,
+            "percentile": round((row["below"] or 0) / row["peers"] * 100),
+            "peers": row["peers"],
+        })
+    return out
+
+
+def notable_nutrients(conn, item_id, dv_table, limit=3):
+    """The components this food carries most of, as a share of the Japanese
+    labelling reference value. A fact with its basis named, not a claim that
+    the food is good for anything."""
+    if not dv_table:
+        return []
+    codes = tuple(dv_table.keys())
+    marks = ",".join("?" * len(codes))
+    rows = conn.execute(
+        f"""SELECT code, name, amount, unit, quality FROM nutrients
+            WHERE item_id = ? AND code IN ({marks}) AND amount IS NOT NULL""",
+        (item_id, *codes)).fetchall()
+    scored = []
+    for r in rows:
+        label, dv, unit = dv_table[r["code"]]
+        if not dv:
+            continue
+        pct = r["amount"] / dv * 100
+        if pct >= 30:            # a third of a day's reference in 100 g
+            scored.append({"code": r["code"], "label": label, "amount": r["amount"],
+                           "unit": unit, "dv_pct": round(pct), "quality": r["quality"]})
+    scored.sort(key=lambda x: -x["dv_pct"])
+    return scored[:limit]
 
 
 def get_dish_page_data(page):
@@ -200,6 +269,16 @@ def get_dish_page_data(page):
     # Weights the recipe did not state. 「にんじん1本」 is a count, and a carrot
     # is about 150 g rather than exactly 150 g, so the page says how much of
     # its total rests on that assumption.
+    # Per 100 g as well as per pot. MAFF recipes are household quantities and
+    # only 13 of 1,364 say how many they serve, so the whole-recipe total is
+    # not comparable between dishes and per 100 g is.
+    if computed["grams"]:
+        computed["per_100g"] = {
+            k: (v * 100 / computed["grams"] if isinstance(v, (int, float)) else v)
+            for k, v in (computed["totals"] or {}).items()
+        }
+    else:
+        computed["per_100g"] = None
     computed["n_assumed"] = sum(
         1 for ln in usable
         if ln["grams"] is not None and _row_get(ln, "grams_source") == "unit")

@@ -33,11 +33,27 @@
     </div>
     {% endif %}
     <div class="table-scroll">
+    {# Two columns, because a MAFF recipe is a potful: the whole-recipe figure
+       answers "what did I just cook", and per 100 g is the only column that
+       compares one dish to another. #}
     <table class="nutrition-table">
+      <thead><tr><th></th>
+        <th>{{ t('whole_recipe_col') }}</th>
+        {% if d.computed.per_100g %}<th>{{ t('per_100g') }}</th>{% endif %}
+      </tr></thead>
       <tbody>
-        <tr><td>{{ t('protein') }}</td><td>{{ d.computed.totals.get('protein_g', 0)|round(1) }} g</td></tr>
-        <tr><td>{{ t('fat') }}</td><td>{{ d.computed.totals.get('fat_g', 0)|round(1) }} g</td></tr>
-        <tr><td>{{ t('carbs') }}</td><td>{{ d.computed.totals.get('carbohydrate_g', 0)|round(1) }} g</td></tr>
+        <tr><td>{{ t('energy') }}</td>
+            <td>{{ d.computed.totals.get('energy_kcal', 0)|round(0)|int }} {{ t('kcal') }}</td>
+            {% if d.computed.per_100g %}<td>{{ d.computed.per_100g.get('energy_kcal', 0)|round(0)|int }} {{ t('kcal') }}</td>{% endif %}</tr>
+        <tr><td>{{ t('protein') }}</td>
+            <td>{{ d.computed.totals.get('protein_g', 0)|round(1) }} g</td>
+            {% if d.computed.per_100g %}<td>{{ d.computed.per_100g.get('protein_g', 0)|round(1) }} g</td>{% endif %}</tr>
+        <tr><td>{{ t('fat') }}</td>
+            <td>{{ d.computed.totals.get('fat_g', 0)|round(1) }} g</td>
+            {% if d.computed.per_100g %}<td>{{ d.computed.per_100g.get('fat_g', 0)|round(1) }} g</td>{% endif %}</tr>
+        <tr><td>{{ t('carbs') }}</td>
+            <td>{{ d.computed.totals.get('carbohydrate_g', 0)|round(1) }} g</td>
+            {% if d.computed.per_100g %}<td>{{ d.computed.per_100g.get('carbohydrate_g', 0)|round(1) }} g</td>{% endif %}</tr>
       </tbody>
     </table>
     </div>

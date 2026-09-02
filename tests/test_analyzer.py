@@ -196,3 +196,28 @@ class TestDishBreakdown(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPlausibility(unittest.TestCase):
+    """The model estimates grams from a photograph and is occasionally wildly
+    out. One bad estimate multiplies the whole meal."""
+
+    def test_absurd_quantity_is_not_counted(self):
+        payload = {"dishes": [{
+            "dish_ja": "ごはん", "dish_en": "rice", "servings_visible": 1,
+            "components": [{"name_ja": "ご飯", "name_en": "cooked rice",
+                            "estimated_grams": 2000, "confidence": "high"}]}]}
+        d = analyze(payload).json()
+        c = d["components"][0]
+        self.assertEqual(c["ai_estimate"]["implausible"], "too_much")
+        self.assertIsNone(c["calculated"])          # named, but not multiplied in
+        self.assertIn(d["totals"].get("energy_kcal"), (None, 0))
+
+    def test_a_large_but_possible_portion_still_counts(self):
+        payload = {"dishes": [{
+            "dish_ja": "ごはん", "dish_en": "rice", "servings_visible": 1,
+            "components": [{"name_ja": "ご飯", "name_en": "cooked rice",
+                            "estimated_grams": 300, "confidence": "high"}]}]}
+        d = analyze(payload).json()
+        self.assertIsNone(d["components"][0]["ai_estimate"]["implausible"])
+        self.assertGreater(d["totals"]["energy_kcal"], 300)
