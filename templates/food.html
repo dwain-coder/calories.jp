@@ -17,14 +17,26 @@
   {% if d.nutrition %}
   <div class="food-hero" style="--c: {{ group_color(d.item.category) }}">
     <div class="food-hero-figure">
-      {{ pfc_donut(d.pfc, 132, d.nutrition.energy_kcal) | safe }}
+      {# the ring is the energy split, which is the same either way; the number
+         inside follows the headline so the two do not disagree #}
+      {{ pfc_donut(d.pfc, 132, (d.serving.nutrition.energy_kcal if (d.serving and d.serving.nutrition) else d.nutrition.energy_kcal)) | safe }}
       {{ fingerprint(d.nutrients, d.item.category, 168, t('nutrient_fingerprint')) | safe }}
     </div>
     <div class="food-hero-body">
+      {# The question is 「茶碗一杯で何kcal」, so lead with that where we know
+         what a serving is, and keep per-100g beside it as the published unit. #}
+      {% if d.serving and d.serving.nutrition %}
+      <p class="kcal-hero">
+        <strong>{{ d.serving.nutrition.energy_kcal|round(0)|int }}</strong>
+        <span class="unit">{{ t('kcal') }}</span>
+        <span class="per">/ {{ d.serving.label }}（{{ d.serving.grams|round(0)|int }}g）</span>
+        <span class="per per-100">{{ t('per_100g') }} {{ d.nutrition.energy_kcal|round(0)|int if d.nutrition.energy_kcal is not none else '—' }} {{ t('kcal') }}</span>
+      {% else %}
       <p class="kcal-hero">
         <strong>{{ d.nutrition.energy_kcal|round(0)|int if d.nutrition.energy_kcal is not none else '—' }}</strong>
         <span class="unit">{{ t('kcal') }}</span>
         <span class="per">/ {{ t('per_100g') }}</span>
+      {% endif %}
         {% if d.jdi8 is not none %}<span class="jdi8-badge">{{ t('jdi8') }} <b>{{ d.jdi8 }}/8</b></span>{% endif %}
       </p>
 

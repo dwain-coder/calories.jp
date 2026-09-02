@@ -120,6 +120,7 @@ def food_page(request: Request, slug: str):
     qa = faq.food_faq(
         lang, name, data["nutrition"], salt_g=data["salt_g"],
         portions=data["portions"], preps=data["preps"], source=data["item"]["source"],
+        serving=data.get("serving"),
     )
     faq_ld = seo.faq_jsonld(qa)
     if faq_ld:

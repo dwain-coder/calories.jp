@@ -8,7 +8,8 @@ so the same text a reader sees is what search engines index.
 _R1 = lambda v: f"{round(v, 1):g}"
 
 
-def food_faq(lang, name, nutrition, salt_g=None, portions=None, preps=None, source=None):
+def food_faq(lang, name, nutrition, salt_g=None, portions=None, preps=None,
+             source=None, serving=None):
     if not nutrition or nutrition.get("energy_kcal") is None:
         return []
     kcal = nutrition["energy_kcal"]
@@ -19,8 +20,12 @@ def food_faq(lang, name, nutrition, salt_g=None, portions=None, preps=None, sour
         qa.append((
             f"{name}のカロリーは？",
             f"{name}は100gあたり{round(kcal)}kcalです。"
-            + (f"1食分の目安は、100gで{round(kcal)}kcal、150gで{round(kcal * 1.5)}kcal、"
-               f"200gで{round(kcal * 2)}kcalになります。" if kcal else "")
+            # A real portion where one is known beats three arbitrary weights:
+            # 「茶碗1杯（150g）で234kcal」 is what was being asked.
+            + (f"{serving['label']}（{round(serving['grams'])}g）では"
+               f"{round(kcal * serving['grams'] / 100)}kcalです。" if serving and kcal
+               else (f"1食分の目安は、100gで{round(kcal)}kcal、150gで{round(kcal * 1.5)}kcal、"
+                     f"200gで{round(kcal * 2)}kcalになります。" if kcal else ""))
             + (f"出典は{source}。" if source else ""),
         ))
         if p is not None:

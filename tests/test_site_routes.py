@@ -176,6 +176,21 @@ class TestSitePages(unittest.TestCase):
         conn.close()
         self.assertEqual(n, 2538)
 
+    def test_serving_leads_the_page_where_one_is_known(self):
+        """「白米のカロリー」 is a question about a bowl, not about 100 g."""
+        html = client.get("/food/" + "こめ-水稲めし-精白米-うるち米").text
+        self.assertIn("茶碗1杯", html)
+        self.assertIn("234", html)              # 156 kcal/100g at 150 g
+        self.assertIn("100gあたり", html)        # the published unit stays visible
+        # the calculator starts at the serving weight, and its table agrees
+        self.assertIn('value="150"', html)
+        self.assertIn("234.0 kcal", html)
+
+    def test_food_without_a_serving_still_leads_with_per_100g(self):
+        html = client.get("/food/" + "こめ-水稲穀粒-精白米-うるち米").text
+        self.assertIn("100gあたり", html)
+        self.assertIn('value="100"', html)
+
     def test_food_page_has_faq_and_dv(self):
         row = _one(
             """SELECT sp.slug FROM site_pages sp JOIN nutrition n ON n.item_id = sp.item_id

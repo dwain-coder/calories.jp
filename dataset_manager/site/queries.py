@@ -4,6 +4,7 @@ Wikidata/FoodKeeper items, so quarantined and share-alike data is structurally
 excluded from the public surface."""
 from ..api.database import get_connection, get_license_info
 from ..calc.nutrition import dish_nutrition
+from . import servings
 
 
 def _row_get(row, key, default=None):
@@ -139,12 +140,19 @@ def get_food_page_data(page):
     conn.close()
     ja_name = (names.get("ja") or {}).get("primary") or item["name"]
     preps = prep_variants(item_id, lang, ja_name)
+    # What one serving of this food is, when we have decided. The figures are
+    # the same per-100g values scaled deterministically; the portion itself is
+    # a kitchen convention and is labelled as one.
+    serving = servings.for_food(ja_name)
+    if serving and nutrition:
+        serving = dict(serving, nutrition=servings.scale(nutrition, serving["grams"]),
+                       salt_g=(salt_g * serving["grams"] / 100 if salt_g is not None else None))
     lic, warning = get_license_info(item["source"])
     return {
         "item": item, "names": names, "nutrition": nutrition,
         "nutrients": nutrients, "portions": portions, "shelf_life": shelf_life,
         "jdi8": jdi8["score"] if jdi8 else None,
-        "salt_g": salt_g, "macro_quality": macro_quality,
+        "salt_g": salt_g, "macro_quality": macro_quality, "serving": serving,
         "pfc": pfc_energy_split(nutrition),
         "preps": preps, "qualified_name": qualified_name,
         "related": related, "alternates": alternates,
