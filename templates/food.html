@@ -74,6 +74,19 @@
       {% endfor %}
     </ul>
     {% endif %}
+    {% if d.claims %}
+    <h3 class="notable-heading">{{ t('claims_heading') }}</h3>
+    <ul class="claim-list">
+      {% for c in d.claims %}
+      <li class="claim claim-{{ c.level }}">
+        <span class="claim-tag">{{ t('claim_high' if c.level == 'high' else 'claim_source', label=c.label) }}</span>
+        <span class="claim-figures">{{ t('claim_line', label=c.label, amount=c.amount, unit=c.unit, threshold=c.threshold) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="calc-note">{{ t('claims_note') }}</p>
+    {% endif %}
+
     {% if d.notable %}
     <h3 class="notable-heading">{{ t('notable_heading') }}</h3>
     <ul class="notable-list">
@@ -91,7 +104,11 @@
     <h2>{{ t('prep_compare') }}</h2>
     <div class="table-scroll">
     <table class="nutrition-table stack-table">
-      <thead><tr><th>{{ t('preparation') }}</th><th>{{ t('calories') }}</th><th>{{ t('protein') }}</th><th>{{ t('fat') }}</th><th>{{ t('carbs') }}</th></tr></thead>
+      {# The last column is the point: 100 g raw does not stay 100 g. Boiled
+         udon is 180 % of its raw weight, so the same starting food gives far
+         more cooked calories than the per-100g column suggests. #}
+      <thead><tr><th>{{ t('preparation') }}</th><th>{{ t('calories') }}</th><th>{{ t('protein') }}</th><th>{{ t('fat') }}</th><th>{{ t('carbs') }}</th>
+        {% if d.preps | selectattr('from_raw_100g') | list %}<th>{{ t('from_raw_100g') }}</th>{% endif %}</tr></thead>
       <tbody>
       {% for v in d.preps %}
         <tr{% if v.is_current %} class="row-current"{% endif %}>
@@ -100,6 +117,13 @@
           <td data-label="{{ t('protein') }}">{{ v.protein_g|round(1) if v.protein_g is not none else '—' }}</td>
           <td data-label="{{ t('fat') }}">{{ v.fat_g|round(1) if v.fat_g is not none else '—' }}</td>
           <td data-label="{{ t('carbs') }}">{{ v.carbohydrate_g|round(1) if v.carbohydrate_g is not none else '—' }}</td>
+          {% if d.preps | selectattr('from_raw_100g') | list %}
+          <td data-label="{{ t('from_raw_100g') }}">
+            {%- if v.from_raw_100g -%}
+              {{ v.from_raw_100g|round(0)|int }} <span class="yield-pct">({{ v.yield_pct|round(0)|int }}%)</span>
+            {%- else -%}—{%- endif -%}
+          </td>
+          {% endif %}
         </tr>
       {% endfor %}
       </tbody>

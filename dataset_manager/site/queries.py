@@ -4,7 +4,7 @@ Wikidata/FoodKeeper items, so quarantined and share-alike data is structurally
 excluded from the public surface."""
 from ..api.database import get_connection, get_license_info
 from ..calc.nutrition import dish_nutrition
-from . import servings
+from . import claims, servings
 from .i18n import MICRO_DV
 
 
@@ -140,6 +140,8 @@ def get_food_page_data(page):
     alternates = get_alternates(conn, item_id)
     ranks = nutrient_ranks(conn, item, nutrition)
     notable = notable_nutrients(conn, item_id, MICRO_DV.get(lang) or MICRO_DV["ja"])
+    # Which of Japan's own labelling criteria this composition would satisfy.
+    nutrient_claims = claims.claims_for(nutrients, item["category"])
     conn.close()
     ja_name = (names.get("ja") or {}).get("primary") or item["name"]
     preps = prep_variants(item_id, lang, ja_name)
@@ -156,7 +158,7 @@ def get_food_page_data(page):
         "nutrients": nutrients, "portions": portions, "shelf_life": shelf_life,
         "jdi8": jdi8["score"] if jdi8 else None,
         "salt_g": salt_g, "macro_quality": macro_quality, "serving": serving,
-        "ranks": ranks, "notable": notable,
+        "ranks": ranks, "notable": notable, "claims": nutrient_claims,
         "pfc": pfc_energy_split(nutrition),
         "preps": preps, "qualified_name": qualified_name,
         "related": related, "alternates": alternates,
@@ -513,11 +515,13 @@ def prep_variants(item_id, lang, ja_name):
     conn = get_connection()
     rows = conn.execute(
         """SELECT nm.item_id, nm.name AS ja_name, sp.slug, sp.title,
-                  n.energy_kcal, n.protein_g, n.fat_g, n.carbohydrate_g
+                  n.energy_kcal, n.protein_g, n.fat_g, n.carbohydrate_g,
+                  cy.rate_percent
            FROM item_names nm
            JOIN items i ON i.id = nm.item_id AND i.source = 'MEXT Standard Tables'
            JOIN site_pages sp ON sp.item_id = nm.item_id AND sp.lang = ?
            LEFT JOIN nutrition n ON n.item_id = nm.item_id
+           LEFT JOIN cooking_yield cy ON cy.item_id = nm.item_id
            WHERE nm.lang = 'ja' AND nm.is_primary = 1 AND nm.name LIKE ?
            ORDER BY n.energy_kcal DESC""",
         (lang, base + " %")).fetchall()
@@ -533,6 +537,12 @@ def prep_variants(item_id, lang, ja_name):
             "is_current": r["item_id"] == item_id,
             "energy_kcal": r["energy_kcal"], "protein_g": r["protein_g"],
             "fat_g": r["fat_g"], "carbohydrate_g": r["carbohydrate_g"],
+            # 100 g of the raw food becomes this much once cooked, so the
+            # cooked row can also be read as "what that raw 100 g became".
+            "yield_pct": _row_get(r, "rate_percent"),
+            "from_raw_100g": (
+                r["energy_kcal"] * _row_get(r, "rate_percent") / 100
+                if r["energy_kcal"] is not None and _row_get(r, "rate_percent") else None),
         })
     return out if len(out) > 1 else []
 

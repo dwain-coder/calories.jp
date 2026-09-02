@@ -783,3 +783,14 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   .context-card .rank-list li { grid-template-columns: 6rem 10rem 1fr; }
   .rank-text { grid-column: auto; }
 }
+
+/* 食品表示基準 別表第十二: the thresholds a Japanese label must meet before it
+   may say a food is high in a nutrient. The law's criteria, not ours. */
+.claim-list { list-style: none; margin: 0.4rem 0 0; padding: 0; }
+.claim { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; padding: 0.35rem 0; }
+.claim-tag {
+  font-weight: 700; font-size: 0.9rem; padding: 0.15rem 0.6rem;
+  border-radius: var(--pill); background: var(--accent-soft); color: var(--accent-dark);
+}
+.claim-source .claim-tag { background: var(--peach); color: var(--ink-soft); }
+.claim-figures { color: var(--ink-soft); font-size: 0.88rem; font-family: var(--font-data); }

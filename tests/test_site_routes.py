@@ -191,6 +191,28 @@ class TestSitePages(unittest.TestCase):
         self.assertIn("100gあたり", html)
         self.assertIn('value="100"', html)
 
+    def test_cooking_yield_makes_raw_and_cooked_comparable(self):
+        """Boiled udon reads 95 kcal/100 g against raw udon's 249, which looks
+        like boiling removes calories. 100 g raw becomes 180 g boiled: MEXT
+        publishes the rate, and without it the comparison misleads."""
+        conn = sqlite3.connect(DB_PATH)
+        n = conn.execute("SELECT COUNT(*) FROM cooking_yield").fetchone()[0]
+        rate = conn.execute(
+            """SELECT cy.rate_percent FROM cooking_yield cy JOIN items i ON i.id = cy.item_id
+               WHERE i.source_url = 'mext_01039'""").fetchone()
+        conn.close()
+        self.assertGreater(n, 400)
+        self.assertEqual(rate[0], 180.0)          # うどん ゆで, as published
+        html = client.get("/food/こむぎ-うどん-ゆで").text
+        self.assertIn("生100gから", html)
+        self.assertIn("171", html)                # 95 kcal x 180 %
+
+    def test_labelling_criteria_shown_where_met(self):
+        """食品表示基準 別表第十二 thresholds, transcribed from the statute."""
+        html = client.get("/food/だいず-糸引き納豆").text
+        self.assertIn("食品表示基準", html)
+        self.assertIn("ビタミンK", html)           # natto is 600 µg against a 45 µg bar
+
     def test_food_page_has_faq_and_dv(self):
         row = _one(
             """SELECT sp.slug FROM site_pages sp JOIN nutrition n ON n.item_id = sp.item_id

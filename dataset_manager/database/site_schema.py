@@ -50,6 +50,15 @@ SITE_DDL = [
     )""",
     "CREATE INDEX IF NOT EXISTS idx_ril_dish ON recipe_ingredient_links(dish_item_id)",
 
+    # 調理による重量変化率: 100 g of the raw food becomes this many grams once
+    # cooked. Boiled udon is 180, dried soba 260. Without it, comparing 100 g
+    # of raw against 100 g of cooked compares two different amounts of food.
+    """CREATE TABLE IF NOT EXISTS cooking_yield (
+        item_id INTEGER PRIMARY KEY REFERENCES items(id),
+        rate_percent REAL NOT NULL,
+        method TEXT
+    )""",
+
     # FDC serving portions (from raw FoundationFoods JSON).
     """CREATE TABLE IF NOT EXISTS food_portions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
