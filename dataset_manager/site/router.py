@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from . import cards, faq, groups, media, queries, seo
+from . import cards, faq, groups, media, nutrient_groups, queries, seo
 from .i18n import LANGS, MACRO_DV, MEXT_GROUPS_EN, NUTRIENT_LABELS_EN, SITE_NAME, t
 from ..scripts.build_site import slugify_en
 
@@ -69,6 +69,7 @@ def _render(request, name, lang, ctx, headers=CACHE):
         "pfc_donut": cards.pfc_donut_svg,
         "media_get": media.get,
         "media_video": media.video,
+        "nutrient_groups": lambda rows: nutrient_groups.grouped(rows, lang),
         "media_slot": None,          # pages that use imagery override this
         "noindex": False,            # paginated pages override this
     }

@@ -748,3 +748,17 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 }
 .val-trace { color: var(--ink-soft); font-family: var(--font-data); cursor: help; }
 .quality-key { border-top: 1px solid var(--hairline); padding-top: 0.6rem; margin-top: 0.4rem; }
+
+/* Component families. A food carries up to ~170 measured components once the
+   amino acid, fatty acid and carbohydrate books are loaded, so they are filed
+   rather than listed: basics and minerals open, the rest a tap away. */
+.nutrient-group { border-top: 1px solid var(--hairline); }
+.nutrient-group > summary {
+  cursor: pointer; padding: 0.65rem 0.2rem; font-weight: 700;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.nutrient-group > summary::-webkit-details-marker { display: none; }
+.nutrient-group > summary::before { content: "▸"; color: var(--accent); font-size: 0.8em; }
+.nutrient-group[open] > summary::before { content: "▾"; }
+.nutrient-group .count { color: var(--ink-faint); font-weight: 400; font-size: 0.85rem; }
+.nutrients-detail > h2 .count { color: var(--ink-faint); font-weight: 400; font-size: 0.9rem; }
