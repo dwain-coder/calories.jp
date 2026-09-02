@@ -357,18 +357,29 @@ def robots():
 def sitemap_index():
     body = ['<?xml version="1.0" encoding="UTF-8"?>',
             '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
-    for p in sorted(SITEMAP_DIR.glob("sitemap-*.xml")):
-        lang = "ja" if p.stem.endswith("-ja") else "en"
-        body.append(f"<sitemap><loc>{seo.base_url(lang)}/{p.name}</loc></sitemap>")
+    for lang in LANGS:
+        for section in queries.SITEMAP_SECTIONS:
+            body.append(
+                f"<sitemap><loc>{seo.base_url(lang)}/sitemap-{section}-{lang}.xml</loc></sitemap>")
     body.append("</sitemapindex>")
     return Response("\n".join(body), media_type="application/xml", headers=CACHE)
 
 
-@router.get("/sitemap-{name}.xml")
-def sitemap_file(name: str):
-    if not name.replace("-", "").isalnum():
+@router.get("/sitemap-{section}-{lang}.xml")
+def sitemap_section(section: str, lang: str):
+    """Generated from the database on request.
+
+    These used to be files written by build-sitemaps into data/sitemaps/, and
+    data/ is not in the repository — so the deployed site advertised an empty
+    sitemap index while holding 4,072 indexable pages.
+    """
+    if lang not in LANGS or section not in queries.SITEMAP_SECTIONS:
         raise HTTPException(status_code=404, detail="Not found")
-    path = SITEMAP_DIR / f"sitemap-{name}.xml"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Sitemap not built")
-    return Response(path.read_text(encoding="utf-8"), media_type="application/xml", headers=CACHE)
+    paths = queries.sitemap_slugs(lang, section)
+    body = ['<?xml version="1.0" encoding="UTF-8"?>',
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    base = seo.base_url(lang)
+    for path in paths:
+        body.append(f"<url><loc>{base}{quote(path)}</loc></url>")
+    body.append("</urlset>")
+    return Response("\n".join(body), media_type="application/xml", headers=CACHE)

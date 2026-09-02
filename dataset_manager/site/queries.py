@@ -710,3 +710,38 @@ def food_nutrition_json(item_id):
         ),
         "portions": portions,
     }
+
+
+# ---------------------------------------------------------------- sitemaps
+
+SITEMAP_SECTIONS = ("foods", "dishes", "categories", "pages")
+STATIC_PAGES = ("", "foods", "meal-calculator", "analyzer", "goals", "sources",
+                "guides/cooking-and-calories", "about", "privacy", "contact")
+
+
+def sitemap_slugs(lang, section):
+    """The paths one sitemap section covers, straight from the database.
+
+    Built per request rather than read from files: the generated files live
+    under data/, which is not in the repository or the image, so production
+    served an empty sitemap index for every one of its 4,072 pages. Querying
+    is cheap, and it cannot go stale against the pages it lists.
+    """
+    conn = get_connection()
+    try:
+        if section in ("foods", "dishes"):
+            ptype = "food" if section == "foods" else "dish"
+            return [f"/{ptype}/{r['slug']}" for r in conn.execute(
+                "SELECT slug FROM site_pages WHERE indexable = 1 AND lang = ?"
+                " AND page_type = ? ORDER BY id", (lang, ptype))]
+        if section == "categories":
+            return [f"/category/{r['category']}" for r in conn.execute(
+                """SELECT i.category FROM items i
+                   JOIN site_pages sp ON sp.item_id = i.id AND sp.lang = ?
+                   WHERE i.category IS NOT NULL AND i.category != 'foundation'
+                   GROUP BY i.category ORDER BY i.category""", (lang,))]
+        if section == "pages":
+            return [f"/{p}" for p in STATIC_PAGES]
+        return []
+    finally:
+        conn.close()

@@ -660,60 +660,11 @@ def build_search():
 
 
 def build_sitemaps():
-    """Split sitemaps per type and language: foods, dishes, categories, pages."""
-    from ..site.i18n import MEXT_GROUPS_EN
-    conn = get_conn()
-    out_dir = Path("data/sitemaps")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for old in out_dir.glob("sitemap-*.xml"):
-        old.unlink()
+    """Retired: the site generates its sitemaps from the database per request.
 
-    alternates = {}
-    for r in conn.execute("SELECT item_id, lang, page_type, slug FROM site_pages WHERE indexable=1"):
-        alternates.setdefault(r["item_id"], {})[r["lang"]] = (r["page_type"], r["slug"])
-
-    def write(name, entries):
-        if not entries:
-            return
-        (out_dir / f"{name}.xml").write_text(seo.sitemap_xml(entries), encoding="utf-8")
-        print(f"{name}.xml: {len(entries)} urls")
-
-    for lang in LANGS:
-        for ptype, plural in (("food", "foods"), ("dish", "dishes")):
-            entries = []
-            for r in conn.execute(
-                "SELECT item_id, slug FROM site_pages WHERE indexable=1 AND lang=? AND page_type=? ORDER BY id",
-                (lang, ptype)):
-                entries.append({
-                    "loc": seo.page_url(lang, ptype, r["slug"]),
-                    "alternates": seo.hreflang_links(alternates.get(r["item_id"], {})),
-                })
-            write(f"sitemap-{plural}-{lang}", entries)
-
-        # Category pages: only categories with pages in this lang.
-        from urllib.parse import quote
-        cat_entries = []
-        for r in conn.execute(
-            """SELECT i.category, COUNT(*) c FROM items i
-               JOIN site_pages sp ON sp.item_id = i.id AND sp.lang = ?
-               WHERE i.category IS NOT NULL AND i.category != 'foundation'
-               GROUP BY i.category""", (lang,)):
-            cat = r["category"]
-            if lang == "en":
-                en = MEXT_GROUPS_EN.get(cat)
-                if not en:
-                    continue  # no EN slugs for prefectures v1
-                slug = slugify_en(en)
-            else:
-                slug = cat
-            cat_entries.append({"loc": seo.base_url(lang) + f"/category/{quote(slug)}"})
-        write(f"sitemap-categories-{lang}", cat_entries)
-
-        # Static tool pages.
-        page_entries = [
-            {"loc": seo.base_url(lang) + f"/{p}"}
-            for p in ("", "foods", "meal-calculator", "analyzer", "goals", "sources",
-                      "guides/cooking-and-calories", "about", "privacy", "contact")
-        ]
-        write(f"sitemap-pages-{lang}", page_entries)
-    conn.close()
+    This wrote data/sitemaps/*.xml, and data/ is not in the repository or the
+    deployed image — so production advertised an empty sitemap index while
+    holding 4,072 indexable pages. Kept as a no-op because `build-site` and
+    the documented run order call it.
+    """
+    print("build-sitemaps: nothing to do — sitemaps are served from the database")

@@ -369,6 +369,22 @@ class TestSitePages(unittest.TestCase):
         self.assertNotIn('name="robots" content="noindex', client.get("/").text)
         self.assertIn("Sitemap:", client.get("/robots.txt").text)
 
+    def test_sitemaps_list_every_indexable_page(self):
+        """These were files under data/, which is gitignored, so the deployed
+        site served an empty sitemap index for 4,072 pages."""
+        index = client.get("/sitemap.xml").text
+        self.assertGreaterEqual(index.count("<sitemap>"), 4)
+        total = 0
+        for section in ("foods", "dishes", "categories", "pages"):
+            r = client.get(f"/sitemap-{section}-ja.xml")
+            self.assertEqual(r.status_code, 200, section)
+            n = r.text.count("<url>")
+            self.assertGreater(n, 0, section)
+            total += n
+        expected = _one("SELECT COUNT(*) c FROM site_pages WHERE indexable=1 AND lang='ja'")["c"]
+        self.assertGreaterEqual(total, expected)
+        self.assertEqual(client.get("/sitemap-nope-ja.xml").status_code, 404)
+
     def test_robots_and_sitemap_index(self):
         r = client.get("/robots.txt")
         self.assertEqual(r.status_code, 200)
