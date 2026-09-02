@@ -6,7 +6,7 @@
 <ul class="result-list">
   {% for r in results %}
   <li class="card result">
-    <a href="/{{ lang }}/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">
+    <a href="/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">
       <span class="result-title">{{ r.name }}</span>
       {% if r.energy_kcal is not none %}<span class="kcal">{{ r.energy_kcal|round(0)|int }} kcal / 100g</span>{% endif %}
     </a>

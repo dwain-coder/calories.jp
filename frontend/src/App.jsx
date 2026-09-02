@@ -14,7 +14,8 @@ function App() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch(`${API}/`);
+      // the root serves the public site to browsers; ask for the stats explicitly
+      const res = await fetch(`${API}/`, { headers: { Accept: 'application/json' } });
       const data = await res.json();
       setStats(data);
     } catch (err) {

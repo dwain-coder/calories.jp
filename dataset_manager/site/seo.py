@@ -12,8 +12,9 @@ def base_url(lang):
 
 
 def page_path(lang, page_type, slug):
+    """One language, so no language segment: /food/…, not /ja/food/…."""
     seg = "food" if page_type == "food" else "dish"
-    return f"/{lang}/{seg}/{quote(slug)}"
+    return f"/{seg}/{quote(slug)}"
 
 
 def page_url(lang, page_type, slug):
@@ -21,7 +22,14 @@ def page_url(lang, page_type, slug):
 
 
 def hreflang_links(pages):
-    """pages: {lang: (page_type, slug)}. Returns [(hreflang, url)] incl. x-default->en."""
+    """pages: {lang: (page_type, slug)}. Returns [(hreflang, url)].
+
+    Empty while the site has one locale: hreflang describes a choice between
+    versions, and announcing a single version as an alternate of itself says
+    nothing. Restored automatically if a second language is added back.
+    """
+    if len(pages) < 2:
+        return []
     links = [(lang, page_url(lang, pt, slug)) for lang, (pt, slug) in sorted(pages.items())]
     if "en" in pages:
         pt, slug = pages["en"]

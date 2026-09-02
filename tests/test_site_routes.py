@@ -31,7 +31,7 @@ def _has_pages():
 
 class TestLegacyEndpointsUnchanged(unittest.TestCase):
     def test_root_still_json_stats(self):
-        r = client.get("/")
+        r = client.get("/", headers={"accept": "application/json"})
         self.assertEqual(r.status_code, 200)
         self.assertIn("total_items", r.json())
 
@@ -58,27 +58,46 @@ class TestSitePages(unittest.TestCase):
             raise unittest.SkipTest("site_pages not built yet (run build-pages)")
 
     def test_home_renders(self):
-        r = client.get("/ja/")
+        r = client.get("/")
         self.assertEqual(r.status_code, 200)
         self.assertIn("text/html", r.headers["content-type"])
+
+    def test_language_prefix_redirects_permanently(self):
+        """The site was served under /ja/ before it dropped the prefix. Those
+        URLs were public, so they move rather than disappear."""
+        for old, new in (("/ja/", "/"), ("/ja/foods", "/foods"),
+                         ("/ja/food/普通牛乳", "/food/普通牛乳"),
+                         ("/ja/guides/cooking-and-calories", "/guides/cooking-and-calories")):
+            from urllib.parse import unquote
+            r = client.get(old, follow_redirects=False)
+            self.assertEqual(r.status_code, 301, old)
+            self.assertEqual(unquote(r.headers["location"]), new, old)
+        # and the destination actually serves the page
+        self.assertEqual(client.get("/ja/foods").status_code, 200)
+
+    def test_urls_carry_no_language_segment(self):
+        html = client.get("/", headers={"accept": "text/html"}).text
+        self.assertNotIn('href="/ja/', html)
+        self.assertIn('<link rel="canonical"', html)
+        self.assertNotIn("/ja/", client.get("/sitemap.xml").text)
 
     def test_english_is_gone(self):
         """Single-language site: /en/ must not resolve, and no page should
         offer a language switch."""
         for url in ("/en/", "/en/foods", "/en/goals"):
             self.assertEqual(client.get(url).status_code, 404, url)
-        self.assertNotIn("lang-switch", client.get("/ja/").text)
+        self.assertNotIn("lang-switch", client.get("/").text)
 
     def test_bad_lang_404(self):
         self.assertEqual(client.get("/fr/").status_code, 404)
 
     def test_unknown_slug_404(self):
-        self.assertEqual(client.get("/ja/food/definitely-not-a-real-slug-xyz").status_code, 404)
+        self.assertEqual(client.get("/food/definitely-not-a-real-slug-xyz").status_code, 404)
 
     def test_food_page_seo(self):
         row = _one(
             "SELECT slug FROM site_pages WHERE lang='ja' AND page_type='food' LIMIT 1")
-        r = client.get(f"/ja/food/{row['slug']}")
+        r = client.get(f"/food/{row['slug']}")
         self.assertEqual(r.status_code, 200)
         html = r.text
         self.assertIn('rel="canonical"', html)
@@ -88,12 +107,12 @@ class TestSitePages(unittest.TestCase):
     def test_ja_food_page(self):
         row = _one(
             "SELECT slug FROM site_pages WHERE lang='ja' AND page_type='food' LIMIT 1")
-        r = client.get(f"/ja/food/{row['slug']}")
+        r = client.get(f"/food/{row['slug']}")
         self.assertEqual(r.status_code, 200)
         self.assertIn('lang="ja"', r.text)
 
     def test_search_html(self):
-        r = client.get("/ja/search?q=みそ")
+        r = client.get("/search?q=みそ")
         self.assertEqual(r.status_code, 200)
 
     def test_api_search(self):
@@ -108,22 +127,22 @@ class TestSitePages(unittest.TestCase):
             self.assertEqual(client.get(f"/api/foods/{row['id']}/nutrition").status_code, 404)
 
     def test_category_page_ja(self):
-        r = client.get("/ja/category/肉類")
+        r = client.get("/category/肉類")
         self.assertEqual(r.status_code, 200)
         self.assertIn("sortable", r.text)
 
     def test_category_page_unknown_404(self):
-        self.assertEqual(client.get("/ja/category/not-a-category").status_code, 404)
+        self.assertEqual(client.get("/category/not-a-category").status_code, 404)
 
     def test_goals_page(self):
-        r = client.get("/ja/goals")
+        r = client.get("/goals")
         self.assertEqual(r.status_code, 200)
         self.assertIn("g-target", r.text)
 
     def test_browse_page_paginates(self):
-        r = client.get("/ja/foods")
+        r = client.get("/foods")
         self.assertEqual(r.status_code, 200)
-        r2 = client.get("/ja/foods?page=2&sort=kcal_desc")
+        r2 = client.get("/foods?page=2&sort=kcal_desc")
         self.assertEqual(r2.status_code, 200)
         self.assertIn("noindex", r2.text)  # paginated pages are not indexed
         self.assertNotEqual(r.text, r2.text)
@@ -132,7 +151,7 @@ class TestSitePages(unittest.TestCase):
         row = _one(
             """SELECT sp.slug FROM site_pages sp JOIN nutrition n ON n.item_id = sp.item_id
                WHERE sp.lang='ja' AND sp.page_type='food' AND n.energy_kcal IS NOT NULL LIMIT 1""")
-        html = client.get(f"/ja/food/{row['slug']}").text
+        html = client.get(f"/food/{row['slug']}").text
         self.assertIn("FAQPage", html)
         self.assertIn('data-dv="protein_g"', html)
 
@@ -143,22 +162,22 @@ class TestSitePages(unittest.TestCase):
                  ON nm.item_id = sp.item_id AND nm.lang='ja' AND nm.is_primary=1
                WHERE sp.lang='ja' AND nm.name LIKE '%うどん ゆで' LIMIT 1""")
         if row:
-            html = client.get(f"/ja/food/{row['slug']}").text
+            html = client.get(f"/food/{row['slug']}").text
             self.assertIn("調理法によるカロリーの違い", html)
 
     def test_stock_imagery_never_on_data_pages(self):
         """Photographs belong on landing pages, not beside measurements."""
         food = _one("SELECT slug FROM site_pages WHERE lang='ja' AND page_type='food' LIMIT 1")
         dish = _one("SELECT slug FROM site_pages WHERE lang='ja' AND page_type='dish' LIMIT 1")
-        for url in (f"/ja/food/{food['slug']}", f"/ja/dish/{dish['slug']}",
-                    "/ja/foods", "/ja/category/肉類"):
+        for url in (f"/food/{food['slug']}", f"/dish/{dish['slug']}",
+                    "/foods", "/category/肉類"):
             self.assertNotIn("framed-media", client.get(url).text, url)
 
     def test_media_absent_renders_nothing(self):
         """A missing image degrades to nothing, never a broken box."""
         from dataset_manager.site import media
-        slots = {"/ja/": "home-hero", "/ja/meal-calculator": "meal-calculator",
-                 "/ja/goals": "goals", "/ja/sources": "sources"}
+        slots = {"/": "home-hero", "/meal-calculator": "meal-calculator",
+                 "/goals": "goals", "/sources": "sources"}
         for url, slot in slots.items():
             r = client.get(url)
             self.assertEqual(r.status_code, 200)
@@ -168,7 +187,7 @@ class TestSitePages(unittest.TestCase):
     def test_video_renders_and_never_on_data_pages(self):
         from dataset_manager.site import media
         # A configured, present video renders in place of the still.
-        for slot, url in (("analyzer", "/ja/analyzer"), ("goals", "/ja/goals")):
+        for slot, url in (("analyzer", "/analyzer"), ("goals", "/goals")):
             v = media.video(slot, "ja")
             html = client.get(url).text
             if v and v["kind"] == "file":
@@ -179,7 +198,7 @@ class TestSitePages(unittest.TestCase):
             else:
                 self.assertNotIn("<video", html, slot)
         food = _one("SELECT slug FROM site_pages WHERE lang='ja' AND page_type='food' LIMIT 1")
-        self.assertNotIn("<video", client.get(f"/ja/food/{food['slug']}").text)
+        self.assertNotIn("<video", client.get(f"/food/{food['slug']}").text)
 
     def test_video_missing_file_is_silent(self):
         from dataset_manager.site import media
@@ -208,7 +227,7 @@ class TestSitePages(unittest.TestCase):
         self.assertEqual(client.get("/api/atlas?lang=en").status_code, 400)
 
     def test_guide_cooking(self):
-        r = client.get("/ja/guides/cooking-and-calories")
+        r = client.get("/guides/cooking-and-calories")
         self.assertEqual(r.status_code, 200)
         self.assertIn("guide-ratio", r.text)
 
@@ -217,7 +236,7 @@ class TestSitePages(unittest.TestCase):
             """SELECT sp.slug FROM site_pages sp
                JOIN items i ON i.id = sp.item_id AND i.source='MEXT Standard Tables'
                WHERE sp.lang='ja' AND sp.page_type='food' LIMIT 1""")
-        html = client.get(f"/ja/food/{row['slug']}").text
+        html = client.get(f"/food/{row['slug']}").text
         self.assertIn('class="fingerprint"', html)   # per-food nutrient portrait
         self.assertIn('class="pfc-donut"', html)
 
@@ -281,17 +300,17 @@ class TestSitePages(unittest.TestCase):
 
     def test_analyzer_widget_on_home(self):
         """The analyzer runs on the home page as well as its own."""
-        home = client.get("/ja/").text
+        home = client.get("/").text
         self.assertIn('id="analyzer"', home)
         self.assertIn("analyzer.js", home)
         self.assertEqual(home.count('id="analyzer"'), 1)   # the script binds one
 
     def test_home_analyzer_hands_off_to_its_page(self):
         """Uploading on the home page opens the report where it fits."""
-        home = client.get("/ja/").text
-        self.assertIn('data-redirect="/ja/analyzer"', home)
+        home = client.get("/").text
+        self.assertIn('data-redirect="/analyzer"', home)
         # the analyzer page itself must not redirect, or it would loop
-        self.assertNotIn("data-redirect", client.get("/ja/analyzer").text)
+        self.assertNotIn("data-redirect", client.get("/analyzer").text)
 
     def test_site_noindex_switch(self):
         """SITE_NOINDEX shuts the whole site to crawlers, for temporary hosts."""
@@ -300,10 +319,10 @@ class TestSitePages(unittest.TestCase):
         try:
             robots = client.get("/robots.txt").text
             self.assertEqual(robots.split(), ["User-agent:", "*", "Disallow:", "/"])
-            self.assertIn('name="robots" content="noindex', client.get("/ja/").text)
+            self.assertIn('name="robots" content="noindex', client.get("/").text)
         finally:
             router.SITE_NOINDEX = False
-        self.assertNotIn('name="robots" content="noindex', client.get("/ja/").text)
+        self.assertNotIn('name="robots" content="noindex', client.get("/").text)
         self.assertIn("Sitemap:", client.get("/robots.txt").text)
 
     def test_robots_and_sitemap_index(self):

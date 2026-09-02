@@ -213,17 +213,18 @@
     showTip(hoverIdx, e.clientX, e.clientY);
   });
   canvas.addEventListener('mouseleave', function () { hoverIdx = -1; tip.hidden = true; });
-  // Slugs arrive as "<lang>/<slug>". A point whose only page is in the other
-  // language is not a link: dropping an English reader onto a Japanese page
-  // without warning is worse than nothing happening. These become clickable on
-  // their own once the name translations are built.
+  // Slugs arrive as "<lang>/<slug>". Composition has no language, so the atlas
+  // plots the whole corpus; a point whose only page is in another language is
+  // not a link, because dropping a reader onto a page they cannot read is
+  // worse than nothing happening. With one locale live, that is every point.
   function pageLangOf(i) { return data.slugs[i].split('/')[0]; }
   function isNavigable(i) { return i >= 0 && pageLangOf(i) === lang; }
 
   canvas.addEventListener('click', function () {
     if (!isNavigable(hoverIdx)) return;
-    var parts = data.slugs[hoverIdx].split('/');
-    window.location.href = '/' + parts[0] + '/food/' + encodeURIComponent(parts.slice(1).join('/'));
+    // URLs carry no language segment: /food/<slug>.
+    var slug = data.slugs[hoverIdx].split('/').slice(1).join('/');
+    window.location.href = '/food/' + encodeURIComponent(slug);
   });
 
   function buildLegend() {

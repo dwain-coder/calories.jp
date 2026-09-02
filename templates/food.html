@@ -56,7 +56,7 @@
       <tbody>
       {% for v in d.preps %}
         <tr{% if v.is_current %} class="row-current"{% endif %}>
-          <td>{% if v.is_current %}<strong>{{ v.prep }}</strong> <span class="here-badge">{{ t('this_page') }}</span>{% else %}<a href="/{{ lang }}/food/{{ v.slug }}">{{ v.prep }}</a>{% endif %}</td>
+          <td>{% if v.is_current %}<strong>{{ v.prep }}</strong> <span class="here-badge">{{ t('this_page') }}</span>{% else %}<a href="/food/{{ v.slug }}">{{ v.prep }}</a>{% endif %}</td>
           <td data-label="{{ t('calories') }}">{{ v.energy_kcal|round(0)|int if v.energy_kcal is not none else '—' }}</td>
           <td data-label="{{ t('protein') }}">{{ v.protein_g|round(1) if v.protein_g is not none else '—' }}</td>
           <td data-label="{{ t('fat') }}">{{ v.fat_g|round(1) if v.fat_g is not none else '—' }}</td>
@@ -125,7 +125,7 @@
     <h2>{{ t('related_foods') }}</h2>
     <ul class="related-list">
       {% for r in d.related %}
-      <li><a href="/{{ lang }}/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">{{ r.name }}</a></li>
+      <li><a href="/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">{{ r.name }}</a></li>
       {% endfor %}
     </ul>
   </section>

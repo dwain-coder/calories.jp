@@ -22,7 +22,7 @@ def api_search(
             "title": r["name"] or r["title"],
             "slug": r["slug"],
             "page_type": r["page_type"],
-            "url": f"/{lang}/{'food' if r['page_type'] == 'food' else 'dish'}/{r['slug']}",
+            "url": f"/{'food' if r['page_type'] == 'food' else 'dish'}/{r['slug']}",
             "energy_kcal": r["energy_kcal"],
             "source": r["source"],
         }

@@ -34,8 +34,12 @@ def read_root(request: Request):
     # Browsers get the public site; programmatic clients (React viewer, curl)
     # keep the original JSON stats contract.
     accept = request.headers.get("accept", "")
-    if "text/html" in accept:
-        return RedirectResponse("/ja/", status_code=302)
+    if "application/json" not in accept:
+        # The home page lives here now. It is served unless the caller asks
+        # for JSON specifically — a link-preview bot sending */* used to get
+        # the stats blob, which is not what sits at calories.jp any more.
+        from ..site.router import home
+        return home(request)
     # Fetch some fast stats
     try:
         conn = sqlite3.connect(DB_PATH, timeout=5000.0)
@@ -253,13 +257,11 @@ def export_clean_data(format: str = Query("csv", description="Export format (csv
 from pathlib import Path as _Path
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from ..site.middleware import add_host_lang_middleware
 from ..site.router import router as site_router
 from .search_api import router as search_router
 from .analyzer import router as analyzer_router
 
 app.add_middleware(GZipMiddleware, minimum_size=1024)
-add_host_lang_middleware(app)
 app.include_router(search_router)
 app.include_router(analyzer_router)
 app.include_router(site_router)

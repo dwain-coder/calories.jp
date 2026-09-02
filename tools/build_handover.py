@@ -191,7 +191,7 @@ def build_html():
   <span class="mono">build-sitemaps</span>. All are idempotent.</p>
 
   <h3>Language</h3>
-  <p>The site is Japanese only. Pages live under <span class="mono">/ja/</span>
+  <p>The site is Japanese only. Pages live under <span class="mono">/</span>
   and a browser hitting the root is redirected there; anything under
   <span class="mono">/en/</span> now returns 404. The English interface strings,
   reference values and the official English names from FoodData Central are all

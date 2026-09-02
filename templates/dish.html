@@ -58,7 +58,7 @@
         <tbody>
         {% for b in d.breakdown %}
           <tr>
-            <td>{% if b.slug %}<a href="/{{ lang }}/food/{{ b.slug }}">{{ b.raw_name }}</a>{% else %}{{ b.raw_name }}{% endif %}</td>
+            <td>{% if b.slug %}<a href="/food/{{ b.slug }}">{{ b.raw_name }}</a>{% else %}{{ b.raw_name }}{% endif %}</td>
             <td>{{ b.grams|round(0)|int }} g</td>
             <td>{{ b.kcal|round(0)|int }} kcal</td>
           </tr>
@@ -111,7 +111,7 @@
     <h2>{{ t('related_foods') }}</h2>
     <ul class="related-list">
       {% for r in d.related %}
-      <li><a href="/{{ lang }}/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">{{ r.name }}</a></li>
+      <li><a href="/{{ 'food' if r.page_type == 'food' else 'dish' }}/{{ r.slug }}">{{ r.name }}</a></li>
       {% endfor %}
     </ul>
   </section>

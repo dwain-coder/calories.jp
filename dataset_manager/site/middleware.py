@@ -1,35 +1,14 @@
-"""Host-header language routing for production domains.
+"""Host-header language routing — retired.
 
-When a request arrives for SITE_DOMAIN_EN / SITE_DOMAIN_JA and its path is not
-already language-prefixed or a known API/asset path, rewrite the path to the
-domain's language prefix. Dev on localhost is untouched (no domains set)."""
-import os
+The site served /ja/… while a second locale was planned, and this rewrote a
+bare path to the language prefix for whichever domain the request arrived on.
+The pages now live at the root, so there is nothing to rewrite; /ja/… is
+handled by a 301 in the router instead.
 
-from .i18n import LANGS
-
-PASSTHROUGH_PREFIXES = (
-    "/en", "/ja", "/items", "/api", "/export", "/docs",
-    "/static", "/openapi.json", "/robots.txt", "/sitemap", "/redoc",
-)
+Kept as a file rather than deleted because bringing back a second language
+means bringing this back with it, and the shape of the answer is here.
+"""
 
 
-def _passthrough(path):
-    return any(path == p or path.startswith(p + "/") for p in PASSTHROUGH_PREFIXES) \
-        or path.startswith("/sitemap")
-
-
-def add_host_lang_middleware(app):
-    @app.middleware("http")
-    async def host_lang_rewrite(request, call_next):
-        host = request.headers.get("host", "").split(":")[0].lower()
-        lang = None
-        for candidate in LANGS:
-            domain = os.environ.get(f"SITE_DOMAIN_{candidate.upper()}", "").lower()
-            if host and host == domain:
-                lang = candidate
-                break
-        if lang:
-            path = request.scope["path"]
-            if path == "/" or not _passthrough(path):
-                request.scope["path"] = f"/{lang}" + (path if path != "/" else "/")
-        return await call_next(request)
+def add_host_lang_middleware(app):     # pragma: no cover - retired
+    return app

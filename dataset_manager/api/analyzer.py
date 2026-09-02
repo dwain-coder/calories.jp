@@ -287,7 +287,7 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
                     # the display name, not the page title: "うし ひき肉 生"
                     # reads in a table, "…のカロリー・栄養成分" does not
                     "title": match.get("name") or match["title"],
-                    "url": f"/{lang}/food/{match['slug']}",
+                    "url": f"/food/{match['slug']}",
                     "source": match["source"],
                     "license": lic,
                     "per_100g": per100,

@@ -1,4 +1,4 @@
-"""Public HTML site: /{lang}/... pages, robots.txt, sitemaps."""
+"""Public HTML site: pages at the root, robots.txt, sitemaps."""
 import os
 from pathlib import Path
 from urllib.parse import quote
@@ -44,9 +44,11 @@ CACHE = {"Cache-Control": f"public, max-age={_MAX_AGE}" if _MAX_AGE else "no-cac
 SITE_NOINDEX = os.environ.get("SITE_NOINDEX", "").lower() in ("1", "true", "yes")
 
 
-def _check_lang(lang):
-    if lang not in LANGS:
-        raise HTTPException(status_code=404, detail="Not found")
+# One language, so the URLs carry no language segment: calories.jp/food/… is
+# the page, not calories.jp/ja/food/…. The lang value still exists because the
+# strings, reference values and name rows are keyed by it, and re-adding a
+# second locale should not mean re-deriving every URL by hand.
+SITE_LANG = LANGS[0]
 
 
 def _render(request, name, lang, ctx, headers=CACHE):
@@ -76,28 +78,28 @@ def _render(request, name, lang, ctx, headers=CACHE):
     return templates.TemplateResponse(request, name, base, headers=headers)
 
 
-@router.get("/{lang}/", response_class=HTMLResponse)
-def home(request: Request, lang: str):
-    _check_lang(lang)
+@router.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    lang = SITE_LANG
     data = queries.home_data(lang)
     return _render(request, "home.html", lang, {
         "data": data,
-        "canonical": seo.base_url(lang) + f"/{lang}/",
-        "alternates": {l: seo.base_url(l) + f"/{l}/" for l in LANGS},
+        "canonical": seo.base_url(lang) + "/",
+        "alternates": {l: seo.base_url(l) + "/" for l in LANGS},
     })
 
 
-def _page_or_404(lang, page_type, slug):
-    _check_lang(lang)
-    page = queries.get_page(lang, slug)
+def _page_or_404(page_type, slug):
+    page = queries.get_page(SITE_LANG, slug)
     if not page or page["page_type"] != page_type:
         raise HTTPException(status_code=404, detail="Not found")
     return page
 
 
-@router.get("/{lang}/food/{slug}", response_class=HTMLResponse)
-def food_page(request: Request, lang: str, slug: str):
-    page = _page_or_404(lang, "food", slug)
+@router.get("/food/{slug}", response_class=HTMLResponse)
+def food_page(request: Request, slug: str):
+    lang = SITE_LANG
+    page = _page_or_404("food", slug)
     data = queries.get_food_page_data(page)
     url = seo.page_url(lang, "food", slug)
     name = queries.display_name(data["names"], data["item"], lang)
@@ -108,9 +110,9 @@ def food_page(request: Request, lang: str, slug: str):
     else:
         label = MEXT_GROUPS_EN.get(category, category) if lang == "en" else category
         cslug = category_slug(lang, category)
-        cat_url = seo.base_url(lang) + f"/{lang}/category/{quote(cslug)}" if cslug else None
+        cat_url = seo.base_url(lang) + f"/category/{quote(cslug)}" if cslug else None
         category = label
-    crumbs = [(t(lang, "home"), seo.base_url(lang) + f"/{lang}/"),
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
               (category, cat_url),
               (name, None)]
     jsonld.append(seo.breadcrumbs_jsonld(crumbs))
@@ -131,9 +133,10 @@ def food_page(request: Request, lang: str, slug: str):
     })
 
 
-@router.get("/{lang}/dish/{slug}", response_class=HTMLResponse)
-def dish_page(request: Request, lang: str, slug: str):
-    page = _page_or_404(lang, "dish", slug)
+@router.get("/dish/{slug}", response_class=HTMLResponse)
+def dish_page(request: Request, slug: str):
+    lang = SITE_LANG
+    page = _page_or_404("dish", slug)
     data = queries.get_dish_page_data(page)
     url = seo.page_url(lang, "dish", slug)
     name = queries.display_name(data["names"], data["item"], lang)
@@ -143,7 +146,7 @@ def dish_page(request: Request, lang: str, slug: str):
         lang, name, url, ing_lines, step_lines,
         data["computed"]["totals"] if data["show_nutrition"] else None,
     )]
-    crumbs = [(t(lang, "home"), seo.base_url(lang) + f"/{lang}/"),
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
               (data["item"]["category"] or t(lang, "dishes"), None),
               (name, None)]
     jsonld.append(seo.breadcrumbs_jsonld(crumbs))
@@ -157,20 +160,20 @@ def dish_page(request: Request, lang: str, slug: str):
     })
 
 
-@router.get("/{lang}/foods", response_class=HTMLResponse)
-def browse_page(request: Request, lang: str, page: int = 1, sort: str = "name",
+@router.get("/foods", response_class=HTMLResponse)
+def browse_page(request: Request, page: int = 1, sort: str = "name",
                 category: str = ""):
-    _check_lang(lang)
+    lang = SITE_LANG
     page = max(1, min(page, 500))
     data = queries.browse_foods(lang, page=page, sort=sort, category=category or None)
-    base = seo.base_url(lang) + f"/{lang}/foods"
+    base = seo.base_url(lang) + "/foods"
     qs = (f"?sort={sort}" if sort != "name" else "")
     return _render(request, "browse.html", lang, {
         "d": data, "sort": sort,
         "canonical": base + (f"?page={page}" if page > 1 else "") ,
         "prev_url": (base + f"?page={page - 1}{qs.replace('?', '&')}") if page > 1 else None,
         "next_url": (base + f"?page={page + 1}{qs.replace('?', '&')}") if page < data["pages"] else None,
-        "alternates": {l: seo.base_url(l) + f"/{l}/foods" for l in LANGS},
+        "alternates": {l: seo.base_url(l) + "/foods" for l in LANGS},
         "meta_description": (
             f"Browse {data['total']} verified foods with calories, protein, fat and carbohydrates per 100 g."
             if lang == "en" else
@@ -180,21 +183,21 @@ def browse_page(request: Request, lang: str, page: int = 1, sort: str = "name",
     })
 
 
-@router.get("/{lang}/category/{cslug}", response_class=HTMLResponse)
-def category_page(request: Request, lang: str, cslug: str):
-    _check_lang(lang)
+@router.get("/category/{cslug}", response_class=HTMLResponse)
+def category_page(request: Request, cslug: str):
+    lang = SITE_LANG
     ja_cat = resolve_category(lang, cslug)
     data = queries.category_data(lang, ja_cat) if ja_cat else None
     if not data:
         raise HTTPException(status_code=404, detail="Not found")
     label = MEXT_GROUPS_EN.get(ja_cat, ja_cat) if lang == "en" else ja_cat
-    url = seo.base_url(lang) + f"/{lang}/category/{quote(cslug)}"
+    url = seo.base_url(lang) + f"/category/{quote(cslug)}"
     alternates = {}
     for l in LANGS:
         s = category_slug(l, ja_cat)
         if s and queries.category_data(l, ja_cat):
-            alternates[l] = seo.base_url(l) + f"/{l}/category/{quote(s)}"
-    crumbs = [(t(lang, "home"), seo.base_url(lang) + f"/{lang}/"), (label, None)]
+            alternates[l] = seo.base_url(l) + f"/category/{quote(s)}"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"), (label, None)]
     return _render(request, "category.html", lang, {
         "d": data, "label": label, "ja_cat": ja_cat,
         "canonical": url, "alternates": alternates,
@@ -209,20 +212,20 @@ def category_page(request: Request, lang: str, cslug: str):
     })
 
 
-@router.get("/{lang}/guides/cooking-and-calories", response_class=HTMLResponse)
-def guide_cooking(request: Request, lang: str):
+@router.get("/guides/cooking-and-calories", response_class=HTMLResponse)
+def guide_cooking(request: Request):
     """A written guide whose every figure is a measurement, not an estimate."""
-    _check_lang(lang)
+    lang = SITE_LANG
     data = queries.cooking_effect(lang, limit=40)
     if not data["rows"]:
         raise HTTPException(status_code=404, detail="Not built yet")
-    url = seo.base_url(lang) + f"/{lang}/guides/cooking-and-calories"
-    crumbs = [(t(lang, "home"), seo.base_url(lang) + f"/{lang}/"),
+    url = seo.base_url(lang) + "/guides/cooking-and-calories"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
               (t(lang, "guide_cooking_title"), None)]
     return _render(request, "guide_cooking.html", lang, {
         "d": data,
         "canonical": url,
-        "alternates": {l: seo.base_url(l) + f"/{l}/guides/cooking-and-calories" for l in LANGS},
+        "alternates": {l: seo.base_url(l) + "/guides/cooking-and-calories" for l in LANGS},
         "hreflangs": seo.hreflang_links({}),
         "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
         "crumbs": crumbs,
@@ -230,52 +233,52 @@ def guide_cooking(request: Request, lang: str):
     })
 
 
-@router.get("/{lang}/goals", response_class=HTMLResponse)
-def goals_page(request: Request, lang: str):
-    _check_lang(lang)
+@router.get("/goals", response_class=HTMLResponse)
+def goals_page(request: Request):
+    lang = SITE_LANG
     return _render(request, "goals.html", lang, {
-        "canonical": seo.base_url(lang) + f"/{lang}/goals",
-        "alternates": {l: seo.base_url(l) + f"/{l}/goals" for l in LANGS},
+        "canonical": seo.base_url(lang) + "/goals",
+        "alternates": {l: seo.base_url(l) + "/goals" for l in LANGS},
         "meta_description": t(lang, "goals_intro"),
     })
 
 
-@router.get("/{lang}/search", response_class=HTMLResponse)
-def search_page(request: Request, lang: str, q: str = ""):
-    _check_lang(lang)
+@router.get("/search", response_class=HTMLResponse)
+def search_page(request: Request, q: str = ""):
+    lang = SITE_LANG
     results = queries.search(q, lang, limit=50) if q else []
     return _render(request, "search.html", lang, {
         "q": q, "results": results,
-        "canonical": seo.base_url(lang) + f"/{lang}/search",
+        "canonical": seo.base_url(lang) + "/search",
         "noindex": True,
     }, headers={"Cache-Control": "no-store"})
 
 
-@router.get("/{lang}/meal-calculator", response_class=HTMLResponse)
-def meal_calculator(request: Request, lang: str):
-    _check_lang(lang)
+@router.get("/meal-calculator", response_class=HTMLResponse)
+def meal_calculator(request: Request):
+    lang = SITE_LANG
     return _render(request, "meal_calc.html", lang, {
-        "canonical": seo.base_url(lang) + f"/{lang}/meal-calculator",
-        "alternates": {l: seo.base_url(l) + f"/{l}/meal-calculator" for l in LANGS},
+        "canonical": seo.base_url(lang) + "/meal-calculator",
+        "alternates": {l: seo.base_url(l) + "/meal-calculator" for l in LANGS},
     })
 
 
-@router.get("/{lang}/analyzer", response_class=HTMLResponse)
-def analyzer_page(request: Request, lang: str):
-    _check_lang(lang)
+@router.get("/analyzer", response_class=HTMLResponse)
+def analyzer_page(request: Request):
+    lang = SITE_LANG
     return _render(request, "analyzer.html", lang, {
-        "canonical": seo.base_url(lang) + f"/{lang}/analyzer",
-        "alternates": {l: seo.base_url(l) + f"/{l}/analyzer" for l in LANGS},
+        "canonical": seo.base_url(lang) + "/analyzer",
+        "alternates": {l: seo.base_url(l) + "/analyzer" for l in LANGS},
     })
 
 
-@router.get("/{lang}/sources", response_class=HTMLResponse)
-def sources_page(request: Request, lang: str):
-    _check_lang(lang)
+@router.get("/sources", response_class=HTMLResponse)
+def sources_page(request: Request):
+    lang = SITE_LANG
     return _render(request, "sources.html", lang, {
         "attribution": seo.ATTRIBUTION,
-        "canonical": seo.base_url(lang) + f"/{lang}/sources",
-        "alternates": {l: seo.base_url(l) + f"/{l}/sources" for l in LANGS},
+        "canonical": seo.base_url(lang) + "/sources",
+        "alternates": {l: seo.base_url(l) + "/sources" for l in LANGS},
     })
 
 
@@ -298,31 +301,43 @@ def _standing_page(request, lang, name, extra=None):
     ctx = {
         "operator": SITE_OPERATOR or t(lang, "operator_unset"),
         "contact_email": CONTACT_EMAIL,
-        "canonical": seo.base_url(lang) + f"/{lang}/{name}",
-        "alternates": {l: seo.base_url(l) + f"/{l}/{name}" for l in LANGS},
+        "canonical": seo.base_url(lang) + f"/{name}",
+        "alternates": {l: seo.base_url(l) + f"/{name}" for l in LANGS},
     }
     ctx.update(extra or {})
     return _render(request, f"{name}.html", lang, ctx)
 
 
-@router.get("/{lang}/about", response_class=HTMLResponse)
-def about_page(request: Request, lang: str):
-    _check_lang(lang)
+@router.get("/about", response_class=HTMLResponse)
+def about_page(request: Request):
+    lang = SITE_LANG
     return _standing_page(request, lang, "about", {"counts": queries.corpus_counts(lang)})
 
 
-@router.get("/{lang}/privacy", response_class=HTMLResponse)
-def privacy_page(request: Request, lang: str):
-    _check_lang(lang)
+@router.get("/privacy", response_class=HTMLResponse)
+def privacy_page(request: Request):
+    lang = SITE_LANG
     return _standing_page(request, lang, "privacy", {
         "has_ads": HAS_ADS, "has_analytics": HAS_ANALYTICS, "updated": POLICY_UPDATED,
     })
 
 
-@router.get("/{lang}/contact", response_class=HTMLResponse)
-def contact_page(request: Request, lang: str):
-    _check_lang(lang)
+@router.get("/contact", response_class=HTMLResponse)
+def contact_page(request: Request):
+    lang = SITE_LANG
     return _standing_page(request, lang, "contact")
+
+
+@router.get("/ja", include_in_schema=False)
+@router.get("/ja/{path:path}", include_in_schema=False)
+def drop_language_prefix(path: str = ""):
+    """The site was served under /ja/ while a second locale was planned.
+
+    It is one language, so the prefix is gone — but the old URLs were public,
+    and a 301 is what tells a browser, a bookmark and a crawler that the page
+    moved rather than vanished.
+    """
+    return RedirectResponse("/" + path.lstrip("/"), status_code=301)
 
 
 @router.get("/robots.txt", response_class=PlainTextResponse)

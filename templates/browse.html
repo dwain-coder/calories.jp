@@ -4,7 +4,7 @@
 <h1>{{ t('food_database') }}</h1>
 <p class="alt-name">{{ t('showing', a=((d.page - 1) * d.size + 1), b=([d.page * d.size, d.total]|min), n=d.total) }}</p>
 
-<form class="browse-controls" method="get" action="/{{ lang }}/foods">
+<form class="browse-controls" method="get" action="/foods">
   <label>{{ t('sort_by') }}
     <select name="sort" onchange="this.form.submit()">
       <option value="name"{% if sort == 'name' %} selected{% endif %}>{{ t('sort_name') }}</option>
@@ -23,7 +23,7 @@
   <tbody>
   {% for r in d.rows %}
     <tr>
-      <td><a href="/{{ lang }}/food/{{ r.slug }}">{{ r.name }}</a></td>
+      <td><a href="/food/{{ r.slug }}">{{ r.name }}</a></td>
       <td data-label="{{ t('calories') }}">{{ r.energy_kcal|round(0)|int if r.energy_kcal is not none else '—' }}</td>
       <td data-label="{{ t('protein') }}">{{ r.protein_g|round(1) if r.protein_g is not none else '—' }}</td>
       <td data-label="{{ t('fat') }}">{{ r.fat_g|round(1) if r.fat_g is not none else '—' }}</td>

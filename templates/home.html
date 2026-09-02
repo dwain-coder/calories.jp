@@ -7,15 +7,15 @@
   <section class="hero">
     <h1>{{ t('tagline_a') }} <span class="hl">{{ t('tagline_b') }}</span></h1>
     <p class="hero-sub">{{ t('footer_note') }}</p>
-    <form class="hero-search suggest-box" action="/{{ lang }}/search" method="get" role="search">
+    <form class="hero-search suggest-box" action="/search" method="get" role="search">
       <input type="search" name="q" placeholder="{{ t('search_placeholder') }}" aria-label="{{ t('search') }}" data-suggest="{{ lang }}" autocomplete="off">
       <button type="submit">{{ t('search') }}</button>
     </form>
     <p class="examples">{{ t('try_examples') }}
-      <a href="/{{ lang }}/search?q=にわとり むね">鶏むね肉</a>
-      <a href="/{{ lang }}/search?q=精白米">白米</a>
-      <a href="/{{ lang }}/search?q=ぶた ロース">豚ロース</a>
-      <a href="/{{ lang }}/search?q=みそ">みそ</a>
+      <a href="/search?q=にわとり むね">鶏むね肉</a>
+      <a href="/search?q=精白米">白米</a>
+      <a href="/search?q=ぶた ロース">豚ロース</a>
+      <a href="/search?q=みそ">みそ</a>
     </p>
   </section>
   {% include "partials/hero_media.html" %}
@@ -65,7 +65,7 @@
     {% for c in data.categories %}
     {% set cslug = cat_slug(lang, c.category) %}
     {% if cslug %}
-    <li><a href="/{{ lang }}/category/{{ cslug | urlencode }}" style="--c: {{ group_color(c.category) }}">
+    <li><a href="/category/{{ cslug | urlencode }}" style="--c: {{ group_color(c.category) }}">
       <span class="chip-glyph" aria-hidden="true">{{ group_emoji(c.category) }}</span>
       {{ mext_groups_en.get(c.category, c.category) if lang == 'en' else c.category }}<span class="count">{{ c.c }}</span></a></li>
     {% endif %}
@@ -77,16 +77,16 @@
 {# A photo is the shortest route into the database, so the analyzer runs
    here rather than only behind a link. #}
 <section class="home-analyzer">
-  {% with heading = true, redirect_to = '/' ~ lang ~ '/analyzer' %}{% include "partials/analyzer_widget.html" %}{% endwith %}
-  <p class="analyzer-more"><a href="/{{ lang }}/analyzer">{{ t('analyzer_open_full') }}</a></p>
+  {% with heading = true, redirect_to = '/analyzer' %}{% include "partials/analyzer_widget.html" %}{% endwith %}
+  <p class="analyzer-more"><a href="/analyzer">{{ t('analyzer_open_full') }}</a></p>
 </section>
 
 <section class="home-tools">
-  <a class="tool-card card" href="/{{ lang }}/meal-calculator">
+  <a class="tool-card card" href="/meal-calculator">
     <h2>{{ t('meal_calculator') }}</h2>
     <p>{{ t('meal_calc_intro') }}</p>
   </a>
-  <a class="tool-card card" href="/{{ lang }}/goals">
+  <a class="tool-card card" href="/goals">
     <h2>{{ t('goals') }}</h2>
     <p>{{ t('goals_intro') }}</p>
   </a>
@@ -97,7 +97,7 @@
   <h2>{{ t('popular_foods') }}</h2>
   <ul class="tile-list">
     {% for f in data.foods %}
-    <li><a href="/{{ lang }}/food/{{ f.slug }}"><span>{{ f.name }}</span>{% if f.energy_kcal is not none %}<span class="kcal">{{ f.energy_kcal|round(0)|int }} kcal</span>{% endif %}</a></li>
+    <li><a href="/food/{{ f.slug }}"><span>{{ f.name }}</span>{% if f.energy_kcal is not none %}<span class="kcal">{{ f.energy_kcal|round(0)|int }} kcal</span>{% endif %}</a></li>
     {% endfor %}
   </ul>
 </section>
@@ -108,7 +108,7 @@
   <h2>{{ t('regional_dishes') }}</h2>
   <ul class="tile-list">
     {% for f in data.dishes %}
-    <li><a href="/{{ lang }}/dish/{{ f.slug }}"><span>{{ f.name }}</span></a></li>
+    <li><a href="/dish/{{ f.slug }}"><span>{{ f.name }}</span></a></li>
     {% endfor %}
   </ul>
 </section>

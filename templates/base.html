@@ -28,16 +28,16 @@
 <a class="skip-link" href="#main">{{ t('skip_to_content') }}</a>
 <header class="site-header">
   <div class="header-row">
-    <a class="brand" href="/{{ lang }}/">{% set parts = site_name.rsplit(".", 1) %}{{ parts[0] }}{% if parts|length > 1 %}<span class="brand-tld">.{{ parts[1] }}</span>{% endif %}</a>
-    <form class="header-search suggest-box" action="/{{ lang }}/search" method="get" role="search">
+    <a class="brand" href="/">{% set parts = site_name.rsplit(".", 1) %}{{ parts[0] }}{% if parts|length > 1 %}<span class="brand-tld">.{{ parts[1] }}</span>{% endif %}</a>
+    <form class="header-search suggest-box" action="/search" method="get" role="search">
       <input type="search" name="q" value="{{ q if q is defined else '' }}" placeholder="{{ t('search_placeholder') }}" aria-label="{{ t('search') }}" data-suggest="{{ lang }}" autocomplete="off">
       <button type="submit">{{ t('search') }}</button>
     </form>
     <nav class="header-nav">
-      <a href="/{{ lang }}/foods">{{ t('food_database') }}</a>
-      <a href="/{{ lang }}/meal-calculator">{{ t('meal_calculator') }}</a>
-      <a href="/{{ lang }}/analyzer">{{ t('ai_analyzer') }}</a>
-      <a href="/{{ lang }}/goals">{{ t('goals') }}</a>
+      <a href="/foods">{{ t('food_database') }}</a>
+      <a href="/meal-calculator">{{ t('meal_calculator') }}</a>
+      <a href="/analyzer">{{ t('ai_analyzer') }}</a>
+      <a href="/goals">{{ t('goals') }}</a>
     </nav>
   </div>
 </header>
@@ -53,26 +53,26 @@
     <div>
       <h3>{{ t('tools') }}</h3>
       <ul>
-        <li><a href="/{{ lang }}/meal-calculator">{{ t('meal_calculator') }}</a></li>
-        <li><a href="/{{ lang }}/analyzer">{{ t('ai_analyzer') }}</a></li>
-        <li><a href="/{{ lang }}/goals">{{ t('goals') }}</a></li>
+        <li><a href="/meal-calculator">{{ t('meal_calculator') }}</a></li>
+        <li><a href="/analyzer">{{ t('ai_analyzer') }}</a></li>
+        <li><a href="/goals">{{ t('goals') }}</a></li>
       </ul>
     </div>
     <div>
       <h3>{{ t('explore') }}</h3>
       <ul>
-        <li><a href="/{{ lang }}/foods">{{ t('food_database') }}</a></li>
-        <li><a href="/{{ lang }}/guides/cooking-and-calories">{{ t('guide_cooking_title') }}</a></li>
-        <li><a href="/{{ lang }}/">{{ t('browse_categories') }}</a></li>
+        <li><a href="/foods">{{ t('food_database') }}</a></li>
+        <li><a href="/guides/cooking-and-calories">{{ t('guide_cooking_title') }}</a></li>
+        <li><a href="/">{{ t('browse_categories') }}</a></li>
       </ul>
     </div>
     <div>
       <h3>{{ t('about_data') }}</h3>
       <ul>
-        <li><a href="/{{ lang }}/sources">{{ t('data_sources') }}</a></li>
-        <li><a href="/{{ lang }}/about">{{ t('about_title') }}</a></li>
-        <li><a href="/{{ lang }}/privacy">{{ t('privacy_title') }}</a></li>
-        <li><a href="/{{ lang }}/contact">{{ t('contact_title') }}</a></li>
+        <li><a href="/sources">{{ t('data_sources') }}</a></li>
+        <li><a href="/about">{{ t('about_title') }}</a></li>
+        <li><a href="/privacy">{{ t('privacy_title') }}</a></li>
+        <li><a href="/contact">{{ t('contact_title') }}</a></li>
         <li><a href="/sitemap.xml">Sitemap</a></li>
       </ul>
     </div>

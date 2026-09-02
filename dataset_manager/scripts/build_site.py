@@ -706,12 +706,12 @@ def build_sitemaps():
                 slug = slugify_en(en)
             else:
                 slug = cat
-            cat_entries.append({"loc": seo.base_url(lang) + f"/{lang}/category/{quote(slug)}"})
+            cat_entries.append({"loc": seo.base_url(lang) + f"/category/{quote(slug)}"})
         write(f"sitemap-categories-{lang}", cat_entries)
 
         # Static tool pages.
         page_entries = [
-            {"loc": seo.base_url(lang) + f"/{lang}/{p}"}
+            {"loc": seo.base_url(lang) + f"/{p}"}
             for p in ("", "foods", "meal-calculator", "analyzer", "goals", "sources",
                       "guides/cooking-and-calories", "about", "privacy", "contact")
         ]

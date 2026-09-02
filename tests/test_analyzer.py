@@ -132,7 +132,7 @@ class TestDishBreakdown(unittest.TestCase):
         d = analyze(LASAGNA).json()
         for c in d["components"]:
             self.assertIsNotNone(c["db_match"]["item_id"])
-            self.assertTrue(c["db_match"]["url"].startswith("/ja/food/"))
+            self.assertTrue(c["db_match"]["url"].startswith("/food/"))
             self.assertTrue(c["ai_estimate"]["estimated"])
             # kcal is per-100g x grams, so it must fall out of the two
             per100 = c["db_match"]["per_100g"]["energy_kcal"]
