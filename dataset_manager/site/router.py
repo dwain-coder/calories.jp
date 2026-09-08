@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from . import (cards, faq, groups, media, nutrient_groups, nutrient_pages,
                queries, seo)
 from .i18n import LANGS, MACRO_DV, MEXT_GROUPS_EN, NUTRIENT_LABELS_EN, SITE_NAME, t
+from ..blog import store as blog_store
 from ..scripts.build_site import slugify_en
 
 # Category URL slugs. ja pages use the Japanese category itself as the slug;
@@ -344,6 +345,49 @@ def category_page(request: Request, cslug: str):
             if lang == "en" else
             f"{label}のカロリー・たんぱく質・脂質・炭水化物を{data['n']}件で比較。100gあたりの検証済みデータ。"
         ),
+    })
+
+
+@router.get("/blog", response_class=HTMLResponse)
+def blog_index(request: Request):
+    """Posts written in WordPress, rendered here.
+
+    An empty list is a normal answer, not an error: the store is a volume that
+    may not have mounted, or nothing has been published yet.
+    """
+    lang = SITE_LANG
+    posts = blog_store.recent(limit=30)
+    url = seo.base_url(lang) + "/blog"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"), (t(lang, "blog_title"), None)]
+    return _render(request, "blog.html", lang, {
+        "posts": posts,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
+        "meta_description": t(lang, "blog_lede"),
+    })
+
+
+@router.get("/blog/{slug}", response_class=HTMLResponse)
+def blog_post(request: Request, slug: str):
+    lang = SITE_LANG
+    post = blog_store.by_slug(slug)
+    if not post:
+        raise HTTPException(status_code=404, detail="Not found")
+    url = seo.base_url(lang) + f"/blog/{quote(slug)}"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
+              (t(lang, "blog_title"), seo.base_url(lang) + "/blog"),
+              (post["title"], None)]
+    jsonld = [
+        seo.breadcrumbs_jsonld(crumbs),
+        seo.article_jsonld(lang, post, url),
+    ]
+    return _render(request, "post.html", lang, {
+        "post": post,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(j) for j in jsonld],
+        "meta_description": post.get("excerpt") or post["title"],
     })
 
 

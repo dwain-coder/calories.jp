@@ -928,9 +928,9 @@ def food_nutrition_json(item_id):
 
 # ---------------------------------------------------------------- sitemaps
 
-SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "nutrients", "pages")
+SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "nutrients", "blog", "pages")
 STATIC_PAGES = ("", "foods", "menu", "nutrients", "cooking-yield", "meal-calculator",
-                "analyzer", "goals", "sources", "api",
+                "analyzer", "goals", "sources", "api", "blog",
                 "guides/cooking-and-calories", "about", "privacy", "contact")
 
 
@@ -961,6 +961,9 @@ def sitemap_slugs(lang, section):
             return [f"/menu/{r['slug']}" for r in conn.execute(
                 "SELECT slug FROM shop_pages WHERE indexable = 1 AND lang = ?"
                 " ORDER BY id", (lang,))]
+        if section == "blog":
+            from ..blog import store as blog_store
+            return [f"/blog/{slug}" for slug in blog_store.slugs()]
         if section == "nutrients":
             from . import nutrient_pages
             return [f"/nutrient/{slug}" for slug in nutrient_pages.SLUGS]

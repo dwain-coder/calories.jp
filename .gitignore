@@ -43,3 +43,6 @@ shops.db
 
 # Local throwaway verification scripts.
 scratch/
+
+# Blog posts are synced from WordPress at runtime, never committed.
+data/metadata/blog*.db

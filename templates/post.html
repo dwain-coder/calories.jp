@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ post.title }} | {{ site_name }}{% endblock %}
+{% block content %}
+<article class="post">
+  <h1>{{ post.title }}</h1>
+  <p class="post-meta">
+    {% if post.published_at %}
+      {{ t('blog_published') }} <time datetime="{{ post.published_at }}">{{ post.published_at[:10] }}</time>
+    {% endif %}
+    {% if post.modified_at and post.modified_at[:10] != post.published_at[:10] %}
+      · {{ t('blog_updated') }} <time datetime="{{ post.modified_at }}">{{ post.modified_at[:10] }}</time>
+    {% endif %}
+    {% if post.author %}· <span class="post-author">{{ post.author }}</span>{% endif %}
+  </p>
+
+  {% if post.image_url %}
+    <figure class="post-hero">
+      <img src="{{ post.image_url }}" alt="{{ post.image_alt or '' }}" decoding="async">
+    </figure>
+  {% endif %}
+
+  {# Sanitised on the way in, in blog/sync.py: an allowlist of tags and
+     attributes, no script, no style, no event handlers. #}
+  <div class="post-body">{{ post.content_html|safe }}</div>
+</article>
+
+<p class="post-back"><a href="/blog">← {{ t('blog_back') }}</a></p>
+{% endblock %}

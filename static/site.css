@@ -1838,3 +1838,56 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   overflow-x: auto; font-size: 0.82rem;
 }
 .api-params { margin: 0.6rem 0; }
+
+/* ------------------------------------------------------------------- Blog
+   Posts are written in WordPress and rendered here, so they inherit the same
+   type scale and rhythm as the rest of the site rather than a theme's. */
+.post-list { list-style: none; margin: 1.4rem 0 0; padding: 0; display: grid; gap: 1.2rem; }
+.post-card {
+  display: grid; grid-template-columns: 12rem 1fr; gap: 1.1rem;
+  align-items: start; padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--hairline);
+}
+.post-card:last-child { border-bottom: none; }
+.post-thumb img {
+  width: 100%; aspect-ratio: 16 / 10; object-fit: cover;
+  border-radius: var(--radius-sm); display: block;
+}
+.post-card h2 { font-size: 1.15rem; margin: 0 0 0.35rem; }
+.post-excerpt { margin: 0 0 0.5rem; color: var(--ink-soft); }
+.post-meta {
+  font-family: var(--font-data); font-size: 0.76rem; color: var(--ink-faint);
+  margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem;
+}
+.post { max-width: 68ch; }
+.post h1 { margin-bottom: 0.4rem; }
+.post-hero img {
+  width: 100%; border-radius: var(--radius-sm); display: block; margin: 1.2rem 0;
+}
+/* The body is author-written HTML; give it prose rhythm without letting it
+   set its own type scale. */
+.post-body { line-height: 1.85; }
+.post-body > * + * { margin-top: 1.1rem; }
+.post-body h2 { font-size: 1.3rem; margin-top: 2.2rem; }
+.post-body h3 { font-size: 1.1rem; margin-top: 1.8rem; }
+.post-body img { max-width: 100%; height: auto; border-radius: var(--radius-sm); }
+.post-body figure { margin: 1.4rem 0; }
+.post-body figcaption { font-size: 0.82rem; color: var(--ink-faint); margin-top: 0.4rem; }
+.post-body blockquote {
+  border-left: 3px solid var(--accent); margin-left: 0;
+  padding: 0.2rem 0 0.2rem 1rem; color: var(--ink-soft);
+}
+.post-body pre { overflow-x: auto; background: var(--paper-raised); padding: 0.8rem; border-radius: var(--radius-sm); }
+.post-body table { width: 100%; border-collapse: collapse; }
+.post-body th, .post-body td { border: 1px solid var(--hairline); padding: 0.4rem 0.6rem; text-align: left; }
+.post-back { margin-top: 2rem; }
+
+@media (max-width: 640px) {
+  /* The thumbnail stops earning a column once it is a third of the screen. */
+  .post-card { grid-template-columns: 1fr; gap: 0.7rem; }
+  .post-thumb img { aspect-ratio: 16 / 9; }
+  .post-body { line-height: 1.8; }
+  /* Author HTML can carry a wide table or a long code block; neither may
+     make the page itself scroll sideways. */
+  .post-body table, .post-body pre { display: block; overflow-x: auto; }
+}

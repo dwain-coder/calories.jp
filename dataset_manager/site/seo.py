@@ -346,3 +346,32 @@ def ranking_jsonld(lang, heading, url, rows, limit=30):
         "itemListOrder": "https://schema.org/ItemListOrderDescending",
         "itemListElement": items,
     }
+
+
+def article_jsonld(lang, post, url):
+    """A blog post as an Article.
+
+    `dateModified` is included because WordPress tracks it and a search engine
+    uses it: a post edited after publication should not look stale.
+    """
+    data = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": post.get("title"),
+        "url": url,
+        "mainEntityOfPage": {"@type": "WebPage", "@id": url},
+        "inLanguage": "ja" if lang == "ja" else "en",
+        "publisher": {"@type": "Organization", "name": SITE_NAME[lang],
+                      "url": base_url(lang) + "/"},
+    }
+    if post.get("excerpt"):
+        data["description"] = post["excerpt"]
+    if post.get("published_at"):
+        data["datePublished"] = post["published_at"]
+    if post.get("modified_at"):
+        data["dateModified"] = post["modified_at"]
+    if post.get("author"):
+        data["author"] = {"@type": "Person", "name": post["author"]}
+    if post.get("image_url"):
+        data["image"] = post["image_url"]
+    return data

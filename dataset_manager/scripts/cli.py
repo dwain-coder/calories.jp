@@ -475,6 +475,21 @@ def import_chain_nutrition_cmd(
         conn.close()
 
 
+@app.command("sync-posts")
+def sync_posts_cmd(
+    url: str = typer.Option(None, "--url", help="WordPress base URL (default: $WP_URL)"),
+):
+    """Pull blog posts from WordPress into the post store."""
+    from ..blog import sync as blog_sync
+    try:
+        stats = blog_sync.sync(url)
+    except Exception as e:
+        console.print(f"[bold red]sync failed:[/bold red] {e}")
+        raise typer.Exit(1)
+    console.print(f"[bold green]fetched {stats['fetched']}, stored {stats['stored']}, "
+                  f"removed {stats['removed']}[/bold green]")
+
+
 @app.command("build-shops")
 def build_shops_cmd(report: bool = typer.Option(False, help="Print coverage + gate report only")):
     """Build shop_pages: slugs, titles, and the index gate."""

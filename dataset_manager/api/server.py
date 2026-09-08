@@ -69,6 +69,36 @@ async def security_headers(request: Request, call_next):
         response.headers.setdefault(key, value)
     return response
 
+# --- WordPress publishes, this pulls ----------------------------------------
+# WordPress calls this when a post is published, updated or deleted. It carries
+# a shared secret and nothing else: the payload is ignored entirely and the sync
+# re-reads the REST API, so a forged body cannot put content on the site — the
+# worst a leaked secret buys an attacker is making us fetch our own WordPress.
+#
+# Unset secret means the endpoint does not exist. A webhook that authenticates
+# against an empty string is not an endpoint, it is a door.
+WP_WEBHOOK_SECRET = os.environ.get("WP_WEBHOOK_SECRET", "")
+
+
+@app.post("/internal/sync-posts", include_in_schema=False)
+def sync_posts(request: Request):
+    import hmac
+    from ..blog import sync as blog_sync
+
+    if not WP_WEBHOOK_SECRET:
+        raise HTTPException(status_code=404, detail="Not found")
+    supplied = request.headers.get("x-webhook-secret", "")
+    # compare_digest, not ==, so a wrong secret takes the same time as a right one
+    if not hmac.compare_digest(supplied, WP_WEBHOOK_SECRET):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        return blog_sync.sync()
+    except Exception as e:
+        # WordPress being unreachable is not this site's emergency. The last
+        # good copy of every post is already stored and keeps being served.
+        raise HTTPException(status_code=502, detail=f"WordPress sync failed: {e}")
+
+
 @app.get("/")
 def read_root(request: Request):
     # Browsers get the public site; programmatic clients (React viewer, curl)
