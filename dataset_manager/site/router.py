@@ -437,17 +437,16 @@ def cooking_yield_page(request: Request):
 def nutrients_index(request: Request):
     """Every nutrient that has a ranking page, grouped as the tables group them."""
     lang = SITE_LANG
+    summary = queries.nutrient_index(lang, [c for c, *_ in nutrient_pages.NUTRIENTS])
     entries = []
     for code, slug, term, _blurb in nutrient_pages.NUTRIENTS:
-        stats = queries.nutrient_corpus_stats(lang, code)
-        if not stats or not stats.get("n"):
+        stats = summary.get(code)
+        if not stats or not stats.get("n_foods"):
             continue
-        top = queries.nutrient_ranking(lang, code, limit=1)
         entries.append({
             "slug": slug, "term": term, "code": code,
-            "n": stats["n"], "top": stats["top"], "unit": stats["unit"],
-            "top_name": top[0]["name"] if top else None,
-            "top_slug": top[0]["slug"] if top else None,
+            "n": stats["n_foods"], "top": stats["top"], "unit": stats["unit"],
+            "top_name": stats["name"], "top_slug": stats["slug"],
         })
 
     # Grouped by the same scheme the food pages use, so a reader who has seen

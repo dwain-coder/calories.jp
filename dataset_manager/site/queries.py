@@ -680,6 +680,40 @@ def nutrient_corpus_stats(lang, code):
         conn.close()
 
 
+def nutrient_index(lang, codes):
+    """Count, maximum and the food holding it, for many components at once.
+
+    The index page asked two queries per nutrient — 84 of them — and took three
+    seconds to answer. One pass over the same rows does it: a window function
+    ranks each component's foods, and the outer query keeps the first.
+    """
+    if not codes:
+        return {}
+    marks = ",".join("?" * len(codes))
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f"""WITH ranked AS (
+                    SELECT n.code, n.amount, n.unit, sp.slug,
+                           COALESCE(nm.name, sp.title) AS name,
+                           COUNT(*) OVER (PARTITION BY n.code) AS n_foods,
+                           ROW_NUMBER() OVER (PARTITION BY n.code
+                                              ORDER BY n.amount DESC) AS rn
+                    FROM nutrients n
+                    JOIN site_pages sp ON sp.item_id = n.item_id
+                         AND sp.lang = ? AND sp.page_type = 'food' AND sp.indexable = 1
+                    LEFT JOIN item_names nm ON nm.item_id = n.item_id
+                         AND nm.lang = sp.lang AND nm.is_primary = 1
+                    WHERE n.code IN ({marks}) AND n.amount IS NOT NULL
+                          AND n.amount > 0 AND n.quality = 'measured'
+                )
+                SELECT code, n_foods, amount AS top, unit, slug, name
+                FROM ranked WHERE rn = 1""", (lang, *codes)).fetchall()
+    finally:
+        conn.close()
+    return {r["code"]: dict(r) for r in rows}
+
+
 def cooking_yields(lang):
     """Every 重量変化率 MEXT publishes, with the food it belongs to.
 
