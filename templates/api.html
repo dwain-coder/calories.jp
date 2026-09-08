@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ t('api_title') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('api_title') }}</h1>
+<p class="alt-name">{{ t('api_lede') }}</p>
+
+<div class="card">
+  <h2>{{ t('api_terms_title') }}</h2>
+  <ul class="api-terms">
+    <li>{{ t('api_terms_free') }}</li>
+    <li>{{ t('api_terms_rate', n=rate_limit, hours=(rate_window // 3600)) }}</li>
+    <li>{{ t('api_terms_attribution') }}</li>
+    <li>{{ t('api_terms_estimates') }}</li>
+  </ul>
+</div>
+
+{% for ep in endpoints %}
+<div class="card api-endpoint">
+  <h2><span class="api-method {{ ep.method|lower }}">{{ ep.method }}</span>
+      <code>{{ ep.path }}</code></h2>
+  <p>{{ ep.summary }}</p>
+  {% if ep.params %}
+    <table class="nutrition-table stack-table api-params">
+      <thead><tr><th>{{ t('api_param') }}</th><th>{{ t('api_param_desc') }}</th></tr></thead>
+      <tbody>
+      {% for name, desc in ep.params %}
+        <tr><td><code>{{ name }}</code></td>
+            <td data-label="{{ t('api_param_desc') }}">{{ desc }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+  <pre class="api-example"><code>{{ ep.example }}</code></pre>
+  {% if ep.note %}<p class="license">{{ ep.note }}</p>{% endif %}
+</div>
+{% endfor %}
+
+<div class="card">
+  <h2>{{ t('api_sources_title') }}</h2>
+  <p>{{ t('api_sources_body') }}</p>
+  <p><a href="/sources">{{ t('sources_title') }} →</a></p>
+</div>
+{% endblock %}

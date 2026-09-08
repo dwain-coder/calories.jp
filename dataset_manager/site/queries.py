@@ -680,6 +680,37 @@ def nutrient_corpus_stats(lang, code):
         conn.close()
 
 
+def cooking_yields(lang):
+    """Every 重量変化率 MEXT publishes, with the food it belongs to.
+
+    A recipe is written in raw weights and a composition table is written in
+    cooked ones, so 100 g of dried hijiki is not 100 g of cooked hijiki — it is
+    870 g of it. The rate is the bridge, and MEXT publishes it for 497 foods.
+    """
+    conn = get_connection()
+    try:
+        rows = [dict(r) for r in conn.execute(
+            """SELECT cy.rate_percent, cy.method, sp.slug, i.category,
+                      COALESCE(nm.name, sp.title) AS name, n.energy_kcal
+               FROM cooking_yield cy
+               JOIN site_pages sp ON sp.item_id = cy.item_id
+                    AND sp.lang = ? AND sp.page_type = 'food'
+               JOIN items i ON i.id = cy.item_id
+               LEFT JOIN nutrition n ON n.item_id = cy.item_id
+               LEFT JOIN item_names nm ON nm.item_id = cy.item_id
+                    AND nm.lang = ? AND nm.is_primary = 1
+               WHERE cy.rate_percent IS NOT NULL
+               ORDER BY i.category, cy.rate_percent DESC""", (lang, lang))]
+    finally:
+        conn.close()
+    for r in rows:
+        rate = r["rate_percent"]
+        # What 100 g of the raw food becomes, and what that weighs in calories.
+        # Stated this way round because a cook measures what goes in.
+        r["from_raw_100g"] = round(r["energy_kcal"] * rate / 100, 0) if r["energy_kcal"] else None
+    return rows
+
+
 def atlas_points(lang):
     """Every food with macros, as a point in protein/fat/carb energy space.
 
@@ -864,7 +895,8 @@ def food_nutrition_json(item_id):
 # ---------------------------------------------------------------- sitemaps
 
 SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "nutrients", "pages")
-STATIC_PAGES = ("", "foods", "menu", "nutrients", "meal-calculator", "analyzer", "goals", "sources",
+STATIC_PAGES = ("", "foods", "menu", "nutrients", "cooking-yield", "meal-calculator",
+                "analyzer", "goals", "sources", "api",
                 "guides/cooking-and-calories", "about", "privacy", "contact")
 
 

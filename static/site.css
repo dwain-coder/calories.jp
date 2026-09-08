@@ -635,6 +635,9 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
     border: 1px solid var(--hairline); border-radius: var(--pill);
     padding: 0.25rem 0.65rem; font-size: 0.76rem; background: var(--paper-raised);
   }
+  /* `display: grid` on a row outranks the browser's own rule for [hidden], so
+     a row a filter had hidden went on showing on phones and only on phones. */
+  .stack-table tbody tr[hidden], .stack-table tfoot tr[hidden] { display: none !important; }
   .stack-table tbody tr, .stack-table tfoot tr {
     display: grid; grid-template-columns: repeat(5, 1fr);
     gap: 0.1rem 0.4rem; padding: 0.6rem 0; align-items: end;
@@ -1791,3 +1794,47 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   #nutrient-rank-table tbody td:nth-child(4) { grid-column: 3; grid-row: 2; }
   #nutrient-rank-table tbody td:nth-child(5) { grid-column: 4; grid-row: 2; }
 }
+
+/* ------------------------------------------------------- Cooking yield tool */
+.yield-calc-row {
+  display: flex; flex-wrap: wrap; gap: 0.9rem 1.4rem; align-items: flex-end;
+  margin: 0.6rem 0 0.4rem;
+}
+.yield-calc-row label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; }
+.yield-calc-row input[type="number"] { width: 7rem; }
+.yield-calc-row select { max-width: min(100%, 28rem); }
+.yield-calc-row .unit { display: none; }
+.yield-result {
+  font-family: var(--font-data); font-size: 1.05rem; margin: 0.6rem 0 0;
+  min-height: 1.5em;
+}
+.yield-filter-label { display: block; font-size: 0.85rem; margin-bottom: 0.7rem; }
+.yield-filter-label input { width: min(100%, 22rem); display: block; margin-top: 0.25rem; }
+
+@media (max-width: 640px) {
+  .yield-calc-row { gap: 0.7rem; }
+  .yield-calc-row label, .yield-calc-row select, .yield-calc-row input[type="number"] { width: 100%; }
+  /* Name on its own line, then the four figures across. */
+  #yield-table tbody tr { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  #yield-table tbody td:first-child {
+    grid-column: 1 / -1; white-space: normal; overflow-wrap: anywhere;
+  }
+}
+
+/* ---------------------------------------------------------- Public API page */
+.api-terms { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+.api-terms li { margin: 0.35rem 0; }
+.api-endpoint h2 { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: 1.05rem; }
+.api-endpoint h2 code { font-size: 0.95rem; }
+.api-method {
+  font-family: var(--font-data); font-size: 0.68rem; font-weight: 700;
+  padding: 0.15rem 0.5rem; border-radius: 5px; letter-spacing: 0.04em;
+}
+.api-method.get { background: rgba(0, 102, 204, 0.12); color: #0066cc; }
+.api-method.post { background: rgba(30, 126, 52, 0.12); color: #1e7e34; }
+.api-example {
+  background: var(--paper-raised); border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: 0.7rem 0.9rem;
+  overflow-x: auto; font-size: 0.82rem;
+}
+.api-params { margin: 0.6rem 0; }

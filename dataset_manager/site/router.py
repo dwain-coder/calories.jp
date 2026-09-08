@@ -347,6 +347,92 @@ def category_page(request: Request, cslug: str):
     })
 
 
+@router.get("/api", response_class=HTMLResponse)
+def api_page(request: Request):
+    """A written contract for the endpoints meant to be public.
+
+    /docs used to answer 200 to anyone and describe every internal route, which
+    is a schema dump rather than a contract. This lists the handful that are
+    stable, says what they cost and what may be done with the answers, and
+    leaves the rest of the app unadvertised.
+    """
+    lang = SITE_LANG
+    base = seo.base_url(lang)
+    endpoints = [
+        {
+            "method": "GET", "path": "/api/search",
+            "summary": t(lang, "api_ep_search"),
+            "params": [("q", t(lang, "api_p_q")), ("lang", t(lang, "api_p_lang")),
+                       ("limit", t(lang, "api_p_limit"))],
+            "example": f"curl '{base}/api/search?q=さば&lang=ja&limit=5'",
+            "note": None,
+        },
+        {
+            "method": "GET", "path": "/api/foods/{id}/nutrition",
+            "summary": t(lang, "api_ep_nutrition"),
+            "params": [("id", t(lang, "api_p_id"))],
+            "example": f"curl '{base}/api/foods/1/nutrition'",
+            "note": t(lang, "api_ep_nutrition_note"),
+        },
+        {
+            "method": "POST", "path": "/api/analyze-dish",
+            "summary": t(lang, "api_ep_dish"),
+            "params": [("dish", t(lang, "api_p_dish")), ("shop", t(lang, "api_p_shop")),
+                       ("lang", t(lang, "api_p_lang"))],
+            "example": f"curl -X POST '{base}/api/analyze-dish?dish=親子丼&lang=ja'",
+            "note": t(lang, "api_ep_estimate_note"),
+        },
+        {
+            "method": "POST", "path": "/api/meal-analyzer",
+            "summary": t(lang, "api_ep_photo"),
+            "params": [("image", t(lang, "api_p_image")), ("lang", t(lang, "api_p_lang"))],
+            "example": (f"curl -X POST '{base}/api/meal-analyzer?lang=ja' \
+"
+                        f"     -F 'image=@lunch.jpg'"),
+            "note": t(lang, "api_ep_estimate_note"),
+        },
+    ]
+    url = base + "/api"
+    crumbs = [(t(lang, "home"), base + "/"), (t(lang, "api_title"), None)]
+    return _render(request, "api.html", lang, {
+        "endpoints": endpoints,
+        "rate_limit": analyzer_limits()[0],
+        "rate_window": analyzer_limits()[1],
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
+        "meta_description": t(lang, "api_lede"),
+    })
+
+
+def analyzer_limits():
+    """The live rate limit, read from the analyzer rather than restated here —
+    a documented number that drifts from the enforced one is worse than none."""
+    from ..api import analyzer
+    return analyzer.RATE_LIMIT, analyzer.RATE_WINDOW
+
+
+@router.get("/cooking-yield", response_class=HTMLResponse)
+def cooking_yield_page(request: Request):
+    """Every published 重量変化率, and a converter over them.
+
+    A recipe is written in raw weights and a composition table in cooked ones.
+    The rate between them is published for 497 foods and was reachable only as
+    one column on one food page at a time.
+    """
+    lang = SITE_LANG
+    rows = queries.cooking_yields(lang)
+    url = seo.base_url(lang) + "/cooking-yield"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"), (t(lang, "yield_title"), None)]
+    return _render(request, "cooking_yield.html", lang, {
+        "rows": rows,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
+        "meta_description": t(lang, "yield_lede"),
+    })
+
+
 @router.get("/nutrients", response_class=HTMLResponse)
 def nutrients_index(request: Request):
     """Every nutrient that has a ranking page, grouped as the tables group them."""

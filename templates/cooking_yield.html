@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ t('yield_title') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('yield_title') }}</h1>
+<p class="alt-name">{{ t('yield_lede') }}</p>
+
+<div class="card yield-calc">
+  <h2>{{ t('yield_calc_title') }}</h2>
+  <p class="license">{{ t('yield_calc_note') }}</p>
+  <div class="yield-calc-row">
+    <label>{{ t('yield_raw_input') }}
+      <input type="number" id="yield-grams" value="100" min="1" max="10000" step="10" inputmode="numeric">
+      <span class="unit">g</span>
+    </label>
+    <label>{{ t('yield_food') }}
+      <select id="yield-food">
+        {% for r in rows %}
+          <option value="{{ r.rate_percent }}" data-kcal="{{ r.energy_kcal or '' }}"
+                  data-slug="{{ r.slug }}">{{ r.name }}{% if r.method %}（{{ r.method }}）{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <p class="yield-result" id="yield-result" aria-live="polite"></p>
+</div>
+
+<div class="card">
+  <label class="yield-filter-label">{{ t('yield_filter') }}
+    <input type="search" id="yield-filter" placeholder="{{ t('yield_filter_ph') }}" autocomplete="off">
+  </label>
+<div class="table-scroll">
+<table class="nutrition-table stack-table" id="yield-table">
+  <thead>
+    <tr>
+      <th>{{ t('name_col') }}</th>
+      <th>{{ t('yield_rate') }}</th>
+      <th>{{ t('yield_100g_becomes') }}</th>
+      <th>{{ t('calories') }}</th>
+      <th>{{ t('yield_kcal_from_raw') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr class="yield-row" data-name="{{ r.name }}{{ r.method }}{{ r.category }}">
+      <td><a href="/food/{{ r.slug }}">{{ r.name }}</a>
+        {% if r.category %}<span class="dish-category-tag">{{ r.category }}</span>{% endif %}</td>
+      <td data-label="{{ t('yield_rate') }}"><strong>{{ r.rate_percent|round(0)|int }}</strong>%</td>
+      <td data-label="{{ t('yield_100g_becomes') }}">{{ r.rate_percent|round(0)|int }} g</td>
+      <td data-label="{{ t('calories') }}">{{ r.energy_kcal|round(0)|int if r.energy_kcal is not none else '—' }}</td>
+      <td data-label="{{ t('yield_kcal_from_raw') }}">{{ r.from_raw_100g|round(0)|int if r.from_raw_100g is not none else '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="no-data" id="yield-empty" style="display:none;">{{ t('yield_no_match') }}</p>
+</div>
+
+<p class="license">{{ t('yield_source_note') }}</p>
+
+<script>
+(function () {
+  var grams = document.getElementById("yield-grams");
+  var food = document.getElementById("yield-food");
+  var out = document.getElementById("yield-result");
+
+  function render() {
+    var g = parseFloat(grams.value);
+    var opt = food.options[food.selectedIndex];
+    if (!opt || !(g > 0)) { out.textContent = ""; return; }
+    var rate = parseFloat(opt.value);
+    var kcal = parseFloat(opt.dataset.kcal);
+    var cooked = g * rate / 100;
+    var text = "{{ t('yield_result_weight') }}"
+      .replace("{raw}", g.toLocaleString())
+      .replace("{cooked}", Math.round(cooked).toLocaleString());
+    if (!isNaN(kcal)) {
+      text += " " + "{{ t('yield_result_kcal') }}"
+        .replace("{kcal}", Math.round(cooked * kcal / 100).toLocaleString());
+    }
+    out.textContent = text;
+  }
+  grams.addEventListener("input", render);
+  food.addEventListener("change", render);
+  render();
+
+  var filter = document.getElementById("yield-filter");
+  var rows = document.querySelectorAll("#yield-table tbody tr.yield-row");
+  var empty = document.getElementById("yield-empty");
+  filter.addEventListener("input", function () {
+    var q = filter.value.trim().toLowerCase();
+    var shown = 0;
+    rows.forEach(function (row) {
+      var hit = !q || row.dataset.name.toLowerCase().indexOf(q) !== -1;
+      row.hidden = !hit;
+      if (hit) shown++;
+    });
+    empty.style.display = shown ? "none" : "";
+  });
+})();
+</script>
+{% endblock %}
