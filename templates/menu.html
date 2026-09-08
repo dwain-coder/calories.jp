@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ page.title or name }} メニュー・カロリー・価格一覧 | {{ site_name }}{% endblock %}
+{% block title %}{{ page.title or name + "のメニュー・カロリー一覧" }} | {{ site_name }}{% endblock %}
 {% block content %}
 <nav class="crumbs" aria-label="breadcrumb">
   {% for label, url in crumbs %}{% if url %}<a href="{{ url }}">{{ label }}</a> ›
@@ -145,7 +145,7 @@
                   {% elif it.kcal_source == 'table' %}
                     <span class="prov-tag table" title="文部科学省 日本食品標準成分表 準拠">成分表準拠</span>
                   {% else %}
-                    <span class="prov-tag calc" title="文科省成分表 算定値（標準調理レシピ分解）">成分表算定</span>
+                    <span class="prov-tag calc" title="標準的なレシピに文部科学省 日本食品標準成分表を当てた推定値です。店舗の実際のレシピ・分量・記載グラム数は反映していません。">推定値</span>
                   {% endif %}
                 </div>
                 <div class="kcal-bar-track">

@@ -80,3 +80,105 @@ class TestMenuPages(unittest.TestCase):
         self.assertGreater(data["totals"]["energy_kcal"], 400)
 
 
+
+
+class TestOneUrlPerPage(unittest.TestCase):
+    """/shops served the same 251 chains as /menu — same rows, same prices, a
+    second address for one page."""
+
+    def test_shops_index_redirects_permanently(self):
+        r = client.get("/shops", follow_redirects=False)
+        self.assertEqual(r.status_code, 301)
+        self.assertEqual(r.headers["location"], "/menu")
+
+    def test_shop_page_redirects_to_its_menu_page(self):
+        r = client.get("/shops/くら寿司", follow_redirects=False)
+        self.assertEqual(r.status_code, 301)
+        self.assertIn("/menu/", r.headers["location"])
+
+    def test_sitemap_lists_the_url_the_site_serves(self):
+        """It listed /shops/... while /menu was in no sitemap at all."""
+        body = client.get("/sitemap-shops-ja.xml").text
+        self.assertIn("/menu/", body)
+        self.assertNotIn("/shops/", body)
+        self.assertIn("<loc>https://calories.jp/menu</loc>",
+                      client.get("/sitemap-pages-ja.xml").text)
+
+
+class TestWhatCountsAsARestaurant(unittest.TestCase):
+    """`shops` is one row per MENU, so a restaurant that publishes lunch and
+    dinner separately arrives twice, and some rows carry only a section name."""
+
+    def test_a_section_name_is_not_a_shop(self):
+        from dataset_manager.scripts.build_shops import is_a_restaurant
+        for name in ("Lunch", "Restaurant", "本日のおすすめ", "ラーメン", "GRAND",
+                     "キッズ", "季節限定 うどん", "台湾料理"):
+            self.assertFalse(is_a_restaurant(name), name)
+
+    def test_a_shop_with_a_section_in_its_name_keeps_its_page(self):
+        """Guessing which half of 「萬作 おしながき」 is the restaurant is how you
+        delete a real one."""
+        from dataset_manager.scripts.build_shops import is_a_restaurant
+        for name in ("萬作 おしながき", "大衆酒場 八銭 名物料理", "山頭火",
+                     "美千味 春のおすすめ", "恵比寿 土鍋炊ごはん なかいよ 定食"):
+            self.assertTrue(is_a_restaurant(name), name)
+
+    def test_one_page_per_business(self):
+        from dataset_manager.scripts.build_shops import pick_canonical
+        rows = [{"id": 1, "name": "AZABUDAI HILLS CAFE", "item_count": 32},
+                {"id": 2, "name": "AZABUDAI HILLS CAFE", "item_count": 26},
+                {"id": 3, "name": "azabudai hills cafe", "item_count": 6},
+                {"id": 4, "name": "Lunch", "item_count": 5},
+                {"id": 5, "name": "一蘭", "item_count": 22}]
+        keep = pick_canonical(rows)
+        self.assertEqual(set(keep), {1, 5})          # biggest menu wins, section dropped
+
+    def test_the_fuller_page_wins_not_the_longer_menu(self):
+        """MOS BURGER lists 116 dishes with one sourced figure behind them;
+        モスバーガー lists 106 with 81. Ranking on length published the emptier
+        page and dropped the chain out of the index entirely."""
+        from dataset_manager.scripts.build_shops import pick_canonical
+        rows = [{"id": 1, "name": "MOS BURGER", "item_count": 116},
+                {"id": 2, "name": "モスバーガー", "item_count": 106}]
+        self.assertEqual(pick_canonical(rows, {1: 1, 2: 81}), {2: "モスバーガー"})
+
+    def test_a_japanese_only_site_does_not_title_a_page_in_english(self):
+        from dataset_manager.scripts.build_shops import pick_canonical
+        rows = [{"id": 1, "name": "MOS BURGER", "item_count": 116},
+                {"id": 2, "name": "モスバーガー", "item_count": 106}]
+        self.assertEqual(list(pick_canonical(rows, {1: 90, 2: 10}).values()),
+                         ["モスバーガー"])
+
+
+class TestIndexGate(unittest.TestCase):
+    """The gate counts calories the chain published or a composition table
+    supplied. It does NOT count the tier-3 recipe estimates that fill most of
+    the calorie column: those are chosen on one keyword from the dish name, so
+    a 145g burger, a 110g burger and a 220g double all come out at 432.5 kcal.
+    Counting them lifted the indexable pages from 3 to 96 and was reverted."""
+
+    def test_a_recipe_estimate_is_not_a_sourced_figure(self):
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        try:
+            from dataset_manager.scripts import build_shops
+            shop = conn.execute(
+                """SELECT smi.shop_id FROM shop_menu_items smi
+                   JOIN menu_item_nutrition min ON min.shop_menu_item_id = smi.id
+                   WHERE min.provenance = 'mext_calc'
+                   GROUP BY smi.shop_id
+                   HAVING COUNT(*) > 20 LIMIT 1""").fetchone()
+            if not shop:
+                self.skipTest("no precomputed estimates in this database")
+            stats = build_shops._shop_stats(
+                conn, shop["shop_id"], build_shops._nutrition_items(conn))
+            self.assertGreater(stats["shown"], stats["resolved"])
+        finally:
+            conn.close()
+
+    def test_gate_wants_a_menu_with_prices_and_sourced_calories(self):
+        from dataset_manager.scripts.build_shops import gate
+        self.assertFalse(gate({"items": 10, "resolved": 10, "priced": 5})[0])   # too few
+        self.assertFalse(gate({"items": 40, "resolved": 8, "priced": 5})[0])    # 20%
+        self.assertFalse(gate({"items": 40, "resolved": 40, "priced": 0})[0])   # no price
+        self.assertTrue(gate({"items": 40, "resolved": 20, "priced": 5})[0])    # 50%

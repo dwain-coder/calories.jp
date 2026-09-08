@@ -162,48 +162,16 @@ def dish_page(request: Request, slug: str):
     })
 
 
-@router.get("/shops", response_class=HTMLResponse)
-def shops_page(request: Request):
-    """Chain menus index. Prices next to the calories each chain publishes."""
-    lang = SITE_LANG
-    shops = queries.shops_index(lang)
-    url = seo.base_url(lang) + "/shops"
-    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"), (t(lang, "shops"), None)]
-    return _render(request, "shops.html", lang, {
-        "shops": shops,
-        "canonical": url,
-        "crumbs": crumbs,
-        "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
-        "meta_description": t(lang, "shops_intro"),
-    })
-
-
-@router.get("/shops/{slug}", response_class=HTMLResponse)
-def shop_page(request: Request, slug: str):
-    """One chain's menu: price and the chain's own published calorie, per dish.
-
-    A page that failed the index gate in scripts/build_shops still renders and is
-    still crawlable — it carries `noindex, follow`, so it passes link equity on to
-    the food pages while staying out of the index it has not earned.
+@router.get("/shops", include_in_schema=False)
+@router.get("/shops/{slug:path}", include_in_schema=False)
+def shops_moved(slug: str = ""):
+    """/shops served the same 251 chains as /menu — the same rows, the same
+    prices, a second URL for one page. Two addresses for one page splits the
+    links between them and lets a search engine pick the one we did not mean,
+    so /menu is now the only one and this redirects to it permanently.
     """
-    lang = SITE_LANG
-    page = queries.get_shop_page(lang, slug)
-    if not page:
-        raise HTTPException(status_code=404, detail="Not found")
-    data = queries.get_shop_page_data(page)
-    url = seo.base_url(lang) + f"/shops/{quote(slug)}"
-    name = data["shop"].get("name", slug)
-    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
-              (t(lang, "shops"), seo.base_url(lang) + "/shops"),
-              (name, None)]
-    return _render(request, "shop.html", lang, {
-        "page": page, "d": data, "name": name,
-        "canonical": url,
-        "crumbs": crumbs,
-        "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
-        "meta_description": page.get("meta_description"),
-        "noindex": not page.get("indexable"),
-    })
+    target = f"/menu/{quote(slug)}" if slug else "/menu"
+    return RedirectResponse(target, status_code=301)
 
 
 @router.get("/menu", response_class=HTMLResponse)

@@ -5,6 +5,7 @@ excluded from the public surface."""
 from ..api.database import get_connection, get_license_info
 from ..calc.nutrition import dish_nutrition
 from . import claims, servings
+from . import menuterms
 from .brand_assets import get_chain_brand_badge, classify_dish_visual
 from .i18n import MICRO_DV
 
@@ -805,7 +806,7 @@ def food_nutrition_json(item_id):
 # ---------------------------------------------------------------- sitemaps
 
 SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "pages")
-STATIC_PAGES = ("", "foods", "shops", "meal-calculator", "analyzer", "goals", "sources",
+STATIC_PAGES = ("", "foods", "menu", "meal-calculator", "analyzer", "goals", "sources",
                 "guides/cooking-and-calories", "about", "privacy", "contact")
 
 
@@ -833,7 +834,7 @@ def sitemap_slugs(lang, section):
         if section == "shops":
             # indexable = 1 only: a chain menu page earns its sitemap slot by
             # carrying enough published calorie figures (scripts/build_shops).
-            return [f"/shops/{r['slug']}" for r in conn.execute(
+            return [f"/menu/{r['slug']}" for r in conn.execute(
                 "SELECT slug FROM shop_pages WHERE indexable = 1 AND lang = ?"
                 " ORDER BY id", (lang,))]
         if section == "pages":
@@ -966,6 +967,12 @@ def get_shop_page_data(page):
         # .items() method, so a key called "items" silently renders a bound method.
         menu, sources, with_figure = [], {}, 0
         for r in rows:
+            # A glass of water, a side of mustard and 「追加チーズ」 are on the menu
+            # but are not what anyone came to count; they padded the table
+            # without adding a figure to it. Drinks go with them.
+            visual = classify_dish_visual(r["name"])
+            if menuterms.is_extra(r["name"]) or menuterms.is_drink(r["name"], visual["category"]):
+                continue
             kcal = source = protein_g = fat_g = carbs_g = salt_g = None
             if r["chain_kcal"] is not None and r["source_page"]:
                 # The chain's own published numbers, with the page it came from.
@@ -995,7 +1002,6 @@ def get_shop_page_data(page):
 
             if kcal is not None:
                 with_figure += 1
-            visual = classify_dish_visual(r["name"])
             menu.append({
                 "id": r["item_id_pk"],
                 "name": r["name"],

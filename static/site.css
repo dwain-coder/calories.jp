@@ -1669,3 +1669,93 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   color: var(--ink-soft);
   margin-left: 0.5rem;
 }
+
+/* ------------------------------------------------- One dish per card, on a phone
+   The generic .stack-table rule hands the FIRST cell the full row width, which is
+   right when the first cell is the name. On a menu the first cell is the tray
+   button, so ＋ took a line of its own above every dish, the name was left sharing
+   a quarter-width track with the price and a whole block of nutrition, and the row
+   ran off the side of the screen — a table nobody could read without dragging it.
+
+   Laid out explicitly instead: the button, the dish and its price on one line, the
+   calorie block under them, the analyse button last. */
+@media (max-width: 640px) {
+  #menu-items-table tbody tr {
+    grid-template-columns: 2.2rem minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.4rem 0.55rem;
+    padding: 0.8rem 0;
+  }
+  #menu-items-table tbody td:first-child {
+    grid-column: 1; grid-row: 1; text-align: left;
+  }
+  #menu-items-table tbody td:nth-child(2) { grid-column: 2; grid-row: 1; min-width: 0; }
+  #menu-items-table tbody td:nth-child(3) {
+    grid-column: 3; grid-row: 1; text-align: right; white-space: nowrap;
+  }
+  #menu-items-table tbody td:nth-child(4) { grid-column: 2 / -1; grid-row: 2; min-width: 0; }
+  #menu-items-table tbody td:last-child   { grid-column: 2 / -1; grid-row: 3; text-align: right; }
+
+  /* 「価格」 over a single yen figure on the same line as the dish is a label
+     for something already obvious. The calorie block keeps its label. */
+  #menu-items-table tbody td:nth-child(3)::before { display: none; }
+
+  /* A Japanese dish name has no spaces to break at, so a long one would
+     otherwise decide the width of the whole row — and the table's own
+     white-space: nowrap kept it on one line, straight through the price. */
+  #menu-items-table tbody td:nth-child(2),
+  #menu-items-table .dish-name-cell,
+  #menu-items-table .dish-title-wrap,
+  #menu-items-table .dish-link,
+  #menu-items-table .dish-title {
+    white-space: normal; overflow-wrap: anywhere; min-width: 0;
+  }
+  #menu-items-table .dish-name-cell { gap: 0.5rem; align-items: flex-start; }
+  #menu-items-table .dish-thumb-avatar { width: 30px; height: 30px; }
+  #menu-items-table .dish-thumb-icon { font-size: 1rem; }
+
+  /* The figure and its provenance tag were pushed apart across the full width
+     by justify-content: space-between; side by side reads as one statement. */
+  #menu-items-table .kcal-val-header { justify-content: flex-start; flex-wrap: wrap; }
+  #menu-items-table .kcal-cell-wrap { width: 100%; min-width: 0; }
+  #menu-items-table .kcal-bar-track { width: 100%; }
+
+  /* The sort controls are the one thing a phone reader most wants — 「カロリー順」
+     on a 300-dish menu — and the generic rule hides the header that carries them. */
+  #menu-items-table thead, #menu-items-table thead tr { display: block; }
+  #menu-items-table thead tr {
+    display: flex; flex-wrap: wrap; gap: 0.35rem;
+    border-bottom: none; padding-bottom: 0.6rem;
+  }
+  #menu-items-table thead th {
+    border: 1px solid var(--hairline); border-radius: var(--pill);
+    padding: 0.3rem 0.7rem; font-size: 0.76rem; background: var(--paper-raised);
+    width: auto !important; text-align: left !important;
+  }
+  /* Neither the tray column nor the analyse column sorts anything. */
+  #menu-items-table thead th:first-child,
+  #menu-items-table thead th:last-child { display: none; }
+
+  /* A thumb needs something to hit. */
+  .tray-add-btn { min-width: 2rem; min-height: 2rem; }
+  .ai-micro-btn { min-height: 2rem; padding-inline: 0.7rem; }
+
+  /* 「/」 focuses the filter box from a keyboard. A phone has no key to press,
+     and the badge was sitting on top of the placeholder text. */
+  .search-kbd-hint { display: none; }
+
+  /* The chain list: three figures across, then the link on its own line.
+     「メニューを見る →」 does not fit a quarter of a 375px screen, and it was
+     the link itself that hung off the right edge of the page. */
+  #chains-table tbody tr { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #chains-table tbody td:last-child {
+    grid-column: 1 / -1; text-align: right; margin-top: 0.2rem;
+  }
+  .chain-action-btn { display: inline-block; min-height: 2rem; }
+
+  /* The order tray's actions had to share one line, so 「計算ツールで開く →」 broke
+     mid-word and 「クリア」 was wedged between two pills. One row each. */
+  .order-tray-actions { flex-wrap: wrap; }
+  .order-tray-actions .button-pill { flex: 1 1 100%; justify-content: center; }
+  .order-tray-actions .button-text { flex: 1 1 100%; text-align: center; padding: 0.4rem 0; }
+}

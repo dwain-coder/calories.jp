@@ -150,3 +150,30 @@ class TestImport(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNotADish(unittest.TestCase):
+    """A glass of water and a side of mustard are on the menu but are not what
+    anyone came to count."""
+
+    def test_add_ons_and_condiments_are_dropped(self):
+        from dataset_manager.site import menuterms
+        for name in ("トッピング 角煮", "追加 チーズ", "追加ソース", "替玉", "麺大盛",
+                     "ソース", "ドレッシング", "わさび", "ガリ", "お冷", "ミルク"):
+            self.assertTrue(menuterms.is_extra(name), name)
+
+    def test_a_dish_that_merely_mentions_a_sauce_is_kept(self):
+        """The reason the rules match a whole name and not a substring."""
+        from dataset_manager.site import menuterms
+        for name in ("豚骨醤油ラーメン", "濃厚渡り蟹のトマトクリームソース 生パスタランチ",
+                     "自家製ハンバーグガーリックトマトソース", "元祖辛子明太子",
+                     "US産リブアイステーキ 自家製醤油ソース [200g]"):
+            self.assertFalse(menuterms.is_extra(name), name)
+
+    def test_drinks_go_by_their_category(self):
+        from dataset_manager.site import menuterms
+        from dataset_manager.site.brand_assets import classify_dish_visual
+        for name in ("生ビール", "アイスコーヒー", "コーラ", "ウーロン茶"):
+            self.assertTrue(menuterms.is_drink(name, classify_dish_visual(name)["category"]), name)
+        for name in ("ハンバーグ", "醤油らーめん", "茶碗蒸し"):
+            self.assertFalse(menuterms.is_drink(name, classify_dish_visual(name)["category"]), name)

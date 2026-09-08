@@ -20,18 +20,132 @@ TWO RULES GOVERN THIS FILE.
     uv run python main.py build-shops --report
 """
 import re
+import unicodedata
 
 from . import build_site
 from ..database.site_schema import create_site_tables
 from ..site import foodterms, menuterms
+from ..site.brand_assets import classify_dish_visual
 
 # --- the index gate ---------------------------------------------------------
 # A page below any of these is a menu reprint with no added fact on it.
+#
+# The share counts only figures the chain published or a composition-table row
+# supplied — NOT the tier-3 estimates in menu_item_nutrition, even though those
+# are what most of the calorie column prints.
+#
+# Counting them was tried and reverted. It lifted the number of indexable pages
+# from 4 to 96, but tier 3 decomposes a dish NAME against a small library of
+# standard recipes, and the recipe is chosen on one keyword: 「ハンバーグ」. It does
+# not read the rest of the name. So 「濃厚ビーフシチューの包み焼きハンバーグ145g」,
+# the 110g and the ダブル220g all come out at 432.5 kcal, and 「殻付き海老グリル＆
+# 大俵ハンバーグ」 matches plain 「大俵ハンバーグ」 at 361.9 — the shrimp is not read.
+# かつや's 78 dishes hold 10 distinct values between them; KFC's 43 hold 6.
+#
+# A page whose calorie column repeats one number down the menu is not a page
+# that earned an index slot on the strength of its calorie column.
 MIN_ITEMS = 15              # fewer dishes than this is not a menu, it is a sign
 MIN_RESOLVED_SHARE = 0.40   # share of dishes carrying a real, sourced kcal
 MIN_PRICED = 1              # at least one price the source did not contradict
 
 LLM_BATCH = 25
+
+
+# --- what is actually a restaurant ------------------------------------------
+# The source CSV is one row per MENU, and a restaurant that publishes its lunch
+# card separately from its dinner card arrives as two menus. Most keep the
+# restaurant's name on both; some carry only the name of the section, so `shops`
+# ended up holding rows called 「Lunch」, 「Restaurant」, 「本日のおすすめ」 and
+# 「ラーメン」 — a course, a time slot and a food category, none of them a business.
+#
+# The test for this list is deliberately narrow: a name goes in only if it
+# identifies NO business at all. 「萬作 おしながき」 and 「大衆酒場 八銭 名物料理」 are
+# also section names, but each carries a real restaurant in front of it, so they
+# keep their page and the gate decides whether it is worth indexing. Guessing
+# which half of a name is the shop is how you delete a real restaurant.
+NOT_A_RESTAURANT = frozenset({
+    # course / service / time slot
+    "lunch", "dinner", "food", "grand", "restaurant", "cafétime", "café time",
+    "cafetime", "ランチメニューlunchmenu11:00~15:00", "besideseasideweekdaylunch",
+    "お食事", "居酒屋", "キッズ", "お得なセット!!", "お通しなし お席料なし",
+    "お通しなしお席料なし", "本日の", "本日のおすすめ",
+    # a food category, not a shop
+    "pizza", "crepe", "coffee&latte", "homeroastedcoffee", "freshmelondessert",
+    "ラーメン", "季節限定うどん", "牡蠣", "台湾料理", "朝引き鶏", "野菜肉巻き串",
+    "煮干し出汁のらーめん", "さぬき名物", "フルーツサンド", "フリット＆ドリンク",
+    "フリット&ドリンク", "ボウラーのための燃料", "大漁海鮮丼定食",
+})
+
+# One chain, written two ways. The source has 「MOS BURGER」 and 「モスバーガー」 as
+# separate menus of the same chain, and a reader who sees both in the index is
+# looking at a bug. Only exact, unambiguous pairs — a branch name
+# (「餃子の王将 グランツリー武蔵小杉店」) is left alone, because a branch really does
+# publish a different menu from the chain's national one.
+SAME_CHAIN = {
+    "mosburger": "モスバーガー",
+    "kfc": "ケンタッキーフライドチキン",
+    "【公式】kfcクリスマスメニュー2025": "ケンタッキーフライドチキン",
+    "falafelbrothers": "ファラフェルブラザーズ",
+    "ファラフェルブラザーズ|大手町": "ファラフェルブラザーズ",
+    "t.y.harbor": "t.y.ハーバーブルワリーレストラン",
+    "globaldiningoriginalbreadbartizanbreadfactory": "bartizanbreadfactory",
+}
+
+
+def chain_key(name):
+    """The identity of the business behind a menu name.
+
+    Case and width folded and whitespace dropped, so 「Ivy Place」/「IVY PLACE」 and
+    「ファラフェル ブラザーズ」/「ファラフェルブラザーズ」 land on one key.
+    """
+    key = unicodedata.normalize("NFKC", name or "").casefold()
+    key = re.sub(r"\s+", "", key)
+    return SAME_CHAIN.get(key, key)
+
+
+def is_a_restaurant(name):
+    """False when the row names a menu section rather than a business."""
+    return chain_key(name) not in NOT_A_RESTAURANT
+
+
+_JA = re.compile(r"[぀-ヿ一-鿿]")
+
+
+def pick_canonical(shops, sourced=None):
+    """{shop id: display name} — one page per business.
+
+    Four rows are called 「AZABUDAI HILLS CAFE」 and three 「IKEA」; they are one
+    venue's menu split by section, so they get one page.
+
+    The winner is the menu carrying the most SOURCED calories, not the longest
+    one. 「MOS BURGER」 lists 116 dishes with one figure behind them and
+    「モスバーガー」 106 dishes with 81, so ranking by length would have published
+    the emptier of the two pages. Length breaks the tie; the lower id breaks
+    that, so a rebuild does not move a page to a different slug.
+
+    The name is chosen separately, and on a different rule again: the Japanese
+    one, when the business has one — a Japanese-only site should not title a
+    page 「MOS BURGER」, the fault already fixed once for eight food pages.
+
+    `sourced` maps shop id to how many of its dishes carry a chain figure or a
+    composition-table row; without it the function ranks on length alone.
+    """
+    sourced = sourced or {}
+    groups = {}
+    for shop in shops:
+        if not is_a_restaurant(shop["name"]):
+            continue
+        groups.setdefault(chain_key(shop["name"]), []).append(shop)
+
+    def rank(s):
+        return (sourced.get(s["id"], 0), s["item_count"], -s["id"])
+
+    out = {}
+    for rows in groups.values():
+        canonical = max(rows, key=rank)
+        japanese = [s for s in rows if _JA.search(s["name"] or "")]
+        out[canonical["id"]] = max(japanese, key=rank)["name"] if japanese else canonical["name"]
+    return out
 
 
 def _nutrition_items(conn):
@@ -52,14 +166,29 @@ def _shop_stats(conn, shop_id, with_nutrition):
     renders as a dash.
     """
     items = conn.execute(
-        """SELECT smi.item_id, smi.price_yen, cn.energy_kcal AS chain_kcal
+        """SELECT smi.name, smi.item_id, smi.price_yen, cn.energy_kcal AS chain_kcal,
+                  min.energy_kcal AS shown_kcal, min.provenance
            FROM shop_menu_items smi
            LEFT JOIN chain_nutrition cn ON cn.id = smi.chain_nutrition_id
+           LEFT JOIN menu_item_nutrition min ON min.shop_menu_item_id = smi.id
            WHERE smi.shop_id = ?""", (shop_id,)).fetchall()
+    # Count the menu a reader sees. Drinks and condiments are filtered out of
+    # the page, so leaving them in here would gate on a menu nobody is shown
+    # and print a 品数 that disagrees with the rows under it.
+    items = [i for i in items if not (
+        menuterms.is_extra(i["name"])
+        or menuterms.is_drink(i["name"], classify_dish_visual(i["name"])["category"]))]
+
+    def sourced(i):
+        """The chain's own figure, or a composition-table row for this dish."""
+        return i["chain_kcal"] is not None or i["item_id"] in with_nutrition
+
     return {
         "items": len(items),
-        "resolved": sum(1 for i in items
-                        if i["chain_kcal"] is not None or i["item_id"] in with_nutrition),
+        "resolved": sum(1 for i in items if sourced(i)),
+        # What the page actually prints, which is mostly tier-3 estimates. Kept
+        # for the report so the gap between the two is visible.
+        "shown": sum(1 for i in items if i["shown_kcal"] is not None or sourced(i)),
         "priced": sum(1 for i in items if i["price_yen"]),
     }
 
@@ -264,19 +393,46 @@ def build_pages(conn, lang="ja"):
     existing = {r[0]: r[1] for r in conn.execute(
         "SELECT shop_id, slug FROM shop_pages WHERE lang = ?", (lang,))}
 
+    shops = conn.execute(
+        "SELECT id, name, item_count, price_min, price_max, imported_at "
+        "FROM shops ORDER BY id").fetchall()
+
+    # A page per business, not a page per menu. Rows that name a section rather
+    # than a restaurant, and the smaller duplicates of a business that appears
+    # more than once, are dropped here — including any page an earlier build
+    # already gave them, which is how they leave the index and the sitemap.
+    sourced = {r[0]: r[1] for r in conn.execute(
+        """SELECT shop_id, COUNT(*) FROM shop_menu_items
+           WHERE chain_nutrition_id IS NOT NULL OR item_id IN
+                 (SELECT item_id FROM nutrition WHERE energy_kcal IS NOT NULL)
+           GROUP BY shop_id""")}
+    keep = pick_canonical(shops, sourced)
+    dropped = [s for s in shops if s["id"] not in keep]
+    for shop in dropped:
+        conn.execute("DELETE FROM shop_pages WHERE shop_id = ?", (shop["id"],))
+
     made = updated = indexable = 0
-    for shop in conn.execute(
-            "SELECT id, name, item_count, price_min, price_max, imported_at "
-            "FROM shops ORDER BY id").fetchall():
+    for shop in shops:
+        if shop["id"] not in keep:
+            continue
+        name = keep[shop["id"]]
+        if name != shop["name"]:
+            # Written back rather than threaded through the page: the index, the
+            # page heading, the title and the JSON-LD all read shops.name, and one
+            # UPDATE keeps them agreeing instead of four places to forget.
+            conn.execute("UPDATE shops SET name = ? WHERE id = ?", (name, shop["id"]))
         stats = _shop_stats(conn, shop["id"], with_nutrition)
+        if stats["items"] != shop["item_count"]:
+            conn.execute("UPDATE shops SET item_count = ? WHERE id = ?",
+                         (stats["items"], shop["id"]))
         stats["price_min"] = shop["price_min"]
         stats["price_max"] = shop["price_max"]
         ok, reason = gate(stats)
-        title, meta = _titles(shop["name"], stats, shop["imported_at"])
+        title, meta = _titles(name, stats, shop["imported_at"])
 
         slug = existing.get(shop["id"])
         if slug is None:
-            base = build_site.slugify_ja(shop["name"]) or f"shop-{shop['id']}"
+            base = build_site.slugify_ja(name) or f"shop-{shop['id']}"
             slug, n = base, 2
             while slug in taken:
                 slug, n = f"{base}-{n}", n + 1
@@ -298,8 +454,11 @@ def build_pages(conn, lang="ja"):
             indexable += 1
     conn.commit()
     total = conn.execute("SELECT COUNT(*) FROM shop_pages").fetchone()[0]
+    sections = sum(1 for s in dropped if not is_a_restaurant(s["name"]))
     print(f"shop pages: +{made} new, {updated} refreshed, {total} total — "
           f"{indexable} pass the index gate, {total - indexable} are noindex,follow")
+    print(f"  skipped {len(dropped)} menus: {sections} name a section not a shop, "
+          f"{len(dropped) - sections} are duplicates of a shop that is already here")
 
 
 def report(conn):

@@ -106,3 +106,66 @@ def covers(dish_name, term):
     if not core:
         return False
     return len(stripped_term) / len(core) >= COVERAGE_MIN
+
+
+# --- rows that are not a dish ------------------------------------------------
+# A menu lists what a kitchen will bring you, and some of that is not food a
+# reader is counting: a bottomless glass of water, a side of mustard, 「追加チーズ」.
+# They pad the calorie table without adding a fact to it.
+#
+# The rules below match the WHOLE name or its opening word, never a substring.
+# 「豚骨醤油ラーメン」 contains 醤油 and 「濃厚渡り蟹のトマトクリームソース 生パスタ」
+# contains ソース; both are dishes, and a substring rule would delete them.
+
+# An add-on, priced separately and eaten as part of something else.
+_EXTRA_PREFIX = re.compile(
+    r"^(?:トッピング|追加|増量|大盛(?:り)?|替(?:え)?玉|おかわり|お代わり|セット割|"
+    r"ライス大盛|麺大盛)[\s　:：]*")
+
+# The whole name is a seasoning or a table condiment.
+_CONDIMENT_ONLY = re.compile(
+    r"^(?:ソース|各種ソース|ドレッシング|マヨネーズ|ケチャップ|マスタード|わさび|ワサビ|"
+    r"生わさび|しょうゆ|醤油|お醤油|塩|藻塩|岩塩|タレ|たれ|specialタレ|ふりかけ|七味|"
+    r"一味|山椒|粉山椒|辛子|からし|ラー油|食べるラー油|酢|お酢|ガリ|紅生姜|生姜|薬味|"
+    r"のり|海苔|刻みのり|バター|ジャム|シロップ|ガムシロップ|ミルク|フレッシュ|氷|"
+    r"お冷|水|お水|おしぼり|割り箸)$")
+
+# Drinks get their own vocabulary rather than borrowing the display classifier
+# in brand_assets: that one is ordered for icons, so it files 「アイスコーヒー」
+# under デザート (「アイス」 matches first) and 「カフェオレ」 under 料理, and a page
+# filtered on it kept the drinks it was supposed to drop.
+_DRINK = re.compile(
+    r"コーヒー|珈琲|カフェ(?:オレ|ラテ|モカ|イン)|エスプレッソ|カプチーノ|ラテ|"
+    r"紅茶|ティー|ウーロン|烏龍|緑茶|麦茶|ほうじ茶|玄米茶|煎茶|ジャスミン茶|"
+    r"ジュース|コーラ|ソーダ|サイダー|ドリンク|スムージー|シェイク|フロート|"
+    r"レモネード|ラッシー|カルピス|牛乳|ミルク|ネクター|エード|ウォーター|"
+    r"ビール|発泡酒|ハイボール|サワー|酎ハイ|チューハイ|ワイン|焼酎|日本酒|"
+    r"カクテル|ウイスキー|ウィスキー|ジントニック|梅酒|マッコリ|紹興酒|泡盛")
+
+# A drink word inside a dish is still a dish: 抹茶パフェ, コーヒーゼリー, ビール酵母
+# パン, ミルクレープ. The form word wins.
+_DRINK_FALSE_FRIEND = re.compile(
+    r"パフェ|ケーキ|ゼリー|プリン|アイスクリーム|ソフトクリーム|パン|クレープ|"
+    r"タルト|ムース|シェーク丼|丼|麺|そば|うどん|ラーメン|定食|セット|サンド|"
+    r"カレー|ピザ|パスタ|グラタン|煮|焼き?豚|酵母|漬け?")
+
+# Kept for callers that already have the display category to hand.
+_DRINK_CATEGORIES = frozenset({"ドリンク", "アルコール", "コーヒー"})
+
+
+def is_extra(name):
+    """A topping, a refill or a side of sauce rather than a dish."""
+    n = (name or "").strip()
+    if not n:
+        return False
+    return bool(_EXTRA_PREFIX.match(n) or _CONDIMENT_ONLY.match(n))
+
+
+def is_drink(name, category=None):
+    """A beverage. `category`, when given, is classify_dish_visual's label."""
+    n = (name or "").strip()
+    if not n:
+        return False
+    if _DRINK.search(n) and not _DRINK_FALSE_FRIEND.search(n):
+        return True
+    return category in _DRINK_CATEGORIES and not _DRINK_FALSE_FRIEND.search(n)

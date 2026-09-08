@@ -1,17 +1,12 @@
 {
   "version": "0.0.1",
+  "autoPort": true,
   "configurations": [
     {
-      "name": "api",
+      "name": "calories",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "python", "-m", "dataset_manager.scripts.cli", "serve"],
+      "runtimeArgs": ["run", "python", "main.py", "serve"],
       "port": 8000
-    },
-    {
-      "name": "frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
-      "port": 5173
     }
   ]
 }
