@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ heading }}</h1>
+<p class="alt-name">{{ blurb }}</p>
+
+<div class="card nutrient-scope">
+  <p>
+    {{ t('nutrient_scope', n='{:,}'.format(stats.n), top=stats.top, unit=stats.unit) }}
+  </p>
+  <p class="license">{{ t('nutrient_measured_only') }}</p>
+</div>
+
+<div class="card">
+<div class="table-scroll">
+<table class="nutrition-table stack-table" id="nutrient-rank-table">
+  <thead>
+    <tr>
+      <th style="width: 3rem;">#</th>
+      <th>{{ t('name_col') }}</th>
+      <th>{{ term }}</th>
+      <th>{{ t('per_serving_col') }}</th>
+      <th>{{ t('calories') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td class="rank-num">{{ loop.index }}</td>
+      <td><a href="/food/{{ r.slug }}">{{ r.name }}</a>
+        {% if r.category %}<span class="dish-category-tag">{{ r.category }}</span>{% endif %}</td>
+      <td data-label="{{ term }}"><strong>{{ r.amount }}</strong> <small>{{ r.unit }}</small></td>
+      <td data-label="{{ t('per_serving_col') }}">
+        {% if r.serving %}{{ r.serving_amount }} <small>{{ r.unit }}</small>
+          <span class="serving-note">{{ r.serving.label }} {{ r.serving.grams }}g</span>
+        {% else %}<span class="muted">—</span>{% endif %}
+      </td>
+      <td data-label="{{ t('calories') }}">{{ r.energy_kcal|round(0)|int if r.energy_kcal is not none else '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+
+<p class="license">{{ t('nutrient_source_note') }}</p>
+
+<nav class="nutrient-siblings">
+  <h2>{{ t('other_nutrients') }}</h2>
+  <ul class="atlas-chips">
+    {% for s, label in siblings %}
+      <li><a class="atlas-chip" href="/nutrient/{{ s }}">{{ label }}</a></li>
+    {% endfor %}
+  </ul>
+  <p><a href="/nutrients">{{ t('all_nutrients') }} →</a></p>
+</nav>
+{% endblock %}

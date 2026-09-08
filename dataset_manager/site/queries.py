@@ -622,6 +622,64 @@ def group_ranking(lang, ja_category, metric="protein_g", limit=25):
     return rows
 
 
+def nutrient_ranking(lang, code, limit=60):
+    """Foods carrying the most of one component, per 100 g.
+
+    Measured values only. A value MEXT prints in parentheses is its own estimate
+    for that food, and a ranking is a claim that THIS food holds more than THAT
+    one — an estimate cannot settle it, and a `Tr` is not a quantity at all.
+
+    Serving figures ride along where the portion table knows one, because
+    「100 g あたり」 is not how anyone eats seaweed or liver.
+    """
+    conn = get_connection()
+    try:
+        rows = [dict(r) for r in conn.execute(
+            """SELECT sp.slug, COALESCE(nm.name, sp.title) AS name, i.category,
+                      n.amount, n.unit, n.name AS nutrient_name,
+                      nu.energy_kcal
+               FROM nutrients n
+               JOIN site_pages sp ON sp.item_id = n.item_id
+                    AND sp.lang = ? AND sp.page_type = 'food' AND sp.indexable = 1
+               JOIN items i ON i.id = n.item_id
+               LEFT JOIN nutrition nu ON nu.item_id = n.item_id
+               LEFT JOIN item_names nm ON nm.item_id = n.item_id
+                    AND nm.lang = sp.lang AND nm.is_primary = 1
+               WHERE n.code = ? AND n.amount IS NOT NULL AND n.amount > 0
+                     AND n.quality = 'measured'
+               ORDER BY n.amount DESC
+               LIMIT ?""", (lang, code, limit))]
+    finally:
+        conn.close()
+    for r in rows:
+        portion = servings.for_food(r.get("name"))
+        if portion:
+            r["serving"] = portion
+            r["serving_amount"] = round(r["amount"] * portion["grams"] / 100, 2)
+    return rows
+
+
+def nutrient_corpus_stats(lang, code):
+    """How many foods carry a measured value for this component, and the spread.
+
+    Printed on the page so a reader knows what the ranking is a ranking OF:
+    「2,338食品中」 is the difference between a fact and a top-ten listicle.
+    """
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            """SELECT COUNT(*) AS n, MAX(n.amount) AS top, AVG(n.amount) AS mean,
+                      MIN(n.unit) AS unit
+               FROM nutrients n
+               JOIN site_pages sp ON sp.item_id = n.item_id
+                    AND sp.lang = ? AND sp.page_type = 'food' AND sp.indexable = 1
+               WHERE n.code = ? AND n.amount IS NOT NULL AND n.amount > 0
+                     AND n.quality = 'measured'""", (lang, code)).fetchone()
+        return dict(row) if row else {}
+    finally:
+        conn.close()
+
+
 def atlas_points(lang):
     """Every food with macros, as a point in protein/fat/carb energy space.
 
@@ -805,8 +863,8 @@ def food_nutrition_json(item_id):
 
 # ---------------------------------------------------------------- sitemaps
 
-SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "pages")
-STATIC_PAGES = ("", "foods", "menu", "meal-calculator", "analyzer", "goals", "sources",
+SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "nutrients", "pages")
+STATIC_PAGES = ("", "foods", "menu", "nutrients", "meal-calculator", "analyzer", "goals", "sources",
                 "guides/cooking-and-calories", "about", "privacy", "contact")
 
 
@@ -837,6 +895,9 @@ def sitemap_slugs(lang, section):
             return [f"/menu/{r['slug']}" for r in conn.execute(
                 "SELECT slug FROM shop_pages WHERE indexable = 1 AND lang = ?"
                 " ORDER BY id", (lang,))]
+        if section == "nutrients":
+            from . import nutrient_pages
+            return [f"/nutrient/{slug}" for slug in nutrient_pages.SLUGS]
         if section == "pages":
             return [f"/{p}" for p in STATIC_PAGES]
         return []

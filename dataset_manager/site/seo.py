@@ -221,9 +221,9 @@ def website_jsonld(lang, counts=None):
     so it can offer the site's own search from the result; `Organization` is
     what a knowledge panel reads.
 
-    The operator's name is whatever SITE_OPERATOR says. It is left out entirely
-    rather than guessed at: an organisation named in structured data is a claim
-    about a real party.
+    The publisher is the site itself unless SITE_OPERATOR names a company —
+    an organisation in structured data is a claim about a real party, so it is
+    never guessed at.
     """
     base = base_url(lang)
     site = {
@@ -246,7 +246,7 @@ def website_jsonld(lang, counts=None):
         site["description"] = (
             "文部科学省『日本食品標準成分表』などの公的データをもとに、"
             "食品・料理・外食メニューのカロリーと栄養成分を検索できます。")
-    operator = os.environ.get("SITE_OPERATOR", "").strip()
+    operator = os.environ.get("SITE_OPERATOR", "").strip() or SITE_NAME[lang]
     if operator:
         site["publisher"] = {"@type": "Organization", "name": operator,
                              "url": base + "/", "@id": f"{base}/#operator"}
@@ -317,3 +317,32 @@ def source_label(source, lang):
     if not entry:
         return source
     return entry.get(f"name_{lang}") or entry.get("name_en") or source
+
+
+def ranking_jsonld(lang, heading, url, rows, limit=30):
+    """The ranking as an ItemList, which is what it is.
+
+    Each entry points at the food's own page, so the list is navigable rather
+    than decorative, and carries the measured amount as the value it was ranked
+    on — a search engine reading this sees the same number the reader does.
+    """
+    base = base_url(lang)
+    items = []
+    for i, r in enumerate(rows[:limit]):
+        if not r.get("slug"):
+            continue
+        items.append({
+            "@type": "ListItem",
+            "position": i + 1,
+            "name": r.get("name"),
+            "url": f"{base}/food/{quote(r['slug'])}",
+        })
+    return {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": heading,
+        "url": url,
+        "numberOfItems": len(items),
+        "itemListOrder": "https://schema.org/ItemListOrderDescending",
+        "itemListElement": items,
+    }

@@ -8,7 +8,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from . import cards, faq, groups, media, nutrient_groups, queries, seo
+from . import (cards, faq, groups, media, nutrient_groups, nutrient_pages,
+               queries, seo)
 from .i18n import LANGS, MACRO_DV, MEXT_GROUPS_EN, NUTRIENT_LABELS_EN, SITE_NAME, t
 from ..scripts.build_site import slugify_en
 
@@ -346,6 +347,80 @@ def category_page(request: Request, cslug: str):
     })
 
 
+@router.get("/nutrients", response_class=HTMLResponse)
+def nutrients_index(request: Request):
+    """Every nutrient that has a ranking page, grouped as the tables group them."""
+    lang = SITE_LANG
+    entries = []
+    for code, slug, term, _blurb in nutrient_pages.NUTRIENTS:
+        stats = queries.nutrient_corpus_stats(lang, code)
+        if not stats or not stats.get("n"):
+            continue
+        top = queries.nutrient_ranking(lang, code, limit=1)
+        entries.append({
+            "slug": slug, "term": term, "code": code,
+            "n": stats["n"], "top": stats["top"], "unit": stats["unit"],
+            "top_name": top[0]["name"] if top else None,
+            "top_slug": top[0]["slug"] if top else None,
+        })
+
+    # Grouped by the same scheme the food pages use, so a reader who has seen
+    # one table recognises the shape of the other.
+    grouped, seen = [], set()
+    for key in nutrient_groups.ORDER:
+        label = nutrient_groups.LABELS[key][lang]
+        rows = [e for e in entries if nutrient_groups.group_of(e["code"]) == key]
+        if rows:
+            grouped.append((label, rows))
+            seen.update(e["slug"] for e in rows)
+    rest = [e for e in entries if e["slug"] not in seen]
+    if rest:
+        grouped.append((t(lang, "other_nutrients"), rest))
+
+    url = seo.base_url(lang) + "/nutrients"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"), (t(lang, "nutrients_index"), None)]
+    return _render(request, "nutrients.html", lang, {
+        "groups": grouped,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
+        "meta_description": t(lang, "nutrients_index_lede"),
+    })
+
+
+@router.get("/nutrient/{slug}", response_class=HTMLResponse)
+def nutrient_page(request: Request, slug: str):
+    """Foods holding the most of one component, measured values only."""
+    lang = SITE_LANG
+    spec = nutrient_pages.get(slug)
+    if not spec:
+        raise HTTPException(status_code=404, detail="Not found")
+    code, _slug, term, blurb = spec
+    stats = queries.nutrient_corpus_stats(lang, code)
+    if not stats or not stats.get("n"):
+        raise HTTPException(status_code=404, detail="Not found")
+    rows = queries.nutrient_ranking(lang, code, limit=60)
+
+    heading = nutrient_pages.title(term, lang)
+    url = seo.base_url(lang) + f"/nutrient/{slug}"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
+              (t(lang, "nutrients_index"), seo.base_url(lang) + "/nutrients"),
+              (term, None)]
+    siblings = [(sl, tm) for _c, sl, tm, _b in nutrient_pages.NUTRIENTS if sl != slug][:14]
+    jsonld = [
+        seo.breadcrumbs_jsonld(crumbs),
+        seo.ranking_jsonld(lang, heading, url, rows),
+    ]
+    return _render(request, "nutrient.html", lang, {
+        "term": term, "heading": heading, "blurb": blurb,
+        "rows": rows, "stats": stats, "siblings": siblings,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(j) for j in jsonld],
+        "meta_description": blurb,
+    })
+
+
 @router.get("/guides/cooking-and-calories", response_class=HTMLResponse)
 def guide_cooking(request: Request):
     """A written guide whose every figure is a measurement, not an estimate."""
@@ -421,8 +496,12 @@ def sources_page(request: Request):
 # site publishing nutrition figures has no business being anonymous. The two
 # facts only the owner can supply come from the environment rather than being
 # written into the repository.
-SITE_OPERATOR = os.environ.get("SITE_OPERATOR", "")
-CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "")
+# The site operates under its own name. Defaulted here rather than left to an
+# environment variable nobody set: the about page read 運営者: 未掲載, which on a
+# Japanese site publishing nutrition information reads as an omission rather
+# than a choice. SITE_OPERATOR still overrides it if a company is ever named.
+SITE_OPERATOR = os.environ.get("SITE_OPERATOR", "").strip() or SITE_NAME[SITE_LANG]
+CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "").strip()
 # Flipped on when those scripts are actually added, so the privacy policy never
 # claims a tracker the site does not run, nor stays silent about one it does.
 HAS_ADS = os.environ.get("SITE_ADS", "").lower() in ("1", "true", "yes")

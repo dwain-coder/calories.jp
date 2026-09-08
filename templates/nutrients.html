@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nutrients_index') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('nutrients_index') }}</h1>
+<p class="alt-name">{{ t('nutrients_index_lede') }}</p>
+
+{% for group_label, entries in groups %}
+  <h2>{{ group_label }}</h2>
+  <div class="card">
+  <div class="table-scroll">
+  <table class="nutrition-table stack-table">
+    <thead><tr><th>{{ t('name_col') }}</th><th>{{ t('foods_measured') }}</th><th>{{ t('highest') }}</th></tr></thead>
+    <tbody>
+    {% for e in entries %}
+      <tr>
+        <td><a href="/nutrient/{{ e.slug }}">{{ e.term }}</a></td>
+        <td data-label="{{ t('foods_measured') }}">{{ '{:,}'.format(e.n) }}</td>
+        <td data-label="{{ t('highest') }}">
+          {% if e.top_name %}<a href="/food/{{ e.top_slug }}">{{ e.top_name }}</a>
+            <span class="serving-note">{{ e.top }} {{ e.unit }}</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  </div>
+{% endfor %}
+
+<p class="license">{{ t('nutrient_source_note') }}</p>
+{% endblock %}

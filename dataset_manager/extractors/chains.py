@@ -220,6 +220,10 @@ _JOIN_STRIP = re.compile(
     r"[（(\[【][^）)\]】]*[）)\]】]"          # bracketed regional/limited notes
     r"|[\s　・、,／/･]"                      # spacing and separators
     r"|[!！?？~〜\-–—]"                      # decorative punctuation
+    # A menu writes 「エビ＆チーズ」 where the disclosure writes 「エビ&チーズ」, and one
+    # of them uses a typographic apostrophe. 54 published figures sat unused on
+    # that difference alone.
+    r"|[&＆+＋'’\"“”]"
 )
 
 
@@ -230,6 +234,41 @@ def name_key(name):
         return ""
     key = unicodedata.normalize("NFKC", name)
     return _JOIN_STRIP.sub("", key).lower()
+
+
+def relink_menu(conn, shop_id=None):
+    """Re-join menu rows to already-imported disclosures, without re-fetching.
+
+    import_chain does this as its last step, but it deletes and re-inserts the
+    chain's figures first — which needs the chain's website. When only the
+    joining rule changes, there is nothing to fetch.
+    """
+    shops = ([shop_id] if shop_id else
+             [r[0] for r in conn.execute("SELECT DISTINCT shop_id FROM chain_nutrition")])
+    linked = 0
+    for sid in shops:
+        by_exact, by_key, ambiguous = {}, {}, set()
+        for row_id, name, _stored in conn.execute(
+                "SELECT id, name, name_key FROM chain_nutrition WHERE shop_id = ?", (sid,)):
+            by_exact.setdefault(name, row_id)
+            key = name_key(name)
+            if key in by_key and by_key[key] != row_id:
+                ambiguous.add(key)
+            by_key[key] = row_id
+        for item_id, name in conn.execute(
+                "SELECT id, name FROM shop_menu_items WHERE shop_id = ?", (sid,)).fetchall():
+            hit = by_exact.get(name)
+            if not hit:
+                key = name_key(name)
+                if key in ambiguous:
+                    continue
+                hit = by_key.get(key)
+            if hit:
+                conn.execute("UPDATE shop_menu_items SET chain_nutrition_id = ? WHERE id = ?",
+                             (hit, item_id))
+                linked += 1
+    conn.commit()
+    return linked
 
 
 def import_chain(conn, chain, opener=None, fetched_at=None):
