@@ -150,8 +150,71 @@ def faq_jsonld(qa):
     }
 
 
+def restaurant_menu_jsonld(lang, shop_name, url, menu_items, description=None, price_min=None, price_max=None):
+    """Schema.org Restaurant with Menu and MenuItems for Google Rich Results."""
+    items_json = []
+    for it in (menu_items or [])[:80]:
+        item_d = {
+            "@type": "MenuItem",
+            "name": it.get("name"),
+        }
+        if it.get("price_yen"):
+            item_d["offers"] = {
+                "@type": "Offer",
+                "price": str(it["price_yen"]),
+                "priceCurrency": "JPY",
+            }
+        if it.get("kcal") is not None:
+            item_d["nutrition"] = {
+                "@type": "NutritionInformation",
+                "calories": f"{int(round(it['kcal']))} calories",
+            }
+        items_json.append(item_d)
+
+    d = {
+        "@context": "https://schema.org",
+        "@type": "Restaurant",
+        "name": shop_name,
+        "url": url,
+        "inLanguage": lang,
+        "description": description,
+        "servesCuisine": "Japanese",
+        "hasMenu": {
+            "@type": "Menu",
+            "name": f"{shop_name} メニュー・カロリー表",
+            "hasMenuItem": items_json,
+        }
+    }
+    if price_min and price_max:
+        d["priceRange"] = f"¥{price_min:,}〜¥{price_max:,}"
+    return d
+
+
+def chain_directory_jsonld(lang, shops):
+    """Schema.org ItemList for the chain directory page."""
+    base = base_url(lang)
+    items = []
+    for i, s in enumerate(shops or []):
+        slug = s.get("slug")
+        if not slug:
+            continue
+        items.append({
+            "@type": "ListItem",
+            "position": i + 1,
+            "name": s.get("name", slug),
+            "url": f"{base}/menu/{quote(slug)}"
+        })
+    return {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": "外食チェーン メニュー・カロリー一覧" if lang == "ja" else "Restaurant Chain Menus & Calories",
+        "itemListElement": items,
+    }
+
+
 def jsonld_script(data):
     return json.dumps(data, ensure_ascii=False)
+
 
 
 def sitemap_xml(entries):

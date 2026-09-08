@@ -63,6 +63,21 @@ def main():
         if n:
             print(f"  {table}: dropped {n} orphaned rows")
 
+    # Chain-menu tables are NOT item-keyed, so they survive the item purge intact
+    # — but a dish's optional link to a composition-table entry can dangle once a
+    # quarantined item is gone. The DISH is still real, so the link is cleared
+    # rather than the row deleted: a menu row with no food page is normal, a menu
+    # missing its dishes is a broken page.
+    try:
+        n = conn.execute(
+            "UPDATE shop_menu_items SET item_id = NULL, match_confidence = NULL, "
+            "match_method = NULL WHERE item_id IS NOT NULL "
+            "AND item_id NOT IN (SELECT id FROM items)").rowcount
+        if n:
+            print(f"  shop_menu_items: cleared {n} links to excluded items")
+    except sqlite3.OperationalError as e:
+        print(f"  skip shop_menu_items: {e}")
+
     for table in EMPTY_TABLES:
         conn.execute(f"DELETE FROM {table}")
     conn.commit()

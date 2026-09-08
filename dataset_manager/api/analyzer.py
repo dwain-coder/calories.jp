@@ -10,6 +10,7 @@ import json
 import os
 import sqlite3
 import time
+import re
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 
@@ -279,11 +280,16 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI analysis unavailable: {e}")
 
+    result = calculate_nutrition_for_dishes(dishes_in, lang=lang)
+    _cache_put(sha, lang, result)
+    return result
+
+
+def calculate_nutrition_for_dishes(dishes_in, lang="ja"):
+    """Deterministic calculation: match components to clean DB rows x estimated grams."""
     components, unmatched, parts, dishes = [], [], [], []
     for di, dish in enumerate(dishes_in):
         dish_parts, dish_component_ix, dish_unmatched = [], [], 0
-        # 「スパイス炒めご飯」 tells us its rice was cooked, whatever the model
-        # called the grain, and the grams estimated are of the cooked food.
         cooked = foodterms.is_cooked_dish(dish["dish_ja"] or dish["dish_en"] or "")
         for f in dish["components"]:
             name_ja, name_en = f.get("name_ja"), f.get("name_en")
@@ -298,8 +304,6 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
                 continue
             nut = queries.food_nutrition_json(match["item_id"])
             per100 = nut["per_100g"] if nut else None
-            # A quantity that cannot be right is not multiplied into the
-            # totals; the component still appears, with the reason shown.
             doubt = _implausible(name_ja, grams, match)
             scaled = scale(per100, grams) if (per100 and grams and not doubt) else None
             if scaled:
@@ -314,8 +318,6 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
                                 "implausible": doubt},
                 "db_match": {
                     "item_id": match["item_id"],
-                    # the display name, not the page title: "うし ひき肉 生"
-                    # reads in a table, "…のカロリー・栄養成分" does not
                     "title": match.get("name") or match["title"],
                     "url": f"/food/{match['slug']}",
                     "source": match["source"],
@@ -334,15 +336,12 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
             "grams": round(sum(c for c in (
                 components[i]["ai_estimate"]["estimated_grams"] for i in dish_component_ix)
                 if c), 1),
-            # how much of the dish the figures actually cover
             "n_matched": len(dish_component_ix),
             "n_total": len(dish_component_ix) + dish_unmatched,
         })
 
     totals, missing = sum_components(parts)
 
-    # Micronutrients + fiber + salt: deterministic sums of MEXT laboratory
-    # values scaled by the AI-estimated grams of each matched component.
     item_grams = [
         (c["db_match"]["item_id"], c["ai_estimate"]["estimated_grams"])
         for c in components if c["calculated"]
@@ -367,10 +366,8 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
         for level, key, params in meal_insights(totals, salt_g=salt_g, fiber_g=fiber_g, dv=dv)
     ]
 
-    # A meal-level per-serving figure is only meaningful when the photo holds
-    # one dish; across several, "a serving" is not one thing.
     meal_servings = dishes[0]["servings"] if len(dishes) == 1 else 1
-    result = {
+    return {
         "dishes": dishes,
         "components": components,
         "unmatched": unmatched,
@@ -387,5 +384,671 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
         "missing_fields": missing,
         "cached": False,
     }
-    _cache_put(sha, lang, result)
+
+
+def decompose_dish_text(dish_name: str, shop_name: str = None):
+    """Decompose a named restaurant dish/meal into ingredients and grams.
+
+    Uses Gemini when configured, or a rich culinary composition heuristic.
+    """
+    name = (dish_name or "").strip()
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key:
+        try:
+            from .server import get_gemini_client, gemini_model
+            from google.genai import types
+            client = get_gemini_client()
+            prompt = f"""You are an expert Japanese restaurant chef and nutritionist.
+The customer is ordering this meal from '{shop_name or 'Japanese restaurant'}':
+Dish name: {name}
+
+Break down this restaurant dish/meal into its typical components and standard weights in grams as served.
+Rules:
+- If it's a set/combo (e.g. ラーメン＆半ライスセット), include all items in the combo (e.g. ramen ingredients PLUS ご飯 120g).
+- If it has toppings specified (e.g. ねぎ, 背脂, チャーシュー), include those extra toppings.
+- Use generic Japanese ingredient names recognizable in standard food composition tables.
+
+Respond ONLY with a valid JSON object:
+{{"dishes": [{{"dish_ja": "{name}", "dish_en": "Meal", "servings_visible": 1,
+  "components": [{{"name_ja": "...", "name_en": "...", "estimated_grams": 100, "confidence": "high"}}]}}]}}
+"""
+            resp = client.models.generate_content(
+                model=gemini_model(),
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            payload = json.loads(resp.text)
+            dishes = _as_dishes(payload)
+            if dishes:
+                return dishes
+        except Exception:
+            pass
+
+    # Culinary composition heuristic for Japanese restaurant dishes
+    comps = []
+
+    # Check for explicit accompaniment rice or soup
+    # e.g., （ライス付）, (ご飯付), ライスつき, 麦ごはん付, 半ライス, 小ライス
+    has_explicit_rice = bool(re.search(r'[(（]?(?:(?<!ス)ライス|ご飯|ごはん|白米|麦ごはん|麦飯)(?:付|つき|セット)?[)）]?', name)) or any(
+        k in name for k in ('半ライス', '小ライス', '大盛ライス', 'ライスセット', 'ごはんセット', 'ご飯セット')
+    )
+    has_explicit_soup = any(k in name for k in ('みそ汁', '味噌汁', 'スープ付', 'スープつき', 'スープセット'))
+
+    def get_rice_grams(base_g=240.0):
+        if any(k in name for k in ('大盛', '大盛り', '特盛')):
+            return min(base_g * 1.25, 320.0)
+        if any(k in name for k in ('小', 'ミニ', 'ハーフ', '半')):
+            return max(base_g * 0.65, 120.0)
+        return base_g
+
+    is_tanpin = "単品" in name and not any(k in name for k in ("定食", "セット"))
+
+    # 1. Donburi & Ju (丼・重 - Rice Bowl Meals: Check BEFORE individual meats, steaks or noodles)
+    if ("丼" in name or "重" in name) and not any(k in name for k in ("ドレッシング", "タレ", "ふりかけ", "スパイス")):
+        rice_g = get_rice_grams(240.0)
+        comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+
+        if any(k in name for k in ("鉄火", "まぐろ", "マグロ", "本まぐろ", "中とろ", "大とろ", "トロ", "とろ", "赤身")):
+            comps.append({"name_ja": "まぐろ", "name_en": "Tuna", "estimated_grams": 75.0, "confidence": "high"})
+            comps.append({"name_ja": "のり", "name_en": "Nori Seaweed", "estimated_grams": 1.5, "confidence": "high"})
+            comps.append({"name_ja": "しょうゆ", "name_en": "Soy Sauce", "estimated_grams": 10.0, "confidence": "high"})
+            if "アボカ" in name or "アボカド" in name:
+                comps.append({"name_ja": "アボカド", "name_en": "Avocado", "estimated_grams": 25.0, "confidence": "high"})
+            if "ユッケ" in name:
+                comps.append({"name_ja": "卵", "name_en": "Egg Yolk", "estimated_grams": 20.0, "confidence": "high"})
+        elif "ねぎとろ" in name or "ネギトロ" in name:
+            comps.append({"name_ja": "まぐろ", "name_en": "Minced Tuna", "estimated_grams": 75.0, "confidence": "high"})
+            comps.append({"name_ja": "ねぎ", "name_en": "Green Onion", "estimated_grams": 10.0, "confidence": "high"})
+            comps.append({"name_ja": "しょうゆ", "name_en": "Soy Sauce", "estimated_grams": 10.0, "confidence": "high"})
+        elif "サーモン" in name or "鮭" in name:
+            comps.append({"name_ja": "サーモン", "name_en": "Salmon", "estimated_grams": 75.0, "confidence": "high"})
+            comps.append({"name_ja": "しょうゆ", "name_en": "Soy Sauce", "estimated_grams": 10.0, "confidence": "high"})
+            if "いくら" in name:
+                comps.append({"name_ja": "いくら", "name_en": "Salmon Roe", "estimated_grams": 30.0, "confidence": "high"})
+        elif "いくら" in name or "イクラ" in name:
+            comps.append({"name_ja": "いくら", "name_en": "Salmon Roe", "estimated_grams": 60.0, "confidence": "high"})
+            comps.append({"name_ja": "のり", "name_en": "Nori Seaweed", "estimated_grams": 1.5, "confidence": "high"})
+        elif "しらす" in name or "シラス" in name:
+            comps.append({"name_ja": "しらす干し", "name_en": "Whitebait", "estimated_grams": 45.0, "confidence": "high"})
+            comps.append({"name_ja": "のり", "name_en": "Nori Seaweed", "estimated_grams": 1.5, "confidence": "high"})
+            comps.append({"name_ja": "しょうゆ", "name_en": "Soy Sauce", "estimated_grams": 8.0, "confidence": "high"})
+        elif any(k in name for k in ("海鮮", "ちらし", "おさかな", "魚", "てっぺん", "5色", "3色", "贅沢")):
+            comps.append({"name_ja": "まぐろ", "name_en": "Tuna Sashimi", "estimated_grams": 40.0, "confidence": "high"})
+            comps.append({"name_ja": "サーモン", "name_en": "Salmon Sashimi", "estimated_grams": 30.0, "confidence": "high"})
+            comps.append({"name_ja": "えび", "name_en": "Shrimp", "estimated_grams": 25.0, "confidence": "high"})
+            comps.append({"name_ja": "しょうゆ", "name_en": "Soy Sauce", "estimated_grams": 10.0, "confidence": "high"})
+        elif "かつ" in name or "カツ" in name:
+            comps.append({"name_ja": "とんかつ", "name_en": "Pork Cutlet", "estimated_grams": 120.0, "confidence": "high"})
+            comps.append({"name_ja": "卵", "name_en": "Egg", "estimated_grams": 55.0, "confidence": "high"})
+            comps.append({"name_ja": "たまねぎ", "name_en": "Onion", "estimated_grams": 35.0, "confidence": "high"})
+        elif "親子" in name:
+            comps.append({"name_ja": "鶏肉", "name_en": "Chicken", "estimated_grams": 80.0, "confidence": "high"})
+            comps.append({"name_ja": "卵", "name_en": "Egg", "estimated_grams": 60.0, "confidence": "high"})
+            comps.append({"name_ja": "たまねぎ", "name_en": "Onion", "estimated_grams": 35.0, "confidence": "high"})
+        elif "天" in name or "えび" in name or "海老" in name:
+            comps.append({"name_ja": "えび", "name_en": "Shrimp Tempura", "estimated_grams": 60.0, "confidence": "high"})
+            comps.append({"name_ja": "めんつゆ", "name_en": "Tare Sauce", "estimated_grams": 30.0, "confidence": "high"})
+        elif "うな" in name or "鰻" in name:
+            comps.append({"name_ja": "うなぎ", "name_en": "Grilled Eel", "estimated_grams": 90.0, "confidence": "high"})
+            comps.append({"name_ja": "しょうゆ", "name_en": "Tare Sauce", "estimated_grams": 15.0, "confidence": "high"})
+        elif any(k in name for k in ("牛", "カルビ", "ステーキ")):
+            comps.append({"name_ja": "牛肉", "name_en": "Beef", "estimated_grams": 85.0, "confidence": "high"})
+            comps.append({"name_ja": "たまねぎ", "name_en": "Onion", "estimated_grams": 40.0, "confidence": "high"})
+        elif any(k in name for k in ("豚", "豚カルビ", "生姜焼", "とん")):
+            comps.append({"name_ja": "豚肉", "name_en": "Pork", "estimated_grams": 85.0, "confidence": "high"})
+            comps.append({"name_ja": "たまねぎ", "name_en": "Onion", "estimated_grams": 40.0, "confidence": "high"})
+        elif "中華" in name:
+            comps.append({"name_ja": "豚肉", "name_en": "Pork", "estimated_grams": 40.0, "confidence": "high"})
+            comps.append({"name_ja": "キャベツ", "name_en": "Vegetables", "estimated_grams": 50.0, "confidence": "high"})
+            comps.append({"name_ja": "植物油", "name_en": "Cooking Oil", "estimated_grams": 10.0, "confidence": "high"})
+        elif "麻婆" in name:
+            comps.append({"name_ja": "絹ごし豆腐", "name_en": "Tofu", "estimated_grams": 80.0, "confidence": "high"})
+            comps.append({"name_ja": "豚肉", "name_en": "Minced Pork", "estimated_grams": 35.0, "confidence": "high"})
+            comps.append({"name_ja": "植物油", "name_en": "Chili Oil", "estimated_grams": 10.0, "confidence": "high"})
+        elif "から揚げ" in name or "唐揚げ" in name or "チキン" in name or "竜田" in name:
+            comps.append({"name_ja": "から揚げ", "name_en": "Fried Chicken", "estimated_grams": 90.0, "confidence": "high"})
+        else:
+            comps.append({"name_ja": "牛肉", "name_en": "Savory Meat", "estimated_grams": 75.0, "confidence": "medium"})
+            comps.append({"name_ja": "たまねぎ", "name_en": "Onion", "estimated_grams": 35.0, "confidence": "medium"})
+
+        # Accompanying items (mini noodles or miso soup)
+        if any(k in name for k in ("そば付", "そばつき", "うどん付", "うどんつき")):
+            comps.append({"name_ja": "そば ゆで" if "そば" in name else "うどん ゆで", "name_en": "Side Noodles", "estimated_grams": 100.0, "confidence": "high"})
+            comps.append({"name_ja": "めんつゆ", "name_en": "Noodle Broth", "estimated_grams": 100.0, "confidence": "high"})
+        elif any(k in name for k in ("モーニング", "セット", "定食", "御膳", "汁", "朝")) or has_explicit_soup:
+            comps.append({"name_ja": "みそ", "name_en": "Miso Paste", "estimated_grams": 15.0, "confidence": "high"})
+            comps.append({"name_ja": "だし汁", "name_en": "Dashi Broth", "estimated_grams": 150.0, "confidence": "high"})
+            comps.append({"name_ja": "絹ごし豆腐", "name_en": "Tofu", "estimated_grams": 20.0, "confidence": "high"})
+
+    # 2. Teishoku, Bento, Gozen & Zen (定食・御膳・弁当・膳 - Complete meal: Check BEFORE individual sides!)
+    elif any(k in name for k in ("定食", "御膳", "弁当", "膳")):
+        if not is_tanpin:
+            rice_g = get_rice_grams(200.0)
+            comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+            comps.append({"name_ja": "みそ", "name_en": "Miso Paste", "estimated_grams": 15.0, "confidence": "high"})
+            comps.append({"name_ja": "だし汁", "name_en": "Dashi Broth", "estimated_grams": 150.0, "confidence": "high"})
+            comps.append({"name_ja": "絹ごし豆腐", "name_en": "Tofu", "estimated_grams": 20.0, "confidence": "high"})
+        comps.append({"name_ja": "キャベツ", "name_en": "Shredded Cabbage", "estimated_grams": 50.0, "confidence": "high"})
+
+        if any(k in name for k in ("から揚げ", "唐揚げ", "竜田")):
+            comps.append({"name_ja": "から揚げ", "name_en": "Fried Chicken", "estimated_grams": 130.0, "confidence": "high"})
+        elif "チキン南蛮" in name:
+            comps.append({"name_ja": "から揚げ", "name_en": "Chicken Nanban", "estimated_grams": 120.0, "confidence": "high"})
+            comps.append({"name_ja": "マヨネーズ", "name_en": "Tartar Sauce", "estimated_grams": 20.0, "confidence": "high"})
+        elif any(k in name for k in ("生姜焼き", "生姜焼", "豚生姜")):
+            comps.append({"name_ja": "豚肉", "name_en": "Ginger Pork", "estimated_grams": 110.0, "confidence": "high"})
+            comps.append({"name_ja": "たまねぎ", "name_en": "Onion", "estimated_grams": 30.0, "confidence": "high"})
+        elif any(k in name for k in ("とんかつ", "豚カツ", "カツ", "かつ")):
+            comps.append({"name_ja": "とんかつ", "name_en": "Tonkatsu", "estimated_grams": 130.0, "confidence": "high"})
+        elif any(k in name for k in ("さば", "鯖", "あじ", "鯵", "ほっけ", "鮭", "サーモン", "金目鯛", "魚", "刺身")):
+            if any(k in name for k in ("フライ", "揚")):
+                comps.append({"name_ja": "さば", "name_en": "Fried Fish", "estimated_grams": 90.0, "confidence": "high"})
+                comps.append({"name_ja": "植物油", "name_en": "Frying Oil", "estimated_grams": 12.0, "confidence": "high"})
+            elif "刺身" in name or "生" in name:
+                comps.append({"name_ja": "まぐろ", "name_en": "Sashimi", "estimated_grams": 80.0, "confidence": "high"})
+            else:
+                comps.append({"name_ja": "さば", "name_en": "Grilled Fish", "estimated_grams": 90.0, "confidence": "high"})
+        elif "ハンバーグ" in name:
+            comps.append({"name_ja": "ハンバーグ", "name_en": "Hamburg Patty", "estimated_grams": 130.0, "confidence": "high"})
+        elif any(k in name for k in ("牛", "ステーキ", "焼肉")):
+            comps.append({"name_ja": "牛肉", "name_en": "Beef", "estimated_grams": 100.0, "confidence": "high"})
+        elif "餃子" in name or "ギョーザ" in name:
+            comps.append({"name_ja": "餃子", "name_en": "Gyoza", "estimated_grams": 120.0, "confidence": "high"})
+        else:
+            comps.append({"name_ja": "豚肉", "name_en": "Main Dish Meat", "estimated_grams": 100.0, "confidence": "medium"})
+
+    # 3. Omurice, Pilaf, Risotto, Doria, Curry & Fried Rice
+    elif "オムライス" in name:
+        comps.append({"name_ja": "ご飯", "name_en": "Chicken Rice", "estimated_grams": 200.0, "confidence": "high"})
+        comps.append({"name_ja": "卵", "name_en": "Omelette Egg", "estimated_grams": 100.0, "confidence": "high"})
+        comps.append({"name_ja": "鶏肉", "name_en": "Chicken", "estimated_grams": 35.0, "confidence": "high"})
+        comps.append({"name_ja": "ケチャップ", "name_en": "Ketchup", "estimated_grams": 25.0, "confidence": "high"})
+        comps.append({"name_ja": "バター", "name_en": "Butter", "estimated_grams": 8.0, "confidence": "high"})
+        if "ビーフシチュー" in name or "シチュー" in name:
+            comps.append({"name_ja": "牛肉", "name_en": "Stewed Beef", "estimated_grams": 40.0, "confidence": "high"})
+            comps.append({"name_ja": "デミグラスソース", "name_en": "Demiglace", "estimated_grams": 40.0, "confidence": "high"})
+
+    elif "ピラフ" in name:
+        comps.append({"name_ja": "ご飯", "name_en": "Pilaf Rice", "estimated_grams": 220.0, "confidence": "high"})
+        comps.append({"name_ja": "バター", "name_en": "Butter", "estimated_grams": 10.0, "confidence": "high"})
+        comps.append({"name_ja": "たまねぎ", "name_en": "Onion", "estimated_grams": 25.0, "confidence": "high"})
+        if any(k in name for k in ("チキン", "タンドリー", "鶏")):
+            comps.append({"name_ja": "から揚げ", "name_en": "Tandoori Chicken", "estimated_grams": 85.0, "confidence": "high"})
+        elif any(k in name for k in ("エビ", "えび", "海老", "シーフード")):
+            comps.append({"name_ja": "えび", "name_en": "Shrimp", "estimated_grams": 40.0, "confidence": "high"})
+
+    elif "リゾット" in name:
+        comps.append({"name_ja": "ご飯", "name_en": "Risotto Rice", "estimated_grams": 180.0, "confidence": "high"})
+        comps.append({"name_ja": "チーズ", "name_en": "Cheese", "estimated_grams": 30.0, "confidence": "high"})
+        comps.append({"name_ja": "植物油", "name_en": "Olive Oil", "estimated_grams": 10.0, "confidence": "high"})
+
+    elif "ドリア" in name:
+        comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": 160.0, "confidence": "high"})
+        comps.append({"name_ja": "チーズ", "name_en": "Cheese", "estimated_grams": 30.0, "confidence": "high"})
+        comps.append({"name_ja": "生クリーム", "name_en": "White Sauce", "estimated_grams": 50.0, "confidence": "high"})
+        if "ミラノ" in name or "ミート" in name or "ボロネーゼ" in name:
+            comps.append({"name_ja": "ミートソース", "name_en": "Meat Sauce", "estimated_grams": 50.0, "confidence": "high"})
+        if "エビ" in name or "えび" in name or "海老" in name:
+            comps.append({"name_ja": "えび", "name_en": "Shrimp", "estimated_grams": 35.0, "confidence": "high"})
+        if "チキン" in name or "鶏" in name:
+            comps.append({"name_ja": "蒸し鶏", "name_en": "Chicken", "estimated_grams": 45.0, "confidence": "high"})
+        if "卵" in name or "たまご" in name or "温玉" in name:
+            comps.append({"name_ja": "卵", "name_en": "Egg", "estimated_grams": 50.0, "confidence": "high"})
+
+    elif "カレー" in name and not any(k in name for k in ("うどん", "そば", "らーめん", "ラーメン", "パン", "ピザ")):
+        rice_g = get_rice_grams(250.0)
+        comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+        comps.append({"name_ja": "カレー ルウ", "name_en": "Curry Sauce", "estimated_grams": 180.0, "confidence": "high"})
+        if "カツ" in name or "かつ" in name:
+            comps.append({"name_ja": "とんかつ", "name_en": "Pork Cutlet", "estimated_grams": 120.0, "confidence": "high"})
+        elif "チキン" in name or "鶏" in name:
+            comps.append({"name_ja": "鶏肉", "name_en": "Chicken", "estimated_grams": 50.0, "confidence": "high"})
+        elif "ビーフ" in name or "牛" in name:
+            comps.append({"name_ja": "牛肉", "name_en": "Beef", "estimated_grams": 45.0, "confidence": "high"})
+        else:
+            comps.append({"name_ja": "豚肉", "name_en": "Pork", "estimated_grams": 40.0, "confidence": "medium"})
+
+    elif "チャーハン" in name or "炒飯" in name:
+        rice_g = get_rice_grams(240.0)
+        comps.append({"name_ja": "ご飯", "name_en": "Rice", "estimated_grams": rice_g, "confidence": "high"})
+        comps.append({"name_ja": "卵", "name_en": "Egg", "estimated_grams": 50.0, "confidence": "high"})
+        comps.append({"name_ja": "豚肉 焼き豚", "name_en": "Roast Pork", "estimated_grams": 35.0, "confidence": "high"})
+        comps.append({"name_ja": "植物油", "name_en": "Cooking Oil", "estimated_grams": 12.0, "confidence": "high"})
+
+    # 4. Stews, Hotpots & Specialized Cookery (スンドゥブ・チゲ・回鍋肉・ビーフシチュー)
+    elif any(k in name for k in ("スンドゥブ", "チゲ")):
+        comps.append({"name_ja": "絹ごし豆腐", "name_en": "Tofu", "estimated_grams": 150.0, "confidence": "high"})
+        comps.append({"name_ja": "豚肉", "name_en": "Pork", "estimated_grams": 40.0, "confidence": "high"})
+        comps.append({"name_ja": "卵", "name_en": "Egg", "estimated_grams": 50.0, "confidence": "high"})
+        comps.append({"name_ja": "植物油", "name_en": "Chili Oil", "estimated_grams": 8.0, "confidence": "high"})
+        if has_explicit_rice:
+            rice_g = 120.0 if any(k in name for k in ('半', '小', 'ミニ')) else 200.0
+            comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+
+    elif "ビーフシチュー" in name or "シチュー" in name:
+        comps.append({"name_ja": "牛肉", "name_en": "Beef", "estimated_grams": 100.0, "confidence": "high"})
+        comps.append({"name_ja": "デミグラスソース", "name_en": "Demiglace Sauce", "estimated_grams": 120.0, "confidence": "high"})
+        comps.append({"name_ja": "じゃがいも", "name_en": "Potato", "estimated_grams": 50.0, "confidence": "high"})
+        comps.append({"name_ja": "にんじん", "name_en": "Carrot", "estimated_grams": 30.0, "confidence": "high"})
+        if has_explicit_rice:
+            rice_g = 120.0 if any(k in name for k in ('半', '小', 'ミニ')) else 200.0
+            comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+
+    elif "回鍋肉" in name:
+        comps.append({"name_ja": "豚肉", "name_en": "Pork", "estimated_grams": 80.0, "confidence": "high"})
+        comps.append({"name_ja": "キャベツ", "name_en": "Cabbage", "estimated_grams": 90.0, "confidence": "high"})
+        comps.append({"name_ja": "みそ", "name_en": "Sweet Bean Sauce", "estimated_grams": 20.0, "confidence": "high"})
+        comps.append({"name_ja": "植物油", "name_en": "Cooking Oil", "estimated_grams": 12.0, "confidence": "high"})
+        if has_explicit_rice or "定食" in name or "セット" in name:
+            rice_g = 120.0 if any(k in name for k in ('半', '小', 'ミニ')) else 200.0
+            comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+
+    # 5. Hamburg Steak, Steaks & Western Meats (洋食・肉料理)
+    elif "ハンバーグ" in name:
+        comps.append({"name_ja": "ハンバーグ", "name_en": "Hamburg Patty", "estimated_grams": 140.0, "confidence": "high"})
+        comps.append({"name_ja": "コーン", "name_en": "Corn Garnish", "estimated_grams": 20.0, "confidence": "high"})
+        comps.append({"name_ja": "フライドポテト", "name_en": "Potato Garnish", "estimated_grams": 30.0, "confidence": "high"})
+        if "和風" in name or "おろし" in name:
+            comps.append({"name_ja": "大根", "name_en": "Grated Daikon", "estimated_grams": 30.0, "confidence": "high"})
+            comps.append({"name_ja": "しょうゆ", "name_en": "Soy Sauce Glaze", "estimated_grams": 15.0, "confidence": "high"})
+        else:
+            comps.append({"name_ja": "デミグラスソース", "name_en": "Demiglace Sauce", "estimated_grams": 30.0, "confidence": "high"})
+        if "チーズ" in name:
+            comps.append({"name_ja": "チーズ", "name_en": "Cheese", "estimated_grams": 25.0, "confidence": "high"})
+        if "エッグ" in name or "目玉焼き" in name or "たまご" in name:
+            comps.append({"name_ja": "卵", "name_en": "Egg", "estimated_grams": 50.0, "confidence": "high"})
+        if has_explicit_rice:
+            rice_g = 120.0 if any(k in name for k in ('半', '小', 'ミニ')) else 200.0
+            comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+
+    elif "ステーキ" in name:
+        comps.append({"name_ja": "牛肉", "name_en": "Beef Steak", "estimated_grams": 160.0, "confidence": "high"})
+        comps.append({"name_ja": "しょうゆ", "name_en": "Steak Sauce", "estimated_grams": 25.0, "confidence": "high"})
+        comps.append({"name_ja": "コーン", "name_en": "Corn Garnish", "estimated_grams": 20.0, "confidence": "high"})
+        comps.append({"name_ja": "フライドポテト", "name_en": "Potato Garnish", "estimated_grams": 30.0, "confidence": "high"})
+        if has_explicit_rice:
+            rice_g = 120.0 if any(k in name for k in ('半', '小', 'ミニ')) else 200.0
+            comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+
+    # 6. Ramen, Soba & Udon (麺類)
+    elif any(k in name for k in ("ラーメン", "らーめん", "中華そば", "つけ麺")):
+        soup_type = "みそ ラーメン スープ" if ("味噌" in name or "みそ" in name) else "しょうゆ ラーメン スープ"
+        comps.append({"name_ja": "中華麺 ゆで", "name_en": "Boiled Chinese Noodles", "estimated_grams": 220.0, "confidence": "high"})
+        comps.append({"name_ja": soup_type, "name_en": "Ramen Broth", "estimated_grams": 300.0, "confidence": "high"})
+        comps.append({"name_ja": "豚肉 焼き豚", "name_en": "Roast Pork Chashu", "estimated_grams": 30.0, "confidence": "high"})
+        comps.append({"name_ja": "メンマ", "name_en": "Menma bamboo shoots", "estimated_grams": 20.0, "confidence": "high"})
+        comps.append({"name_ja": "ねぎ", "name_en": "Green Onion", "estimated_grams": 15.0, "confidence": "high"})
+        comps.append({"name_ja": "のり", "name_en": "Nori Seaweed", "estimated_grams": 2.0, "confidence": "high"})
+
+        if "ねぎ" in name:
+            comps.append({"name_ja": "ねぎ", "name_en": "Extra Green Onion", "estimated_grams": 45.0, "confidence": "high"})
+        if "背脂" in name:
+            comps.append({"name_ja": "豚肉 脂身", "name_en": "Pork Back Fat", "estimated_grams": 25.0, "confidence": "high"})
+        if "チャーシュー" in name:
+            comps.append({"name_ja": "豚肉 焼き豚", "name_en": "Extra Chashu", "estimated_grams": 50.0, "confidence": "high"})
+        if "玉子" in name or "たまご" in name or "味玉" in name:
+            comps.append({"name_ja": "鶏卵 ゆで", "name_en": "Boiled Egg", "estimated_grams": 55.0, "confidence": "high"})
+        if "半カレー" in name:
+            comps.append({"name_ja": "ご飯", "name_en": "Half Curry Rice", "estimated_grams": 100.0, "confidence": "high"})
+            comps.append({"name_ja": "カレー ルウ", "name_en": "Curry Sauce", "estimated_grams": 70.0, "confidence": "high"})
+        elif "半ライス" in name or "半ごはん" in name:
+            comps.append({"name_ja": "ご飯", "name_en": "Half Steamed Rice", "estimated_grams": 100.0, "confidence": "high"})
+        elif "ライス" in name or "ご飯" in name or has_explicit_rice:
+            comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": 180.0, "confidence": "high"})
+        elif "チャーハン" in name or "炒飯" in name:
+            comps.append({"name_ja": "ご飯", "name_en": "Fried Rice", "estimated_grams": 150.0, "confidence": "high"})
+            comps.append({"name_ja": "卵", "name_en": "Egg", "estimated_grams": 25.0, "confidence": "high"})
+        elif "餃子" in name or "ギョーザ" in name:
+            comps.append({"name_ja": "餃子", "name_en": "Gyoza Side", "estimated_grams": 70.0, "confidence": "high"})
+
+    elif "うどん" in name:
+        comps.append({"name_ja": "うどん ゆで", "name_en": "Boiled Udon", "estimated_grams": 250.0, "confidence": "high"})
+        comps.append({"name_ja": "めんつゆ", "name_en": "Noodle Broth", "estimated_grams": 250.0, "confidence": "high"})
+        comps.append({"name_ja": "ねぎ", "name_en": "Green Onion", "estimated_grams": 10.0, "confidence": "high"})
+        if "きつね" in name:
+            comps.append({"name_ja": "油揚げ", "name_en": "Fried Tofu", "estimated_grams": 35.0, "confidence": "high"})
+        if "天ぷら" in name or "天" in name:
+            comps.append({"name_ja": "えび", "name_en": "Tempura", "estimated_grams": 65.0, "confidence": "high"})
+        if "肉" in name:
+            comps.append({"name_ja": "牛肉", "name_en": "Simmered Beef", "estimated_grams": 60.0, "confidence": "high"})
+        if has_explicit_rice:
+            rice_g = 100.0 if any(k in name for k in ('半', '小', 'ミニ')) else 150.0
+            comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+
+    elif "そば" in name:
+        comps.append({"name_ja": "そば ゆで", "name_en": "Boiled Soba", "estimated_grams": 220.0, "confidence": "high"})
+        comps.append({"name_ja": "めんつゆ", "name_en": "Soba Broth", "estimated_grams": 250.0, "confidence": "high"})
+        comps.append({"name_ja": "ねぎ", "name_en": "Green Onion", "estimated_grams": 10.0, "confidence": "high"})
+        if "天ぷら" in name or "天" in name:
+            comps.append({"name_ja": "えび", "name_en": "Tempura", "estimated_grams": 65.0, "confidence": "high"})
+        if has_explicit_rice:
+            rice_g = 100.0 if any(k in name for k in ('半', '小', 'ミニ')) else 150.0
+            comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+
+    # 7. Sushi & Sashimi (にぎり、軍艦、巻き寿司、海鮮)
+    elif any(k in name for k in ("寿司", "すし", "スシ", "にぎり", "握り", "軍艦", "手巻", "刺身", "造り")) or (
+        shop_name and any(s in shop_name for s in ("寿司", "すし", "スシ", "回転")) and any(
+            f in name for f in ("まぐろ", "マグロ", "中とろ", "大とろ", "サーモン", "いくら", "えび", "海老", "いか", "たこ", "うなぎ", "穴子", "たい", "ほたて", "ぶり", "はまち", "さば", "たまご", "玉子")
+        )
+    ):
+        is_sashimi = "刺身" in name or "造り" in name
+        is_gunkan = "軍艦" in name
+        is_maki = "巻" in name or "手巻" in name
+        
+        # Rice base
+        if not is_sashimi:
+            rice_g = 35.0 if is_gunkan else (60.0 if is_maki else 40.0)
+            comps.append({"name_ja": "ご飯", "name_en": "Sushi Rice", "estimated_grams": rice_g, "confidence": "high"})
+            if is_gunkan or is_maki:
+                comps.append({"name_ja": "のり", "name_en": "Nori Seaweed", "estimated_grams": 1.5, "confidence": "high"})
+        
+        # Toppings & Protein
+        seafood_g = 70.0 if is_sashimi else 25.0
+        if "牛" in name or "カルビ" in name:
+            comps.append({"name_ja": "牛肉", "name_en": "Beef Topping", "estimated_grams": 25.0, "confidence": "high"})
+        elif "豚" in name:
+            comps.append({"name_ja": "豚肉", "name_en": "Pork Topping", "estimated_grams": 25.0, "confidence": "high"})
+        elif "ハンバーグ" in name or "ミートボール" in name:
+            comps.append({"name_ja": "ハンバーグ", "name_en": "Hamburg", "estimated_grams": 30.0, "confidence": "high"})
+        elif "ツナ" in name:
+            comps.append({"name_ja": "まぐろ 缶詰", "name_en": "Tuna", "estimated_grams": 20.0, "confidence": "high"})
+            comps.append({"name_ja": "マヨネーズ", "name_en": "Mayonnaise", "estimated_grams": 5.0, "confidence": "high"})
+        elif "納豆" in name:
+            comps.append({"name_ja": "納豆", "name_en": "Natto", "estimated_grams": 25.0, "confidence": "high"})
+        elif "コーン" in name:
+            comps.append({"name_ja": "コーン", "name_en": "Corn", "estimated_grams": 25.0, "confidence": "high"})
+            comps.append({"name_ja": "マヨネーズ", "name_en": "Mayonnaise", "estimated_grams": 5.0, "confidence": "high"})
+        elif "生ハム" in name:
+            comps.append({"name_ja": "生ハム", "name_en": "Prosciutto", "estimated_grams": 20.0, "confidence": "high"})
+        elif "中とろ" in name or "大とろ" in name or "トロ" in name or "とろ" in name:
+            comps.append({"name_ja": "中とろ", "name_en": "Fatty Tuna", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "まぐろ" in name or "マグロ" in name or "赤身" in name:
+            comps.append({"name_ja": "まぐろ", "name_en": "Tuna", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "サーモン" in name or "鮭" in name:
+            comps.append({"name_ja": "サーモン", "name_en": "Salmon", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "いくら" in name:
+            comps.append({"name_ja": "いくら", "name_en": "Salmon Roe", "estimated_grams": 20.0, "confidence": "high"})
+        elif "えび" in name or "エビ" in name or "海老" in name:
+            comps.append({"name_ja": "えび", "name_en": "Shrimp", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "いか" in name or "イカ" in name:
+            comps.append({"name_ja": "いか", "name_en": "Squid", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "たこ" in name or "タコ" in name:
+            comps.append({"name_ja": "たこ", "name_en": "Octopus", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "うなぎ" in name or "鰻" in name:
+            comps.append({"name_ja": "うなぎ", "name_en": "Eel", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "穴子" in name or "あなご" in name:
+            comps.append({"name_ja": "穴子", "name_en": "Sea Eel", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "ほたて" in name or "ホタテ" in name:
+            comps.append({"name_ja": "ほたて", "name_en": "Scallop", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "ぶり" in name or "はまち" in name or "ハマチ" in name:
+            comps.append({"name_ja": "ぶり", "name_en": "Yellowtail", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "さば" in name or "サバ" in name:
+            comps.append({"name_ja": "さば", "name_en": "Mackerel", "estimated_grams": seafood_g, "confidence": "high"})
+        elif "玉子" in name or "たまご" in name or "エッグ" in name:
+            comps.append({"name_ja": "卵", "name_en": "Egg", "estimated_grams": 35.0, "confidence": "high"})
+        else:
+            comps.append({"name_ja": "まぐろ", "name_en": "Fish Topping", "estimated_grams": seafood_g, "confidence": "medium"})
+        
+        # Accompaniments
+        if "アボカド" in name:
+            comps.append({"name_ja": "アボカド", "name_en": "Avocado", "estimated_grams": 15.0, "confidence": "high"})
+        if "マヨ" in name and not any(c["name_ja"] == "マヨネーズ" for c in comps):
+            comps.append({"name_ja": "マヨネーズ", "name_en": "Mayonnaise", "estimated_grams": 5.0, "confidence": "high"})
+        if "チーズ" in name:
+            comps.append({"name_ja": "チーズ", "name_en": "Cheese", "estimated_grams": 10.0, "confidence": "high"})
+
+    # 8. Pizza, Pasta, Doria & Gratin (ピザ・パスタ・ドリア・グラタン)
+    elif "ピザ" in name or "ピッツァ" in name:
+        comps.append({"name_ja": "ピザ生地", "name_en": "Pizza Crust", "estimated_grams": 130.0, "confidence": "high"})
+        comps.append({"name_ja": "チーズ", "name_en": "Cheese", "estimated_grams": 45.0, "confidence": "high"})
+        comps.append({"name_ja": "トマトソース", "name_en": "Tomato Sauce", "estimated_grams": 30.0, "confidence": "high"})
+        if "ソーセージ" in name or "サラミ" in name or "チョリソー" in name:
+            comps.append({"name_ja": "ソーセージ", "name_en": "Sausage", "estimated_grams": 30.0, "confidence": "high"})
+        elif "ベーコン" in name:
+            comps.append({"name_ja": "ベーコン", "name_en": "Bacon", "estimated_grams": 25.0, "confidence": "high"})
+        elif "シーフード" in name or "エビ" in name or "えび" in name:
+            comps.append({"name_ja": "えび", "name_en": "Shrimp", "estimated_grams": 30.0, "confidence": "high"})
+        elif "コーン" in name:
+            comps.append({"name_ja": "コーン", "name_en": "Sweet Corn", "estimated_grams": 30.0, "confidence": "high"})
+            comps.append({"name_ja": "マヨネーズ", "name_en": "Mayonnaise", "estimated_grams": 12.0, "confidence": "high"})
+
+    elif any(k in name for k in ("パスタ", "スパゲッティ", "ボロネーゼ", "カルボナーラ", "ペペロンチーノ")):
+        comps.append({"name_ja": "パスタ", "name_en": "Boiled Pasta", "estimated_grams": 200.0, "confidence": "high"})
+        if "ミートソース" in name or "ボロネーゼ" in name:
+            comps.append({"name_ja": "ミートソース", "name_en": "Meat Sauce", "estimated_grams": 120.0, "confidence": "high"})
+        elif "カルボナーラ" in name:
+            comps.append({"name_ja": "生クリーム", "name_en": "Cream", "estimated_grams": 40.0, "confidence": "high"})
+            comps.append({"name_ja": "ベーコン", "name_en": "Bacon", "estimated_grams": 25.0, "confidence": "high"})
+            comps.append({"name_ja": "チーズ", "name_en": "Cheese", "estimated_grams": 15.0, "confidence": "high"})
+        elif "たらこ" in name or "明太子" in name:
+            comps.append({"name_ja": "たらこ", "name_en": "Tarako Caviar", "estimated_grams": 25.0, "confidence": "high"})
+            comps.append({"name_ja": "バター", "name_en": "Butter", "estimated_grams": 10.0, "confidence": "high"})
+        elif "ナポリタン" in name:
+            comps.append({"name_ja": "ケチャップ", "name_en": "Ketchup", "estimated_grams": 35.0, "confidence": "high"})
+            comps.append({"name_ja": "ソーセージ", "name_en": "Sausage", "estimated_grams": 25.0, "confidence": "high"})
+        elif "ペペロンチーノ" in name:
+            comps.append({"name_ja": "植物油", "name_en": "Olive Oil", "estimated_grams": 15.0, "confidence": "high"})
+            comps.append({"name_ja": "にんにく", "name_en": "Garlic", "estimated_grams": 5.0, "confidence": "high"})
+            if "温玉" in name or "卵" in name or "たまご" in name:
+                comps.append({"name_ja": "卵", "name_en": "Soft Boiled Egg", "estimated_grams": 50.0, "confidence": "high"})
+        elif "イカスミ" in name:
+            comps.append({"name_ja": "いか", "name_en": "Squid", "estimated_grams": 35.0, "confidence": "high"})
+            comps.append({"name_ja": "トマトソース", "name_en": "Tomato Sauce", "estimated_grams": 50.0, "confidence": "high"})
+            comps.append({"name_ja": "植物油", "name_en": "Olive Oil", "estimated_grams": 10.0, "confidence": "high"})
+        elif "ボンゴレ" in name or "あさり" in name:
+            comps.append({"name_ja": "あさり", "name_en": "Clams", "estimated_grams": 50.0, "confidence": "high"})
+            comps.append({"name_ja": "植物油", "name_en": "Olive Oil", "estimated_grams": 10.0, "confidence": "high"})
+        else:
+            comps.append({"name_ja": "トマトソース", "name_en": "Tomato Sauce", "estimated_grams": 100.0, "confidence": "medium"})
+
+    elif "グラタン" in name:
+        comps.append({"name_ja": "パスタ", "name_en": "Macaroni", "estimated_grams": 100.0, "confidence": "high"})
+        comps.append({"name_ja": "生クリーム", "name_en": "White Sauce", "estimated_grams": 70.0, "confidence": "high"})
+        comps.append({"name_ja": "チーズ", "name_en": "Cheese", "estimated_grams": 30.0, "confidence": "high"})
+        if "エビ" in name or "えび" in name or "海老" in name:
+            comps.append({"name_ja": "えび", "name_en": "Shrimp", "estimated_grams": 35.0, "confidence": "high"})
+        elif "チキン" in name or "鶏" in name:
+            comps.append({"name_ja": "蒸し鶏", "name_en": "Chicken", "estimated_grams": 45.0, "confidence": "high"})
+
+    # 9. Burgers & Sandwiches (バーガー・サンド)
+    elif "バーガー" in name or "サンド" in name:
+        if "ライス" in name:
+            comps.append({"name_ja": "ご飯", "name_en": "Rice Bun", "estimated_grams": 120.0, "confidence": "high"})
+        else:
+            comps.append({"name_ja": "パン", "name_en": "Burger Bun", "estimated_grams": 75.0, "confidence": "high"})
+        
+        if "フィッシュ" in name:
+            comps.append({"name_ja": "たら", "name_en": "Fish Patty", "estimated_grams": 75.0, "confidence": "high"})
+        elif "チキン" in name:
+            comps.append({"name_ja": "から揚げ", "name_en": "Chicken Patty", "estimated_grams": 85.0, "confidence": "high"})
+        elif "エビ" in name or "海老" in name:
+            comps.append({"name_ja": "えび", "name_en": "Shrimp Patty", "estimated_grams": 75.0, "confidence": "high"})
+        else:
+            comps.append({"name_ja": "ハンバーグ", "name_en": "Beef Patty", "estimated_grams": 90.0, "confidence": "high"})
+        comps.append({"name_ja": "キャベツ", "name_en": "Lettuce", "estimated_grams": 20.0, "confidence": "high"})
+        comps.append({"name_ja": "マヨネーズ", "name_en": "Sauce", "estimated_grams": 10.0, "confidence": "high"})
+        if "チーズ" in name:
+            comps.append({"name_ja": "チーズ", "name_en": "Cheese", "estimated_grams": 18.0, "confidence": "high"})
+
+    # 10. Salads (サラダ)
+    elif "サラダ" in name:
+        if "ポテト" in name:
+            comps.append({"name_ja": "じゃがいも", "name_en": "Potato", "estimated_grams": 80.0, "confidence": "high"})
+            comps.append({"name_ja": "マヨネーズ", "name_en": "Mayonnaise", "estimated_grams": 20.0, "confidence": "high"})
+            comps.append({"name_ja": "キャベツ", "name_en": "Vegetables", "estimated_grams": 30.0, "confidence": "high"})
+        else:
+            comps.append({"name_ja": "キャベツ", "name_en": "Salad Greens", "estimated_grams": 70.0, "confidence": "high"})
+            comps.append({"name_ja": "トマト", "name_en": "Tomato", "estimated_grams": 30.0, "confidence": "high"})
+            comps.append({"name_ja": "調合油", "name_en": "Dressing", "estimated_grams": 15.0, "confidence": "high"})
+
+            if "チキン" in name or "蒸し鶏" in name or "鶏" in name:
+                comps.append({"name_ja": "蒸し鶏", "name_en": "Steamed Chicken Breast", "estimated_grams": 65.0, "confidence": "high"})
+            elif "小エビ" in name or "えび" in name or "エビ" in name or "海老" in name:
+                comps.append({"name_ja": "小エビ", "name_en": "Baby Shrimp", "estimated_grams": 40.0, "confidence": "high"})
+            elif "ツナ" in name or "シーチキン" in name:
+                comps.append({"name_ja": "まぐろ 缶詰", "name_en": "Tuna", "estimated_grams": 35.0, "confidence": "high"})
+            elif "わかめ" in name or "海藻" in name:
+                comps.append({"name_ja": "わかめ", "name_en": "Wakame Seaweed", "estimated_grams": 35.0, "confidence": "high"})
+            elif "シーザー" in name:
+                comps.append({"name_ja": "ベーコン", "name_en": "Bacon", "estimated_grams": 15.0, "confidence": "high"})
+                comps.append({"name_ja": "チーズ", "name_en": "Parmesan Cheese", "estimated_grams": 15.0, "confidence": "high"})
+            elif "モッツァレラ" in name or "カプレーゼ" in name:
+                comps.append({"name_ja": "チーズ", "name_en": "Mozzarella Cheese", "estimated_grams": 40.0, "confidence": "high"})
+            elif "生ハム" in name:
+                comps.append({"name_ja": "生ハム", "name_en": "Prosciutto", "estimated_grams": 25.0, "confidence": "high"})
+            elif "とうふ" in name or "豆腐" in name:
+                comps.append({"name_ja": "絹ごし豆腐", "name_en": "Tofu", "estimated_grams": 80.0, "confidence": "high"})
+            elif "コーン" in name:
+                comps.append({"name_ja": "コーン", "name_en": "Sweet Corn", "estimated_grams": 35.0, "confidence": "high"})
+            elif "たまご" in name or "玉子" in name or "卵" in name or "コブ" in name:
+                comps.append({"name_ja": "卵", "name_en": "Boiled Egg", "estimated_grams": 50.0, "confidence": "high"})
+
+    # 11. Sides, Soups & Appetizers (サイド・スープ・前菜)
+    elif "コーンスープ" in name or "コーンクリームスープ" in name or "ポタージュ" in name:
+        comps.append({"name_ja": "コーンクリームスープ", "name_en": "Corn Potage Soup", "estimated_grams": 160.0, "confidence": "high"})
+
+    elif "ミネストローネ" in name:
+        comps.append({"name_ja": "トマト", "name_en": "Tomato Broth", "estimated_grams": 80.0, "confidence": "high"})
+        comps.append({"name_ja": "キャベツ", "name_en": "Vegetables", "estimated_grams": 40.0, "confidence": "high"})
+        comps.append({"name_ja": "ベーコン", "name_en": "Bacon", "estimated_grams": 15.0, "confidence": "high"})
+
+    elif "クラムチャウダー" in name:
+        comps.append({"name_ja": "牛乳", "name_en": "Cream Soup", "estimated_grams": 100.0, "confidence": "high"})
+        comps.append({"name_ja": "あさり", "name_en": "Clams", "estimated_grams": 30.0, "confidence": "high"})
+        comps.append({"name_ja": "じゃがいも", "name_en": "Potato", "estimated_grams": 30.0, "confidence": "high"})
+
+    elif "辛味チキン" in name:
+        comps.append({"name_ja": "鶏肉", "name_en": "Spicy Bone-in Chicken Wing", "estimated_grams": 120.0, "confidence": "high"})
+        comps.append({"name_ja": "調合油", "name_en": "Cooking Oil", "estimated_grams": 10.0, "confidence": "high"})
+
+    elif "ポップコーンシュリンプ" in name:
+        comps.append({"name_ja": "えび", "name_en": "Crispy Shrimp", "estimated_grams": 60.0, "confidence": "high"})
+        comps.append({"name_ja": "調合油", "name_en": "Frying Oil", "estimated_grams": 15.0, "confidence": "high"})
+        comps.append({"name_ja": "小麦粉", "name_en": "Batter", "estimated_grams": 15.0, "confidence": "high"})
+
+    elif "エスカルゴ" in name:
+        comps.append({"name_ja": "あさり", "name_en": "Escargot Shellfish", "estimated_grams": 40.0, "confidence": "high"})
+        comps.append({"name_ja": "バター", "name_en": "Garlic Butter", "estimated_grams": 15.0, "confidence": "high"})
+
+    elif "フォッカ" in name or "フォカッチャ" in name:
+        comps.append({"name_ja": "パン", "name_en": "Focaccia Bread", "estimated_grams": 65.0, "confidence": "high"})
+        comps.append({"name_ja": "植物油", "name_en": "Olive Oil", "estimated_grams": 6.0, "confidence": "high"})
+
+    elif "ポテト" in name or "ポテトフライ" in name:
+        comps.append({"name_ja": "フライドポテト", "name_en": "French Fries", "estimated_grams": 110.0, "confidence": "high"})
+
+    elif "から揚げ" in name or "唐揚げ" in name:
+        comps.append({"name_ja": "から揚げ", "name_en": "Fried Chicken", "estimated_grams": 130.0, "confidence": "high"})
+
+    elif "餃子" in name or "ギョーザ" in name:
+        comps.append({"name_ja": "餃子", "name_en": "Pan-fried Gyoza", "estimated_grams": 120.0, "confidence": "high"})
+
+    elif "ソーセージ" in name or "チョリソー" in name:
+        comps.append({"name_ja": "ソーセージ", "name_en": "Sausage", "estimated_grams": 75.0, "confidence": "high"})
+
+    elif "枝豆" in name:
+        comps.append({"name_ja": "枝豆", "name_en": "Edamame", "estimated_grams": 70.0, "confidence": "high"})
+
+    elif "冷奴" in name:
+        comps.append({"name_ja": "絹ごし豆腐", "name_en": "Tofu", "estimated_grams": 150.0, "confidence": "high"})
+        comps.append({"name_ja": "しょうゆ", "name_en": "Soy Sauce", "estimated_grams": 10.0, "confidence": "high"})
+
+    elif "納豆" in name:
+        comps.append({"name_ja": "納豆", "name_en": "Natto", "estimated_grams": 50.0, "confidence": "high"})
+
+    elif "みそ汁" in name or "味噌汁" in name:
+        comps.append({"name_ja": "みそ", "name_en": "Miso Paste", "estimated_grams": 15.0, "confidence": "high"})
+        comps.append({"name_ja": "だし汁", "name_en": "Dashi Broth", "estimated_grams": 150.0, "confidence": "high"})
+        comps.append({"name_ja": "絹ごし豆腐", "name_en": "Tofu", "estimated_grams": 20.0, "confidence": "high"})
+
+    # 12. Drinks & Desserts (ドリンク・デザート)
+    elif "ビール" in name:
+        comps.append({"name_ja": "ビール", "name_en": "Draft Beer", "estimated_grams": 350.0, "confidence": "high"})
+
+    elif "ハイボール" in name:
+        comps.append({"name_ja": "ウイスキー", "name_en": "Whisky", "estimated_grams": 40.0, "confidence": "high"})
+
+    elif "プリン" in name:
+        comps.append({"name_ja": "プリン", "name_en": "Custard Pudding", "estimated_grams": 95.0, "confidence": "high"})
+
+    elif "ティラミス" in name:
+        comps.append({"name_ja": "チーズ", "name_en": "Mascarpone", "estimated_grams": 30.0, "confidence": "high"})
+        comps.append({"name_ja": "ショートケーキ", "name_en": "Sponge Cake", "estimated_grams": 30.0, "confidence": "high"})
+        comps.append({"name_ja": "生クリーム", "name_en": "Cream", "estimated_grams": 20.0, "confidence": "high"})
+
+    elif "パフェ" in name:
+        comps.append({"name_ja": "アイスクリーム", "name_en": "Ice Cream", "estimated_grams": 90.0, "confidence": "high"})
+        comps.append({"name_ja": "生クリーム", "name_en": "Whipped Cream", "estimated_grams": 30.0, "confidence": "high"})
+
+    elif "アイス" in name or "ソフトクリーム" in name:
+        comps.append({"name_ja": "アイスクリーム", "name_en": "Ice Cream", "estimated_grams": 90.0, "confidence": "high"})
+
+    elif "ケーキ" in name:
+        comps.append({"name_ja": "ショートケーキ", "name_en": "Cake", "estimated_grams": 85.0, "confidence": "high"})
+
+    # 13. Generic Sets (セット)
+    elif "セット" in name:
+        comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": 200.0, "confidence": "high"})
+        comps.append({"name_ja": "みそ", "name_en": "Miso Paste", "estimated_grams": 15.0, "confidence": "high"})
+        comps.append({"name_ja": "だし汁", "name_en": "Dashi Broth", "estimated_grams": 150.0, "confidence": "high"})
+        comps.append({"name_ja": "絹ごし豆腐", "name_en": "Tofu", "estimated_grams": 20.0, "confidence": "high"})
+        comps.append({"name_ja": "豚肉", "name_en": "Main Dish Meat", "estimated_grams": 100.0, "confidence": "medium"})
+        comps.append({"name_ja": "キャベツ", "name_en": "Shredded Cabbage", "estimated_grams": 50.0, "confidence": "high"})
+
+    # 14. Standalone Rice Dishes (ライス、ごはん、白米、おにぎり)
+    elif any(k in name for k in ("ライス", "ごはん", "ご飯", "白米", "麦ごはん", "麦飯", "おにぎり", "おむすび")) and not any(k in name for k in ("パン", "パスタ", "ピザ", "スライス")):
+        if "おにぎり" in name or "おむすび" in name:
+            comps.append({"name_ja": "ご飯", "name_en": "Rice Ball", "estimated_grams": 110.0, "confidence": "high"})
+            comps.append({"name_ja": "のり", "name_en": "Nori Seaweed", "estimated_grams": 1.5, "confidence": "high"})
+            if "鮭" in name or "サーモン" in name:
+                comps.append({"name_ja": "サーモン", "name_en": "Salmon Filling", "estimated_grams": 15.0, "confidence": "high"})
+            elif "ツナ" in name or "マヨ" in name:
+                comps.append({"name_ja": "まぐろ 缶詰", "name_en": "Tuna Mayo", "estimated_grams": 15.0, "confidence": "high"})
+        else:
+            rice_g = 100.0 if any(k in name for k in ("半", "小", "ミニ")) else (280.0 if any(k in name for k in ("大盛", "大盛り", "大")) else 200.0)
+            comps.append({"name_ja": "ご飯", "name_en": "Steamed Rice", "estimated_grams": rice_g, "confidence": "high"})
+
+    else:
+        comps.append({"name_ja": name, "name_en": name, "estimated_grams": 150.0, "confidence": "medium"})
+
+    # Universal Post-check: If dish has explicit rice tag (e.g. てりたまハンバーグ（ライス付）) and rice wasn't added yet:
+    if has_explicit_rice and not any(c["name_ja"] == "ご飯" for c in comps):
+        rice_g = 100.0 if any(k in name for k in ("半", "小", "ミニ")) else (280.0 if any(k in name for k in ("大盛", "大盛り", "大")) else 200.0)
+        comps.append({"name_ja": "ご飯", "name_en": "Accompaniment Rice", "estimated_grams": rice_g, "confidence": "high"})
+
+    return [{
+        "dish_ja": name,
+        "dish_en": "Meal",
+        "servings": 1,
+        "components": comps,
+    }]
+
+
+@router.get("/analyze-dish")
+@router.post("/analyze-dish")
+async def analyze_named_dish(
+    request: Request,
+    dish: str = Query(..., description="Name of the restaurant dish / meal"),
+    shop: str = Query(None, description="Name of the restaurant chain or cuisine"),
+    lang: str = Query("ja")
+):
+    """Estimate the nutrition and ingredient breakdown for a named dish/meal."""
+    if lang not in LANGS:
+        raise HTTPException(status_code=400, detail=f"lang must be one of {', '.join(LANGS)}")
+    dish_clean = (dish or "").strip()
+    if not dish_clean:
+        raise HTTPException(status_code=400, detail="dish name required")
+
+    cache_key = hashlib.sha256(f"dish:{shop or ''}:{dish_clean}:{lang}".encode()).hexdigest()
+    cached = _cache_get(cache_key, lang)
+    if cached is not None:
+        cached["cached"] = True
+        return cached
+
+    dishes_in = decompose_dish_text(dish_clean, shop)
+    result = calculate_nutrition_for_dishes(dishes_in, lang=lang)
+    result["dish_name"] = dish_clean
+    result["shop_name"] = shop
+    _cache_put(cache_key, lang, result)
     return result
+

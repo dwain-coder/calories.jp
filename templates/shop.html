@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title or name }} | {{ site_name }}{% endblock %}
+{% block content %}
+<nav class="crumbs" aria-label="breadcrumb">
+  {% for label, url in crumbs %}{% if url %}<a href="{{ url }}">{{ label }}</a> ›
+  {% else %}<span aria-current="page">{{ label }}</span>{% endif %}{% endfor %}
+</nav>
+
+<h1>{{ page.title or name }}</h1>
+<p class="alt-name">
+  {{ t('item_count', n=d.menu|length) }}
+  {% if d.shop.price_min and d.shop.price_max %}
+    · {{ t('price') }} ¥{{ '{:,}'.format(d.shop.price_min) }}–¥{{ '{:,}'.format(d.shop.price_max) }}
+  {% endif %}
+  {% if d.shop.imported_at %} · {{ d.shop.imported_at[:7] }}{% endif %}
+</p>
+
+{# The chain's own figures, and where they came from. Rendered ABOVE the table
+   rather than in a footnote: a reader meeting a calorie number should already
+   have seen whose number it is and how old it is. #}
+{% set chain = d.sources.get('chain') %}
+{% if chain %}
+<div class="card provenance">
+  <p class="source-name">{{ t('official_figure') }}
+    {% if chain.updated %}<span class="license">（{{ t('as_published', date=chain.updated) }}）</span>{% endif %}
+  </p>
+  <p>{{ t('official_note') }}</p>
+  <p class="attribution">
+    <a href="{{ chain.page }}" rel="noopener nofollow" target="_blank">{{ t('see_official') }}</a>
+  </p>
+</div>
+{% endif %}
+
+<div class="card">
+<div class="table-scroll">
+<table class="nutrition-table stack-table">
+  <thead>
+    <tr>
+      <th>{{ t('name_col') }}</th>
+      <th>{{ t('price') }}</th>
+      <th>{{ t('calories') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for it in d.menu %}
+    <tr>
+      <td>
+        {% if it.food_slug %}<a href="/{{ it.food_page_type }}/{{ it.food_slug }}">{{ it.name }}</a>
+        {% else %}{{ it.name }}{% endif %}
+      </td>
+      <td data-label="{{ t('price') }}">
+        {% if it.price_yen %}¥{{ '{:,}'.format(it.price_yen) }}{% if it.price_max_yen %}〜¥{{ '{:,}'.format(it.price_max_yen) }}{% endif %}
+        {% else %}—{% endif %}
+      </td>
+      <td data-label="{{ t('calories') }}">
+        {% if it.kcal is not none %}{{ it.kcal|round(0)|int }} kcal
+        {% else %}<span class="license">{{ t('no_figure') }}</span>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+{% endblock %}

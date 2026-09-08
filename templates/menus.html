@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}{{ t('menu') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<nav class="crumbs" aria-label="breadcrumb">
+  {% for label, url in crumbs %}{% if url %}<a href="{{ url }}">{{ label }}</a> ›
+  {% else %}<span aria-current="page">{{ label }}</span>{% endif %}{% endfor %}
+</nav>
+
+{% set media_slot = "menu" %}
+<div class="menu-header-section">
+  <h1>{{ t('menu') }}</h1>
+  <p class="alt-name">{{ t('menu_intro') }}</p>
+</div>
+{% include "partials/hero_media.html" %}
+
+<!-- Interactive AI Tool Spotlight -->
+<div class="card menu-ai-banner">
+  <div class="menu-ai-banner-content">
+    <div class="menu-ai-badge">AI TOOL</div>
+    <h2>写真や品名からAIでカロリー推定・計算</h2>
+    <p>外食時のセットメニューや未公表メニューも、AI画像解析・成分照合でカロリーとPFCバランスを即座に計算できます。</p>
+    <div class="menu-ai-actions">
+      <a href="/analyzer" class="button-pill primary">写真からAI解析</a>
+      <a href="/meal-calculator" class="button-pill secondary">食事計算ツール</a>
+    </div>
+  </div>
+</div>
+
+<!-- Chain Filter & List -->
+<div class="card">
+  <div class="menu-filter-bar">
+    <div class="menu-search-box" style="flex: 1;">
+      <input type="search" id="chain-filter-input" placeholder="チェーン店名を検索（例: スシロー、はま寿司、マクドナルド）..." autocomplete="off" aria-label="チェーン店名を検索">
+      <span class="search-kbd-hint" title="ショートカット: [/]キーで検索">/</span>
+      <button type="button" id="chain-search-clear" class="search-clear-btn" aria-label="検索をクリア">✕</button>
+    </div>
+    <span class="chain-count-badge" id="chain-count">{{ t('shop_count', n=shops|length) }}</span>
+  </div>
+  <div id="sr-chain-announcer" class="sr-only" aria-live="polite"></div>
+
+  <!-- Cuisine Category Chips -->
+  <div class="menu-chip-row" id="cuisine-chip-row">
+    <button type="button" class="menu-chip active" data-cuisine="all">すべて</button>
+    <button type="button" class="menu-chip" data-cuisine="sushi">寿司 🍣</button>
+    <button type="button" class="menu-chip" data-cuisine="beef">牛丼・定食 🥩</button>
+    <button type="button" class="menu-chip" data-cuisine="ramen">ラーメン 🍜</button>
+    <button type="button" class="menu-chip" data-cuisine="family">ファミレス 🍽️</button>
+    <button type="button" class="menu-chip" data-cuisine="fastfood">ファストフード 🍔</button>
+    <button type="button" class="menu-chip" data-cuisine="cafe">カフェ ☕</button>
+    <button type="button" class="menu-chip" data-cuisine="noodles">うどん・そば 🥢</button>
+  </div>
+
+  <div class="table-scroll">
+    <table class="nutrition-table stack-table" id="chains-table">
+      <thead>
+        <tr>
+          <th>{{ t('name_col') }}</th>
+          <th>{{ t('item_count', n='') | trim }}</th>
+          <th>{{ t('official_figure') }}</th>
+          <th>{{ t('price') }}</th>
+          <th style="text-align: right;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in shops %}
+        <tr class="chain-row" data-name="{{ s.name|lower }}">
+          <td>
+            <a href="/menu/{{ s.slug }}" class="chain-link">
+              {% if s.brand_logo %}
+                <span class="chain-brand-badge" style="background: {{ s.brand_logo.bg }}; color: {{ s.brand_logo.fg }};">
+                  <span class="chain-brand-mark">{{ s.brand_logo.mark }}</span>
+                </span>
+              {% endif %}
+              <span class="chain-name-text">
+                <strong>{{ s.name }}</strong>
+                {% if s.brand_logo and s.brand_logo.sub %}
+                  <small class="chain-sub-text">{{ s.brand_logo.sub }}</small>
+                {% endif %}
+              </span>
+            </a>
+          </td>
+          <td data-label="{{ t('item_count', n='') | trim }}">{{ s.item_count }}品</td>
+          <td data-label="{{ t('official_figure') }}">
+            {% if s.published %}
+              <span class="badge verified">{{ s.published }}品公表</span>
+            {% else %}
+              <span class="badge muted">—</span>
+            {% endif %}
+          </td>
+          <td data-label="{{ t('price') }}">
+            {% if s.price_min and s.price_max %}
+              ¥{{ '{:,}'.format(s.price_min) }}〜¥{{ '{:,}'.format(s.price_max) }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td style="text-align: right;">
+            <a href="/menu/{{ s.slug }}" class="chain-action-btn">メニューを見る →</a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div id="no-chains-msg" class="no-data" style="display: none; padding: 2rem; text-align: center;">
+      <p>該当するチェーン店が見つかりませんでした。</p>
+      <button type="button" id="reset-chains-btn" class="button-pill secondary" style="margin-top: 0.5rem;">条件をリセット</button>
+    </div>
+  </div>
+</div>
+
+<!-- Compliance & Statutory Advisory Card -->
+<div class="compliance-card">
+  <div class="compliance-header">
+    <span class="compliance-badge">食品表示法・栄養成分公表基準 準拠</span>
+    <h3>栄養情報・外食データに関する留意事項</h3>
+  </div>
+  <div class="compliance-grid">
+    <div class="compliance-item">
+      <h4>📊 データ出典と信頼性</h4>
+      <p>掲載されているメニュー価格およびカロリー情報は、各外食チェーンの公式公表資料および文部科学省『日本食品標準成分表』を典拠として整理しています。</p>
+    </div>
+    <div class="compliance-item">
+      <h4>🏢 価格・メニューの改定について</h4>
+      <p>地域別価格、深夜料金、季節限定フェア、原材料費の高騰に伴う価格改定等により、最新の店頭価格と相違が生じる場合があります。正確な最新価格は店舗にてご確認ください。</p>
+    </div>
+    <div class="compliance-item">
+      <h4>⚠️ アレルギー情報のご確認</h4>
+      <p>アレルギーをお持ちの方は、必ずご利用になるチェーンの公式アレルゲン情報をご確認の上、店舗スタッフにご相談ください。</p>
+    </div>
+    <div class="compliance-item">
+      <h4>💡 AI食事解析の活用</h4>
+      <p>セットメニューやサイドメニューの組み合わせ計算、栄養バランス（PFC比率）の把握には、当サイトの「AI解析ツール」および「食事計算ツール」をご活用いただけます。</p>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const filterInput = document.getElementById("chain-filter-input");
+  const clearBtn = document.getElementById("chain-search-clear");
+  const resetBtn = document.getElementById("reset-chains-btn");
+  const rows = document.querySelectorAll("#chains-table tbody tr.chain-row");
+  const countBadge = document.getElementById("chain-count");
+  const noMsg = document.getElementById("no-chains-msg");
+  const cuisineChips = document.querySelectorAll("#cuisine-chip-row .menu-chip");
+  const announcer = document.getElementById("sr-chain-announcer");
+  let activeCuisine = "all";
+
+  const cuisinePatterns = {
+    sushi: /寿司|すし|スシ|魚/,
+    beef: /吉野家|松屋|すき家|大戸屋|やよい軒|かつや|松のや|とんかつ|焼肉|ステーキ|どん/,
+    ramen: /ラーメン|らーめん|幸楽苑|日高屋|一風堂|一蘭|丸源|8番|山頭火|山岡家|花月嵐/,
+    family: /サイゼリヤ|ガスト|デニーズ|ジョナサン|バーミヤン|ココス|ロイヤルホスト|ジョイフル|びっくりドンキー/,
+    fastfood: /マクドナルド|モスバーガー|ケンタッキー|ロッテリア|バーガーキング|KFC|タコベル/,
+    cafe: /スターバックス|コメダ|ドトール|タリーズ|サンマルク|カフェ|珈琲|ブルーボトル/,
+    noodles: /丸亀製麺|はなまる|富士そば|ゆで太郎|そば|うどん/
+  };
+
+  function announce(msg) {
+    if (announcer) announcer.textContent = msg;
+  }
+
+  function filterChains(isUserTyping) {
+    const q = filterInput ? filterInput.value.trim().toLowerCase() : "";
+    let visibleCount = 0;
+
+    if (clearBtn) {
+      clearBtn.style.display = q ? "block" : "none";
+    }
+
+    rows.forEach(function(row) {
+      const name = row.getAttribute("data-name") || "";
+      const matchesSearch = !q || name.includes(q);
+      let matchesCuisine = true;
+
+      if (activeCuisine !== "all" && cuisinePatterns[activeCuisine]) {
+        matchesCuisine = cuisinePatterns[activeCuisine].test(name);
+      }
+
+      if (matchesSearch && matchesCuisine) {
+        row.style.display = "";
+        visibleCount++;
+      } else {
+        row.style.display = "none";
+      }
+    });
+
+    if (countBadge) {
+      countBadge.textContent = visibleCount + "チェーン表示";
+    }
+    if (noMsg) {
+      noMsg.style.display = visibleCount === 0 ? "block" : "none";
+    }
+    if (isUserTyping) {
+      announce(visibleCount + "チェーンのメニューを表示中");
+    }
+  }
+
+  if (filterInput) {
+    filterInput.addEventListener("input", () => filterChains(true));
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", function() {
+      if (filterInput) {
+        filterInput.value = "";
+        filterInput.focus();
+        filterChains(false);
+      }
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function() {
+      if (filterInput) filterInput.value = "";
+      activeCuisine = "all";
+      cuisineChips.forEach(c => c.classList.toggle("active", c.getAttribute("data-cuisine") === "all"));
+      filterChains(false);
+    });
+  }
+
+  cuisineChips.forEach(function(chip) {
+    chip.addEventListener("click", function() {
+      cuisineChips.forEach(c => c.classList.remove("active"));
+      this.classList.add("active");
+      activeCuisine = this.getAttribute("data-cuisine");
+      filterChains(false);
+    });
+  });
+
+  // Hotkeys: [/] to focus search, [Escape] to clear
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "/" && document.activeElement !== filterInput && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+      e.preventDefault();
+      if (filterInput) filterInput.focus();
+    } else if (e.key === "Escape" && document.activeElement === filterInput) {
+      filterInput.value = "";
+      filterChains(false);
+      filterInput.blur();
+    }
+  });
+});
+</script>
+{% endblock %}

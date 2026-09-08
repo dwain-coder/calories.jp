@@ -1,0 +1,1008 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title or name }} メニュー・カロリー・価格一覧 | {{ site_name }}{% endblock %}
+{% block content %}
+<nav class="crumbs" aria-label="breadcrumb">
+  {% for label, url in crumbs %}{% if url %}<a href="{{ url }}">{{ label }}</a> ›
+  {% else %}<span aria-current="page">{{ label }}</span>{% endif %}{% endfor %}
+</nav>
+
+<div class="menu-detail-header">
+  <div class="menu-header-brand-row">
+    {% if d.shop.brand_logo %}
+      <div class="chain-header-badge" style="background: {{ d.shop.brand_logo.bg }}; color: {{ d.shop.brand_logo.fg }};">
+        <span class="chain-brand-mark">{{ d.shop.brand_logo.mark }}</span>
+      </div>
+    {% endif %}
+    <div class="menu-title-wrap">
+      <h1>{{ page.title or name }}</h1>
+      <p class="alt-name">
+        <span class="badge">{{ t('dish_count', n=d.menu|length) }}</span>
+        {% if d.shop.price_min and d.shop.price_max %}
+          · <strong>{{ t('price') }}</strong> ¥{{ '{:,}'.format(d.shop.price_min) }}〜¥{{ '{:,}'.format(d.shop.price_max) }}
+        {% endif %}
+        {% if d.shop.imported_at %} · {{ d.shop.imported_at[:7] }}{% endif %}
+      </p>
+    </div>
+  </div>
+</div>
+
+{# The chain's own figures, and where they came from. #}
+{% set chain = d.sources.get('chain') %}
+{% if chain %}
+<div class="card provenance menu-provenance">
+  <div class="provenance-header">
+    <span class="source-badge">公式情報</span>
+    <p class="source-name">{{ t('official_figure') }}
+      {% if chain.updated %}<span class="license">（{{ t('as_published', date=chain.updated) }}）</span>{% endif %}
+    </p>
+  </div>
+  <p class="provenance-desc">{{ t('official_note') }}</p>
+  <p class="attribution">
+    <a href="{{ chain.page }}" rel="noopener nofollow" target="_blank" class="external-link">{{ t('see_official') }} ↗</a>
+  </p>
+</div>
+{% endif %}
+
+<!-- Quick Filter and Action Bar -->
+<div class="menu-controls-row">
+  <div class="menu-search-box">
+    <input type="search" id="dish-filter-input" placeholder="{{ t('filter_menu_placeholder') }}" autocomplete="off" aria-label="メニュー内を検索">
+    <span class="search-kbd-hint" id="search-kbd-hint" title="ショートカット: [/]キーで検索">/</span>
+    <button type="button" id="search-clear-btn" class="search-clear-btn" aria-label="検索条件をクリア">✕</button>
+  </div>
+  <span class="dish-filter-count-badge" id="dish-filter-count">全{{ d.menu|length }}品</span>
+  <div class="menu-actions-right">
+    <button type="button" id="toggle-analyzer-btn" class="button-pill secondary">
+      📷 写真からAIカロリー解析
+    </button>
+  </div>
+</div>
+<div id="sr-announcer" class="sr-only" aria-live="polite"></div>
+
+<!-- Category & Calorie Filter Chips -->
+<div class="menu-chip-row" id="menu-chip-row">
+  <button type="button" class="menu-chip active" data-filter="all">すべて</button>
+  <button type="button" class="menu-chip" data-filter="under500">500kcal以下 🌿</button>
+  <button type="button" class="menu-chip" data-filter="noodles">麺類・ラーメン</button>
+  <button type="button" class="menu-chip" data-filter="rice">ご飯・セット</button>
+  <button type="button" class="menu-chip" data-filter="sides">一品・サイド</button>
+  <button type="button" class="menu-chip" data-filter="drinks">ドリンク・甘味</button>
+</div>
+
+<!-- Expandable AI Analyzer Container -->
+<div id="inline-analyzer-container" class="menu-inline-analyzer" style="display: none;">
+  {% include "partials/analyzer_widget.html" %}
+</div>
+
+<!-- Menu Dishes Table -->
+<div class="card menu-table-card">
+  <div class="table-scroll">
+    <table class="nutrition-table stack-table menu-items-table" id="menu-items-table" data-shop-name="{{ name }}">
+      <thead>
+        <tr>
+          <th style="width: 44px; text-align: center;">選択</th>
+          <th class="sortable-th" id="th-name" style="cursor: pointer;" title="料理名で並べ替え" aria-sort="none">{{ t('name_col') }} <span class="sort-arrow">⇅</span></th>
+          <th class="sortable-th" id="th-price" style="cursor: pointer;" title="価格順で並べ替え" aria-sort="none">{{ t('price') }} <span class="sort-arrow">⇅</span></th>
+          <th class="sortable-th" id="th-kcal" style="cursor: pointer;" title="カロリー順で並べ替え" aria-sort="none">{{ t('calories') }} <span class="sort-arrow">⇅</span></th>
+          <th style="text-align: right;">解析・推定</th>
+        </tr>
+      </thead>
+      <tbody id="menu-tbody">
+      {% for it in d.menu %}
+        <tr class="dish-row" id="dish-row-{{ loop.index }}"
+            data-name="{{ it.name|lower }}"
+            data-price="{{ it.price_yen or 0 }}"
+            data-kcal="{{ it.kcal|round(0)|int if it.kcal is not none else '' }}"
+            data-p="{{ it.protein_g or 0 }}"
+            data-f="{{ it.fat_g or 0 }}"
+            data-c="{{ it.carbs_g or 0 }}"
+            data-salt="{{ it.salt_g or 0 }}"
+            data-source="{{ it.kcal_source or '' }}">
+          <td style="text-align: center;">
+            <button type="button" class="tray-add-btn" id="tray-btn-{{ loop.index }}" aria-label="{{ it.name }} をトレイに追加" title="注文トレイに追加"
+                    data-row-id="{{ loop.index }}" data-name="{{ it.name }}" data-price="{{ it.price_yen or 0 }}"
+                    data-kcal="{{ it.kcal|round(0)|int if it.kcal is not none else '' }}"
+                    data-p="{{ it.protein_g or 0 }}"
+                    data-f="{{ it.fat_g or 0 }}"
+                    data-c="{{ it.carbs_g or 0 }}"
+                    data-salt="{{ it.salt_g or 0 }}"
+                    data-source="{{ it.kcal_source or '' }}">＋</button>
+          </td>
+          <td>
+            <div class="dish-name-cell">
+              {% if it.visual %}
+                <div class="dish-thumb-avatar" style="background: {{ it.visual.gradient }};" title="{{ it.visual.category }}">
+                  <span class="dish-thumb-icon">{{ it.visual.icon }}</span>
+                </div>
+              {% endif %}
+              <div class="dish-title-wrap">
+                {% if it.food_slug %}
+                  <a href="/{{ it.food_page_type }}/{{ it.food_slug }}" class="dish-link"><strong>{{ it.name }}</strong></a>
+                {% else %}
+                  <span class="dish-title"><strong>{{ it.name }}</strong></span>
+                {% endif %}
+                {% if it.visual %}
+                  <span class="dish-category-tag">{{ it.visual.category }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          <td data-label="{{ t('price') }}">
+            {% if it.price_yen %}
+              <span class="price-val">¥{{ '{:,}'.format(it.price_yen) }}</span>{% if it.price_max_yen %}〜¥{{ '{:,}'.format(it.price_max_yen) }}{% endif %}
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td data-label="{{ t('calories') }}" class="calorie-cell" id="calorie-cell-{{ loop.index }}">
+            {% if it.kcal is not none %}
+              {% set k = it.kcal|round(0)|int %}
+              <div class="kcal-cell-wrap">
+                <div class="kcal-val-header">
+                  <span class="kcal-val"><strong>{{ k }}</strong> <small>kcal</small></span>
+                  {% if it.kcal_source == 'chain' %}
+                    <span class="prov-tag chain" title="店舗公式公表値（検査機関分析・規格基準値）">公式公表</span>
+                  {% elif it.kcal_source == 'table' %}
+                    <span class="prov-tag table" title="文部科学省 日本食品標準成分表 準拠">成分表準拠</span>
+                  {% else %}
+                    <span class="prov-tag calc" title="文科省成分表 算定値（標準調理レシピ分解）">成分表算定</span>
+                  {% endif %}
+                </div>
+                <div class="kcal-bar-track">
+                  <div class="kcal-bar-fill {% if k < 350 %}light{% elif k <= 650 %}mid{% else %}heavy{% endif %}"
+                       style="width: {{ [100, (k / 1000 * 100)|round(0)|int]|min }}%;"></div>
+                </div>
+                {% if it.protein_g or it.fat_g or it.carbs_g or it.salt_g %}
+                  <div class="macro-mini-strip">
+                    {% if it.protein_g is not none and it.protein_g > 0 %}<span class="mini-macro p" title="たんぱく質">P <strong>{{ it.protein_g }}</strong>g</span>{% endif %}
+                    {% if it.fat_g is not none and it.fat_g > 0 %}<span class="mini-macro f" title="脂質">F <strong>{{ it.fat_g }}</strong>g</span>{% endif %}
+                    {% if it.carbs_g is not none and it.carbs_g > 0 %}<span class="mini-macro c" title="炭水化物">C <strong>{{ it.carbs_g }}</strong>g</span>{% endif %}
+                    {% if it.salt_g is not none and it.salt_g > 0 %}<span class="mini-macro salt" title="食塩相当量">塩 <strong>{{ it.salt_g }}</strong>g</span>{% endif %}
+                  </div>
+                {% endif %}
+              </div>
+            {% else %}
+              <span class="license no-figure-label">{{ t('no_figure') }}</span>
+            {% endif %}
+          </td>
+          <td style="text-align: right;">
+            {% if it.kcal is not none %}
+              <button type="button" class="ai-micro-btn dish-ai-btn" data-row-id="{{ loop.index }}" data-dish="{{ it.name }}" data-price="{{ it.price_yen or 0 }}" data-published="{{ it.kcal|round(0)|int }}" title="AIで具材・栄養を詳細解析">詳細解析</button>
+            {% else %}
+              <button type="button" class="ai-micro-btn highlight dish-ai-btn" data-row-id="{{ loop.index }}" data-dish="{{ it.name }}" data-price="{{ it.price_yen or 0 }}" data-published="" title="AIでこの料理のカロリーを推定">AI推定</button>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div id="no-dishes-msg" class="no-data" style="display: none; padding: 2rem; text-align: center;">
+      <p>該当するメニュー項目が見つかりませんでした。</p>
+      <button type="button" id="reset-filters-btn" class="button-pill secondary" style="margin-top: 0.5rem;">条件をリセット</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dish AI Analysis & Breakdown Modal -->
+<div id="dish-ai-modal" class="dish-ai-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-dish-name">
+  <div class="dish-ai-modal-box">
+    <button type="button" class="dish-ai-close-btn" id="modal-close-btn" aria-label="閉じる">✕</button>
+    <div class="dish-ai-header">
+      <div style="display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.35rem;">
+        <span class="badge" id="modal-badge">AI料理推定</span>
+        <span id="modal-dish-icon" style="font-size: 1.4rem;">🍽️</span>
+      </div>
+      <h3 id="modal-dish-name">料理名</h3>
+      <p id="modal-shop-name" class="alt-name">{{ name }}</p>
+    </div>
+
+    <!-- AI Scanning Shimmer Loader -->
+    <div id="modal-loading" style="display: none;">
+      <div class="ai-scanner-box">
+        <div class="ai-scanner-laser"></div>
+        <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.8rem; color: var(--accent);">
+          ⚡ AIスキャン中: 料理の具材と調理状態を照合中...
+        </div>
+        <div class="skeleton-line" style="width: 75%;"></div>
+        <div class="skeleton-line" style="width: 90%;"></div>
+        <div class="skeleton-line" style="width: 60%;"></div>
+        <div class="skeleton-line" style="width: 80%;"></div>
+      </div>
+    </div>
+
+    <!-- Loaded AI Nutrition Content -->
+    <div id="modal-content-area" style="display: none;">
+      <div class="dish-ai-hero-kcal">
+        <span class="num" id="modal-total-kcal">0</span>
+        <span>kcal</span>
+        <span id="modal-kcal-note" class="badge estimate" style="margin-left: 0.5rem;">AI具材推定値</span>
+      </div>
+
+      <!-- PFC Ratio Donut Ring & Gauge -->
+      <div class="pfc-visualizer">
+        <svg class="pfc-ring-svg" viewBox="0 0 42 42">
+          <circle class="pfc-ring-bg" cx="21" cy="21" r="15.91549430918954"></circle>
+          <circle class="pfc-ring-p" id="pfc-circle-p" cx="21" cy="21" r="15.91549430918954" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+          <circle class="pfc-ring-f" id="pfc-circle-f" cx="21" cy="21" r="15.91549430918954" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+          <circle class="pfc-ring-c" id="pfc-circle-c" cx="21" cy="21" r="15.91549430918954" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+        </svg>
+        <div class="pfc-legend-col">
+          <div class="pfc-legend-row">
+            <span><i class="pfc-dot p"></i>タンパク質 (P)</span>
+            <span class="pfc-pct" id="pfc-pct-p">0%</span>
+          </div>
+          <div class="pfc-legend-row">
+            <span><i class="pfc-dot f"></i>脂質 (F)</span>
+            <span class="pfc-pct" id="pfc-pct-f">0%</span>
+          </div>
+          <div class="pfc-legend-row">
+            <span><i class="pfc-dot c"></i>炭水化物 (C)</span>
+            <span class="pfc-pct" id="pfc-pct-c">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dish-ai-macro-grid">
+        <div class="dish-ai-macro-item">
+          <div class="macro-label">タンパク質</div>
+          <div class="macro-val" id="modal-macro-p">0g</div>
+        </div>
+        <div class="dish-ai-macro-item">
+          <div class="macro-label">脂質</div>
+          <div class="macro-val" id="modal-macro-f">0g</div>
+        </div>
+        <div class="dish-ai-macro-item">
+          <div class="macro-label">炭水化物</div>
+          <div class="macro-val" id="modal-macro-c">0g</div>
+        </div>
+        <div class="dish-ai-macro-item">
+          <div class="macro-label">食塩相当量</div>
+          <div class="macro-val" id="modal-macro-salt">0g</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 1rem;">
+        <h4 style="font-size: 0.92rem; margin: 0 0 0.4rem;">構成具材・分量内訳（食品成分表より算定）:</h4>
+        <ul class="dish-ai-ingredients-list" id="modal-ingredients-list"></ul>
+      </div>
+
+      <div style="margin-top: 1.2rem; display: flex; gap: 0.6rem; justify-content: flex-end;">
+        <button type="button" id="modal-add-tray-btn" class="button-pill primary">この推定値で注文トレイに追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sticky Order Tray & Calorie Budget Bar -->
+<div id="order-tray" class="order-tray-bar" style="display: none;">
+  <!-- Expandable Item Drawer -->
+  <div id="order-tray-drawer" class="order-tray-drawer" role="region" aria-label="注文トレイ明細">
+    <div class="wrap">
+      <div class="tray-drawer-header">
+        <strong>選択したメニュー明細（個別に削除可能）</strong>
+        <button type="button" id="tray-drawer-close-btn" class="button-text">閉じる ✕</button>
+      </div>
+      <ul id="tray-items-list" class="tray-items-list"></ul>
+    </div>
+  </div>
+
+  <div class="order-tray-inner wrap">
+    <div class="order-tray-summary">
+      <div class="order-tray-count">
+        <span id="tray-count-num">0</span>品選択中
+        <button type="button" id="tray-drawer-toggle-btn" class="tray-expand-toggle-btn" aria-expanded="false" aria-controls="order-tray-drawer" title="選択した品目を一覧表示">
+          明細 <span id="tray-toggle-arrow">▲</span>
+        </button>
+      </div>
+      <div class="order-tray-totals">
+        <span class="tray-total-price">合計: ¥<strong id="tray-total-price">0</strong></span>
+        <span class="tray-total-kcal">カロリー: <strong id="tray-total-kcal">0</strong> kcal</span>
+      </div>
+      <div class="order-tray-macros" id="tray-macros-bar" style="display: none;">
+        <span id="tray-macro-p">P: <strong>0</strong>g</span>
+        <span id="tray-macro-f">F: <strong>0</strong>g</span>
+        <span id="tray-macro-c">C: <strong>0</strong>g</span>
+        <span id="tray-macro-salt">塩: <strong>0</strong>g</span>
+      </div>
+
+      <!-- Meal Calorie Budget Meter -->
+      <div class="tray-budget-wrap" id="tray-budget-wrap">
+        <div class="tray-budget-header">
+          <span>一食目安 (650kcal)</span>
+          <span id="tray-budget-pct">0%</span>
+        </div>
+        <div class="tray-budget-track">
+          <div class="tray-budget-fill under" id="tray-budget-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="order-tray-actions">
+      <button type="button" id="tray-copy-btn" class="button-pill secondary" title="注文内容とカロリー合計をクリップボードにコピー">📋 注文をコピー</button>
+      <button type="button" id="tray-batch-ai-btn" class="button-pill secondary" style="display: none;">🤖 未公表品をAI一括推定</button>
+      <button type="button" id="tray-clear-btn" class="button-text">{{ t('order_calc_clear') }}</button>
+      <a id="tray-calc-link" href="/meal-calculator" class="button-pill primary">計算ツールで開く →</a>
+    </div>
+  </div>
+</div>
+
+<!-- Compliance & Statutory Advisory Card -->
+<div class="compliance-card">
+  <div class="compliance-header">
+    <span class="compliance-badge">食品表示法・栄養成分公表基準 準拠</span>
+    <h3>栄養情報・食品表示に関する留意事項</h3>
+  </div>
+  <div class="compliance-grid">
+    <div class="compliance-item">
+      <h4>📊 公式公表値とAI推定値の区分</h4>
+      <p>各チェーンが公表する公式栄養成分値（エネルギー・PFC）を優先表示しています。「AI推定」と記載されたメニューは、文部科学省『日本食品標準成分表』をベースに具材構成から独自算定した参考値です。</p>
+    </div>
+    <div class="compliance-item">
+      <h4>🍳 調理・店舗による個体差</h4>
+      <p>掲載数値は標準レシピに基づく算定基準値です。盛り付け・調理条件、タレ・ドレッシングの増減、店舗・地域限定仕様により実際の摂取カロリーや栄養価は多少前後する場合があります。</p>
+    </div>
+    <div class="compliance-item">
+      <h4>⚠️ 食物アレルギーに関する重要事項</h4>
+      <p>アレルギー物質（特定原材料8品目および準ずる20品目）に関する最新情報およびコンタミネーションの有無については、必ず各チェーンの公式サイトまたは店舗にて最新情報をご確認ください。</p>
+    </div>
+    <div class="compliance-item">
+      <h4>🩺 健康管理・医療上の助言について</h4>
+      <p>本サイトの掲載情報は日常の健康管理やカロリーコントロールの参考指標として提供しています。治療中の方や医師・管理栄養士の食事指導を受けている場合は、必ず専門家の指示に従ってください。</p>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const shopTable = document.getElementById("menu-items-table");
+  const shopName = shopTable ? shopTable.getAttribute("data-shop-name") : "";
+  const MEAL_CALORIE_BUDGET = 650;
+  const STORAGE_KEY = "calories_tray_" + (shopName || "default");
+
+  // Accessibility screen reader announcer
+  const announcer = document.getElementById("sr-announcer");
+  function announce(msg) {
+    if (announcer) announcer.textContent = msg;
+  }
+
+  // 1. Quick dish filter & Category Chips
+  const filterInput = document.getElementById("dish-filter-input");
+  const searchClearBtn = document.getElementById("search-clear-btn");
+  const dishFilterCount = document.getElementById("dish-filter-count");
+  const resetFiltersBtn = document.getElementById("reset-filters-btn");
+  const tbody = document.getElementById("menu-tbody");
+  const rows = Array.from(document.querySelectorAll("#menu-items-table tbody tr.dish-row"));
+  const noMsg = document.getElementById("no-dishes-msg");
+  const chipButtons = document.querySelectorAll("#menu-chip-row .menu-chip");
+  let activeFilter = "all";
+
+  function applyFilters(isUserTyping) {
+    const q = filterInput ? filterInput.value.trim().toLowerCase() : "";
+    let visible = 0;
+
+    if (searchClearBtn) {
+      searchClearBtn.style.display = q ? "block" : "none";
+    }
+
+    rows.forEach(function(row) {
+      const name = row.getAttribute("data-name") || "";
+      const kcalStr = row.getAttribute("data-kcal");
+      const kcal = kcalStr ? parseInt(kcalStr, 10) : null;
+
+      let matchesQuery = !q || name.includes(q);
+      let matchesChip = true;
+
+      if (activeFilter === "under500") {
+        matchesChip = (kcal !== null && kcal <= 500);
+      } else if (activeFilter === "noodles") {
+        matchesChip = /ラーメン|らーめん|そば|うどん|中華そば|つけ麺|麺/.test(name);
+      } else if (activeFilter === "rice") {
+        matchesChip = /ご飯|ライス|丼|定食|セット|カレー|チャーハン|炒飯/.test(name);
+      } else if (activeFilter === "sides") {
+        matchesChip = /餃子|ギョーザ|から揚げ|唐揚げ|サラダ|ポテト|コロッケ|メンマ|キムチ|枝豆/.test(name);
+      } else if (activeFilter === "drinks") {
+        matchesChip = /ビール|酒|茶|コーラ|ジュース|コーヒー|フロート|アイス|デザート|杏仁/.test(name);
+      }
+
+      if (matchesQuery && matchesChip) {
+        row.style.display = "";
+        visible++;
+      } else {
+        row.style.display = "none";
+      }
+    });
+
+    if (dishFilterCount) {
+      dishFilterCount.textContent = `${visible}品表示 / 全${rows.length}品`;
+    }
+
+    if (noMsg) {
+      noMsg.style.display = visible === 0 ? "block" : "none";
+    }
+
+    if (isUserTyping) {
+      announce(`${visible}品のメニューを表示中`);
+    }
+  }
+
+  if (filterInput) {
+    filterInput.addEventListener("input", () => applyFilters(true));
+  }
+
+  if (searchClearBtn) {
+    searchClearBtn.addEventListener("click", function() {
+      if (filterInput) {
+        filterInput.value = "";
+        filterInput.focus();
+        applyFilters(false);
+      }
+    });
+  }
+
+  if (resetFiltersBtn) {
+    resetFiltersBtn.addEventListener("click", function() {
+      if (filterInput) filterInput.value = "";
+      activeFilter = "all";
+      chipButtons.forEach(c => c.classList.toggle("active", c.getAttribute("data-filter") === "all"));
+      applyFilters(false);
+    });
+  }
+
+  chipButtons.forEach(function(chip) {
+    chip.addEventListener("click", function() {
+      chipButtons.forEach(c => c.classList.remove("active"));
+      this.classList.add("active");
+      activeFilter = this.getAttribute("data-filter");
+      applyFilters(false);
+    });
+  });
+
+  // Global keyboard shortcuts: [/] to search, [Escape] to close modals/drawers
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "/" && document.activeElement !== filterInput && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+      e.preventDefault();
+      if (filterInput) filterInput.focus();
+    } else if (e.key === "Escape") {
+      closeModal();
+      closeTrayDrawer();
+    }
+  });
+
+  // 2. Table Column Sorting (Price, Calories, Name)
+  let sortState = { col: null, asc: true };
+
+  function sortTable(col) {
+    const isAsc = (sortState.col === col) ? !sortState.asc : true;
+    sortState = { col: col, asc: isAsc };
+
+    document.querySelectorAll(".sortable-th .sort-arrow").forEach(s => s.textContent = "⇅");
+    const thEl = document.getElementById("th-" + col);
+    if (thEl) {
+      thEl.querySelector(".sort-arrow").textContent = isAsc ? "▲" : "▼";
+    }
+
+    rows.sort(function(a, b) {
+      if (col === "price") {
+        const pA = parseInt(a.getAttribute("data-price"), 10) || 0;
+        const pB = parseInt(b.getAttribute("data-price"), 10) || 0;
+        return isAsc ? pA - pB : pB - pA;
+      } else if (col === "kcal") {
+        const kA = parseInt(a.getAttribute("data-kcal"), 10) || (isAsc ? 99999 : -1);
+        const kB = parseInt(b.getAttribute("data-kcal"), 10) || (isAsc ? 99999 : -1);
+        return isAsc ? kA - kB : kB - kA;
+      } else {
+        const nA = a.getAttribute("data-name") || "";
+        const nB = b.getAttribute("data-name") || "";
+        return isAsc ? nA.localeCompare(nB) : nB.localeCompare(nA);
+      }
+    });
+
+    rows.forEach(r => tbody.appendChild(r));
+    applyFilters();
+  }
+
+  const thPrice = document.getElementById("th-price");
+  const thKcal = document.getElementById("th-kcal");
+  const thName = document.getElementById("th-name");
+  if (thPrice) thPrice.addEventListener("click", () => sortTable("price"));
+  if (thKcal) thKcal.addEventListener("click", () => sortTable("kcal"));
+  if (thName) thName.addEventListener("click", () => sortTable("name"));
+
+  // 3. Toggle AI photo analyzer container
+  const toggleBtn = document.getElementById("toggle-analyzer-btn");
+  const analyzerCont = document.getElementById("inline-analyzer-container");
+  if (toggleBtn && analyzerCont) {
+    toggleBtn.addEventListener("click", function() {
+      const isHidden = analyzerCont.style.display === "none";
+      analyzerCont.style.display = isHidden ? "block" : "none";
+      toggleBtn.textContent = isHidden ? "✕ AI解析を閉じる" : "📷 写真からAIカロリー解析";
+      if (isHidden) {
+        analyzerCont.scrollIntoView({ behavior: "smooth" });
+      }
+    });
+  }
+
+  // 4. Order Tray Calculator & Budget Bar with Expandable Item Drawer
+  const tray = document.getElementById("order-tray");
+  const trayDrawer = document.getElementById("order-tray-drawer");
+  const trayDrawerToggleBtn = document.getElementById("tray-drawer-toggle-btn");
+  const trayToggleArrow = document.getElementById("tray-toggle-arrow");
+  const trayDrawerCloseBtn = document.getElementById("tray-drawer-close-btn");
+  const trayItemsList = document.getElementById("tray-items-list");
+  const countEl = document.getElementById("tray-count-num");
+  const priceEl = document.getElementById("tray-total-price");
+  const kcalEl = document.getElementById("tray-total-kcal");
+  const budgetFill = document.getElementById("tray-budget-fill");
+  const budgetPctEl = document.getElementById("tray-budget-pct");
+  const clearBtn = document.getElementById("tray-clear-btn");
+  const copyBtn = document.getElementById("tray-copy-btn");
+  const calcLink = document.getElementById("tray-calc-link");
+  const batchAiBtn = document.getElementById("tray-batch-ai-btn");
+
+  let trayItems = [];
+
+  function saveTraySession() {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(trayItems));
+    } catch (e) {}
+  }
+
+  function loadTraySession() {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          trayItems = parsed;
+          updateTray();
+        }
+      }
+    } catch (e) {}
+  }
+
+  function toggleTrayDrawer() {
+    if (!trayDrawer) return;
+    const isOpen = trayDrawer.classList.contains("open");
+    if (isOpen) {
+      closeTrayDrawer();
+    } else {
+      openTrayDrawer();
+    }
+  }
+
+  function openTrayDrawer() {
+    if (!trayDrawer) return;
+    trayDrawer.classList.add("open");
+    if (trayDrawerToggleBtn) {
+      trayDrawerToggleBtn.setAttribute("aria-expanded", "true");
+      if (trayToggleArrow) trayToggleArrow.textContent = "▼";
+    }
+    renderTrayDrawer();
+  }
+
+  function closeTrayDrawer() {
+    if (!trayDrawer) return;
+    trayDrawer.classList.remove("open");
+    if (trayDrawerToggleBtn) {
+      trayDrawerToggleBtn.setAttribute("aria-expanded", "false");
+      if (trayToggleArrow) trayToggleArrow.textContent = "▲";
+    }
+  }
+
+  if (trayDrawerToggleBtn) {
+    trayDrawerToggleBtn.addEventListener("click", toggleTrayDrawer);
+  }
+  if (trayDrawerCloseBtn) {
+    trayDrawerCloseBtn.addEventListener("click", closeTrayDrawer);
+  }
+
+  function renderTrayDrawer() {
+    if (!trayItemsList) return;
+    trayItemsList.innerHTML = "";
+    if (trayItems.length === 0) {
+      trayItemsList.innerHTML = "<li style='padding: 0.5rem; color: var(--ink-soft);'>選択中のメニューはありません</li>";
+      return;
+    }
+    trayItems.forEach(function(it, idx) {
+      const li = document.createElement("li");
+      li.className = "tray-item-row";
+      const kcalText = (it.kcal && it.kcal > 0) ? `${it.kcal} kcal` : "未公表";
+      const priceText = it.price ? `¥${it.price.toLocaleString()}` : "—";
+      const macroText = (it.p || it.f || it.c) ? `<span class="tray-item-macros">(P:${it.p || 0}g F:${it.f || 0}g C:${it.c || 0}g)</span>` : "";
+      li.innerHTML = `
+        <div class="tray-item-info">
+          <span class="tray-item-name">${it.name}</span>
+          <span class="tray-item-meta">${priceText} · ${kcalText} ${macroText}</span>
+        </div>
+        <button type="button" class="tray-item-remove-btn" data-index="${idx}" aria-label="${it.name} をトレイから削除" title="この品目を削除">✕</button>
+      `;
+      trayItemsList.appendChild(li);
+    });
+
+    trayItemsList.querySelectorAll(".tray-item-remove-btn").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        const idx = parseInt(this.getAttribute("data-index"), 10);
+        if (!isNaN(idx) && idx >= 0 && idx < trayItems.length) {
+          const removed = trayItems.splice(idx, 1)[0];
+          saveTraySession();
+          updateTray();
+          renderTrayDrawer();
+          announce(`${removed.name} をトレイから削除しました`);
+        }
+      });
+    });
+  }
+
+  function triggerTrayBump() {
+    if (tray) {
+      tray.classList.remove("tray-bump");
+      void tray.offsetWidth; // force reflow
+      tray.classList.add("tray-bump");
+    }
+  }
+
+  function spawnFlyingKcalBadge(event, text) {
+    const badge = document.createElement("div");
+    badge.className = "flying-kcal-badge";
+    badge.textContent = text;
+    const x = event.clientX;
+    const y = event.clientY;
+    badge.style.left = (x - 20) + "px";
+    badge.style.top = (y - 30) + "px";
+    document.body.appendChild(badge);
+    setTimeout(function() {
+      badge.remove();
+    }, 700);
+  }
+
+  function updateTray() {
+    saveTraySession();
+    if (trayItems.length === 0) {
+      tray.style.display = "none";
+      closeTrayDrawer();
+      return;
+    }
+    tray.style.display = "block";
+    let totPrice = 0;
+    let totKcal = 0;
+    let totP = 0, totF = 0, totC = 0, totSalt = 0;
+    let unestimatedCount = 0;
+
+    trayItems.forEach(function(it) {
+      totPrice += (it.price || 0);
+      if (it.kcal !== null && it.kcal !== undefined && !isNaN(it.kcal) && it.kcal > 0) {
+        totKcal += it.kcal;
+      } else {
+        unestimatedCount++;
+      }
+      if (it.p) totP += parseFloat(it.p) || 0;
+      if (it.f) totF += parseFloat(it.f) || 0;
+      if (it.c) totC += parseFloat(it.c) || 0;
+      if (it.salt) totSalt += parseFloat(it.salt) || 0;
+    });
+
+    countEl.textContent = trayItems.length;
+    priceEl.textContent = totPrice.toLocaleString();
+    kcalEl.textContent = totKcal.toLocaleString() + (unestimatedCount > 0 ? ` (※${unestimatedCount}品 未公表)` : "");
+
+    const macroBar = document.getElementById("tray-macros-bar");
+    if (macroBar) {
+      if (totP > 0 || totF > 0 || totC > 0 || totSalt > 0) {
+        macroBar.style.display = "flex";
+        const elP = document.getElementById("tray-macro-p");
+        const elF = document.getElementById("tray-macro-f");
+        const elC = document.getElementById("tray-macro-c");
+        const elSalt = document.getElementById("tray-macro-salt");
+        if (elP) elP.innerHTML = `P: <strong>${totP.toFixed(1)}</strong>g`;
+        if (elF) elF.innerHTML = `F: <strong>${totF.toFixed(1)}</strong>g`;
+        if (elC) elC.innerHTML = `C: <strong>${totC.toFixed(1)}</strong>g`;
+        if (elSalt) elSalt.innerHTML = `塩: <strong>${totSalt.toFixed(2)}</strong>g`;
+      } else {
+        macroBar.style.display = "none";
+      }
+    }
+
+    // Update Calorie Budget Progress
+    if (budgetFill && budgetPctEl) {
+      const pct = Math.round((totKcal / MEAL_CALORIE_BUDGET) * 100);
+      budgetPctEl.textContent = pct + "%";
+      const clampedWidth = Math.min(100, pct);
+      budgetFill.style.width = clampedWidth + "%";
+
+      budgetFill.className = "tray-budget-fill " + (pct < 85 ? "under" : (pct <= 110 ? "target" : "over"));
+    }
+
+    if (batchAiBtn) {
+      batchAiBtn.style.display = unestimatedCount > 0 ? "inline-flex" : "none";
+    }
+
+    const qList = trayItems.map(function(i) { return encodeURIComponent(i.name); }).join(",");
+    calcLink.href = "/meal-calculator?items=" + qList;
+
+    if (trayDrawer && trayDrawer.classList.contains("open")) {
+      renderTrayDrawer();
+    }
+  }
+
+  document.querySelectorAll(".tray-add-btn").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      const name = this.getAttribute("data-name");
+      const price = parseInt(this.getAttribute("data-price"), 10) || 0;
+      const kcalStr = this.getAttribute("data-kcal");
+      const kcal = kcalStr ? parseInt(kcalStr, 10) : null;
+      const p = parseFloat(this.getAttribute("data-p")) || 0;
+      const f = parseFloat(this.getAttribute("data-f")) || 0;
+      const c = parseFloat(this.getAttribute("data-c")) || 0;
+      const salt = parseFloat(this.getAttribute("data-salt")) || 0;
+      const source = this.getAttribute("data-source") || "";
+
+      trayItems.push({ name: name, price: price, kcal: kcal, p: p, f: f, c: c, salt: salt, source: source });
+      this.classList.add("added");
+      setTimeout(() => this.classList.remove("added"), 300);
+
+      // Flying badge & bump effect
+      const badgeText = kcal ? `+${kcal} kcal` : `+¥${price.toLocaleString()}`;
+      spawnFlyingKcalBadge(e, badgeText);
+      triggerTrayBump();
+
+      updateTray();
+      announce(`${name} をトレイに追加しました。合計 ${trayItems.length}品`);
+    });
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", function() {
+      trayItems = [];
+      updateTray();
+      announce("注文トレイを空にしました");
+    });
+  }
+
+  // Copy Order Summary to Clipboard
+  if (copyBtn) {
+    copyBtn.addEventListener("click", function() {
+      if (trayItems.length === 0) return;
+      let totPrice = 0;
+      let totKcal = 0;
+      let lines = [`【${shopName} 注文リスト】`];
+
+      trayItems.forEach(function(it) {
+        totPrice += (it.price || 0);
+        const kcalText = (it.kcal && it.kcal > 0) ? `${it.kcal} kcal` : "未公表";
+        if (it.kcal) totKcal += it.kcal;
+        lines.push(`・${it.name} (¥${(it.price || 0).toLocaleString()} / ${kcalText})`);
+      });
+
+      lines.push(`--------------------`);
+      lines.push(`合計: ${trayItems.length}品 · ¥${totPrice.toLocaleString()} · ${totKcal} kcal`);
+      lines.push(window.location.href);
+
+      const text = lines.join("\n");
+      navigator.clipboard.writeText(text).then(function() {
+        copyBtn.textContent = "✓ コピー完了！";
+        setTimeout(() => { copyBtn.textContent = "📋 注文をコピー"; }, 2000);
+      });
+    });
+  }
+
+  // Restore saved session on load
+  loadTraySession();
+
+  // Batch AI estimation for tray items without kcal
+  if (batchAiBtn) {
+    batchAiBtn.addEventListener("click", async function() {
+      batchAiBtn.disabled = true;
+      batchAiBtn.textContent = "AI推定計算中...";
+      for (let i = 0; i < trayItems.length; i++) {
+        if (trayItems[i].kcal === null || isNaN(trayItems[i].kcal) || trayItems[i].kcal <= 0) {
+          try {
+            const res = await fetch(`/api/analyze-dish?dish=${encodeURIComponent(trayItems[i].name)}&shop=${encodeURIComponent(shopName)}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.totals && data.totals.energy_kcal) {
+                trayItems[i].kcal = Math.round(data.totals.energy_kcal);
+              }
+            }
+          } catch (err) {
+            console.error("Batch AI estimate failed for", trayItems[i].name, err);
+          }
+        }
+      }
+      batchAiBtn.disabled = false;
+      batchAiBtn.textContent = "🤖 未公表品をAI一括推定";
+      triggerTrayBump();
+      updateTray();
+    });
+  }
+
+  // 5. Modal: Dish AI Estimation, PFC Ring & Breakdown
+  const modal = document.getElementById("dish-ai-modal");
+  const modalCloseBtn = document.getElementById("modal-close-btn");
+  const modalLoading = document.getElementById("modal-loading");
+  const modalContent = document.getElementById("modal-content-area");
+  const modalDishName = document.getElementById("modal-dish-name");
+  const modalBadge = document.getElementById("modal-badge");
+  const modalTotalKcal = document.getElementById("modal-total-kcal");
+  const modalKcalNote = document.getElementById("modal-kcal-note");
+  const modalMacroP = document.getElementById("modal-macro-p");
+  const modalMacroF = document.getElementById("modal-macro-f");
+  const modalMacroC = document.getElementById("modal-macro-c");
+  const modalMacroSalt = document.getElementById("modal-macro-salt");
+  const modalIngredientsList = document.getElementById("modal-ingredients-list");
+  const modalAddTrayBtn = document.getElementById("modal-add-tray-btn");
+
+  const circleP = document.getElementById("pfc-circle-p");
+  const circleF = document.getElementById("pfc-circle-f");
+  const circleC = document.getElementById("pfc-circle-c");
+  const pctP = document.getElementById("pfc-pct-p");
+  const pctF = document.getElementById("pfc-pct-f");
+  const pctC = document.getElementById("pfc-pct-c");
+
+  let currentModalDish = null;
+  let currentModalKcal = 0;
+  let currentModalPrice = 0;
+  let currentModalRowId = null;
+
+  function closeModal() {
+    if (modal) modal.style.display = "none";
+  }
+
+  if (modalCloseBtn) modalCloseBtn.addEventListener("click", closeModal);
+  if (modal) {
+    modal.addEventListener("click", function(e) {
+      if (e.target === modal) closeModal();
+    });
+  }
+
+  function renderPFCRing(protG, fatG, carbG) {
+    const pKcal = (protG || 0) * 4;
+    const fKcal = (fatG || 0) * 9;
+    const cKcal = (carbG || 0) * 4;
+    const totalMacroKcal = pKcal + fKcal + cKcal;
+
+    if (totalMacroKcal <= 0) {
+      circleP.setAttribute("stroke-dasharray", "0 100");
+      circleF.setAttribute("stroke-dasharray", "0 100");
+      circleC.setAttribute("stroke-dasharray", "0 100");
+      pctP.textContent = "—";
+      pctF.textContent = "—";
+      pctC.textContent = "—";
+      return;
+    }
+
+    const pRatio = Math.round((pKcal / totalMacroKcal) * 100);
+    const fRatio = Math.round((fKcal / totalMacroKcal) * 100);
+    const cRatio = Math.max(0, 100 - pRatio - fRatio);
+
+    pctP.textContent = pRatio + "%";
+    pctF.textContent = fRatio + "%";
+    pctC.textContent = cRatio + "%";
+
+    // Circle circumference = 2 * PI * 15.9155 = 100
+    circleP.setAttribute("stroke-dasharray", `${pRatio} ${100 - pRatio}`);
+    circleP.setAttribute("stroke-dashoffset", "0");
+
+    circleF.setAttribute("stroke-dasharray", `${fRatio} ${100 - fRatio}`);
+    circleF.setAttribute("stroke-dashoffset", `-${pRatio}`);
+
+    circleC.setAttribute("stroke-dasharray", `${cRatio} ${100 - cRatio}`);
+    circleC.setAttribute("stroke-dashoffset", `-${pRatio + fRatio}`);
+  }
+
+  document.querySelectorAll(".dish-ai-btn").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      const dish = this.getAttribute("data-dish");
+      const published = this.getAttribute("data-published");
+      const price = parseInt(this.getAttribute("data-price"), 10) || 0;
+      const rowId = this.getAttribute("data-row-id");
+
+      currentModalDish = dish;
+      currentModalPrice = price;
+      currentModalRowId = rowId;
+
+      modalDishName.textContent = dish;
+      modalBadge.textContent = published ? "公式公表 ＋ 具材詳細" : "AI料理具材推定";
+
+      const tr = this.closest("tr");
+      const iconEl = tr ? tr.querySelector(".dish-thumb-icon") : null;
+      const modalDishIcon = document.getElementById("modal-dish-icon");
+      if (iconEl && modalDishIcon) {
+        modalDishIcon.textContent = iconEl.textContent;
+      }
+
+      modal.style.display = "flex";
+      modalLoading.style.display = "block";
+      modalContent.style.display = "none";
+
+      try {
+        const res = await fetch(`/api/analyze-dish?dish=${encodeURIComponent(dish)}&shop=${encodeURIComponent(shopName)}`);
+        if (!res.ok) throw new Error("API error " + res.status);
+        const data = await res.json();
+
+        const totals = data.totals || {};
+        const calculatedKcal = totals.energy_kcal ? Math.round(totals.energy_kcal) : (published ? parseInt(published, 10) : 0);
+        currentModalKcal = published ? parseInt(published, 10) : calculatedKcal;
+
+        modalTotalKcal.textContent = currentModalKcal;
+        modalKcalNote.textContent = published ? "店舗公式公表値" : "AI具材推定値";
+        const protG = totals.protein_g || 0;
+        const fatG = totals.fat_g || 0;
+        const carbG = totals.carbohydrate_g || 0;
+
+        modalMacroP.textContent = (protG ? protG.toFixed(1) : "—") + "g";
+        modalMacroF.textContent = (fatG ? fatG.toFixed(1) : "—") + "g";
+        modalMacroC.textContent = (carbG ? carbG.toFixed(1) : "—") + "g";
+        modalMacroSalt.textContent = (data.salt_g !== null && data.salt_g !== undefined ? data.salt_g.toFixed(1) : "—") + "g";
+
+        renderPFCRing(protG, fatG, carbG);
+
+        modalIngredientsList.innerHTML = "";
+        const comps = data.components || [];
+        if (comps.length === 0) {
+          modalIngredientsList.innerHTML = "<li style='color: var(--ink-faint); padding: 1rem;'>具材内訳データなし</li>";
+        } else {
+          comps.forEach(function(c) {
+            const ingName = c.identified ? (c.identified.name_ja || c.identified.name_en) : (c.db_match ? c.db_match.title : "具材");
+            const grams = c.ai_estimate && c.ai_estimate.estimated_grams ? Math.round(c.ai_estimate.estimated_grams) : null;
+            const ingKcal = c.calculated && c.calculated.energy_kcal ? Math.round(c.calculated.energy_kcal) : null;
+
+            const li = document.createElement("li");
+            li.innerHTML = `
+              <span><strong>${ingName}</strong>${grams ? `<span class="ing-grams">（約${grams}g）</span>` : ''}</span>
+              <span class="ing-kcal">${ingKcal !== null ? ingKcal + ' kcal' : '—'}</span>
+            `;
+            modalIngredientsList.appendChild(li);
+          });
+        }
+
+        modalLoading.style.display = "none";
+        modalContent.style.display = "block";
+
+        // Update the table row inline with color-coded calorie bar
+        if (!published && rowId && currentModalKcal > 0) {
+          const calCell = document.getElementById("calorie-cell-" + rowId);
+          const trayBtn = document.getElementById("tray-btn-" + rowId);
+          const tr = document.getElementById("dish-row-" + rowId);
+          if (tr) {
+            tr.setAttribute("data-kcal", currentModalKcal);
+          }
+          if (calCell) {
+            const k = currentModalKcal;
+            const barClass = k < 350 ? "light" : (k <= 650 ? "mid" : "heavy");
+            const barW = Math.min(100, Math.round(k / 10));
+            calCell.innerHTML = `
+              <div class="kcal-cell-wrap">
+                <span class="badge estimate" title="AI料理具材推定による算出値">約<strong>${k}</strong> kcal*</span>
+                <div class="kcal-bar-track">
+                  <div class="kcal-bar-fill ${barClass}" style="width: ${barW}%;"></div>
+                </div>
+              </div>`;
+          }
+          if (trayBtn) {
+            trayBtn.setAttribute("data-kcal", currentModalKcal);
+          }
+        }
+      } catch (err) {
+        modalLoading.innerHTML = `<p style="color: var(--seal); padding: 1.5rem;">解析に失敗しました: ${err.message}</p>`;
+      }
+    });
+  });
+
+  if (modalAddTrayBtn) {
+    modalAddTrayBtn.addEventListener("click", function(e) {
+      if (currentModalDish) {
+        trayItems.push({
+          name: currentModalDish,
+          price: currentModalPrice,
+          kcal: currentModalKcal
+        });
+        spawnFlyingKcalBadge(e, `+${currentModalKcal} kcal`);
+        triggerTrayBump();
+        updateTray();
+        closeModal();
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

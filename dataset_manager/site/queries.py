@@ -5,6 +5,7 @@ excluded from the public surface."""
 from ..api.database import get_connection, get_license_info
 from ..calc.nutrition import dish_nutrition
 from . import claims, servings
+from .brand_assets import get_chain_brand_badge, classify_dish_visual
 from .i18n import MICRO_DV
 
 
@@ -803,8 +804,8 @@ def food_nutrition_json(item_id):
 
 # ---------------------------------------------------------------- sitemaps
 
-SITEMAP_SECTIONS = ("foods", "dishes", "categories", "pages")
-STATIC_PAGES = ("", "foods", "meal-calculator", "analyzer", "goals", "sources",
+SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "pages")
+STATIC_PAGES = ("", "foods", "shops", "meal-calculator", "analyzer", "goals", "sources",
                 "guides/cooking-and-calories", "about", "privacy", "contact")
 
 
@@ -829,8 +830,222 @@ def sitemap_slugs(lang, section):
                    JOIN site_pages sp ON sp.item_id = i.id AND sp.lang = ?
                    WHERE i.category IS NOT NULL AND i.category != 'foundation'
                    GROUP BY i.category ORDER BY i.category""", (lang,))]
+        if section == "shops":
+            # indexable = 1 only: a chain menu page earns its sitemap slot by
+            # carrying enough published calorie figures (scripts/build_shops).
+            return [f"/shops/{r['slug']}" for r in conn.execute(
+                "SELECT slug FROM shop_pages WHERE indexable = 1 AND lang = ?"
+                " ORDER BY id", (lang,))]
         if section == "pages":
             return [f"/{p}" for p in STATIC_PAGES]
         return []
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------- chain menus
+
+ROMAJI_CHAIN_ALIASES = {
+    "sushiro": "スシロー",
+    "hamazushi": "はま寿司",
+    "hama-sushi": "はま寿司",
+    "kurasushi": "くら寿司",
+    "kura-sushi": "くら寿司",
+    "mcdonalds": "マクドナルド",
+    "mcdonald": "マクドナルド",
+    "saizeriya": "サイゼリヤ",
+    "saize": "サイゼリヤ",
+    "yoshinoya": "吉野家",
+    "matsuya": "松屋",
+    "sukiya": "すき家",
+    "mosburger": "モスバーガー",
+    "mos-burger": "モスバーガー",
+    "marugame": "丸亀製麺",
+    "marugame-seimen": "丸亀製麺",
+    "cocoichi": "カレーハウスCoCo壱番屋",
+    "coco-ichibanya": "カレーハウスCoCo壱番屋",
+    "ootoya": "大戸屋",
+    "otoya": "大戸屋",
+    "yayoiken": "やよい軒",
+    "yayoi-ken": "やよい軒",
+    "katsuya": "かつや",
+    "tenya": "天丼てんや",
+    "ippudo": "一風堂",
+    "ichiran": "一蘭",
+    "komeda": "コメダ珈琲店",
+    "doutor": "ドトールコーヒー",
+    "tullys": "タリーズコーヒー",
+    "starbucks": "スターバックス-コーヒー",
+    "gusto": "ガスト",
+    "dennys": "デニーズ",
+    "jonathan": "ジョナサン",
+    "bamiyan": "バーミヤン",
+    "bikkuri-donkey": "びっくりドンキー",
+    "ringer-hut": "リンガーハット",
+    "gyukaku": "牛角",
+    "torikizoku": "鳥貴族",
+    "hidakaya": "日高屋",
+    "fujisoba": "名代富士そば",
+    "hoshino": "星乃珈琲店",
+}
+
+
+def get_shop_page(lang, slug):
+    """The shop_pages row for a slug, or None."""
+    conn = get_connection()
+    try:
+        # 1. Exact match
+        row = conn.execute(
+            "SELECT * FROM shop_pages WHERE lang = ? AND slug = ?", (lang, slug)).fetchone()
+        if row:
+            return dict(row)
+
+        # 2. Known romaji alias
+        norm = (slug or "").lower().strip()
+        if norm in ROMAJI_CHAIN_ALIASES:
+            alias_slug = ROMAJI_CHAIN_ALIASES[norm]
+            row = conn.execute(
+                "SELECT * FROM shop_pages WHERE lang = ? AND slug = ?", (lang, alias_slug)).fetchone()
+            if row:
+                return dict(row)
+
+        # 3. Case-insensitive slug match
+        row = conn.execute(
+            "SELECT * FROM shop_pages WHERE lang = ? AND slug = ? COLLATE NOCASE", (lang, slug)).fetchone()
+        if row:
+            return dict(row)
+
+        # 4. Match by shop name
+        row = conn.execute(
+            """SELECT sp.* FROM shop_pages sp
+               JOIN shops s ON s.id = sp.shop_id
+               WHERE sp.lang = ? AND (s.name = ? OR s.name = ? COLLATE NOCASE)""",
+            (lang, slug, slug)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_shop_page_data(page):
+    """Everything one chain-menu page renders.
+
+    ATTRIBUTION IS STRUCTURAL HERE. A calorie figure is only carried out of this
+    function together with the source it came from, so a template cannot print a
+    number that has no provenance — the row simply has no `kcal` without one.
+    Dishes the chain has not published a figure for come back with kcal None and
+    render as 「未公表」, which is the honest answer and the one we can defend.
+    """
+    conn = get_connection()
+    try:
+        shop = conn.execute(
+            "SELECT * FROM shops WHERE id = ?", (page["shop_id"],)).fetchone()
+        rows = conn.execute(
+            """SELECT smi.id AS item_id_pk, smi.name, smi.price_yen, smi.price_max_yen, smi.tax_incl,
+                      smi.mealtime, smi.position,
+                      cn.energy_kcal AS chain_kcal, cn.protein_g AS chain_p,
+                      cn.fat_g AS chain_f, cn.carbohydrate_g AS chain_c, cn.salt_g AS chain_salt,
+                      cn.name AS official_name,
+                      cn.source_page, cn.source_url, cn.source_updated,
+                      n.energy_kcal AS table_kcal, n.protein_g AS table_p,
+                      n.fat_g AS table_f, n.carbohydrate_g AS table_c,
+                      min.energy_kcal AS min_kcal, min.protein_g AS min_p,
+                      min.fat_g AS min_f, min.carbohydrate_g AS min_c, min.salt_g AS min_salt,
+                      min.provenance AS min_provenance,
+                      sp.slug AS food_slug, sp.page_type AS food_page_type
+               FROM shop_menu_items smi
+               LEFT JOIN chain_nutrition cn ON cn.id = smi.chain_nutrition_id
+               LEFT JOIN nutrition n ON n.item_id = smi.item_id
+               LEFT JOIN menu_item_nutrition min ON min.shop_menu_item_id = smi.id
+               LEFT JOIN site_pages sp ON sp.item_id = smi.item_id AND sp.lang = ?
+               WHERE smi.shop_id = ?
+               -- Dishes with verified figures first
+               ORDER BY (cn.energy_kcal IS NULL AND min.energy_kcal IS NULL AND n.energy_kcal IS NULL),
+                        smi.position""", (page["lang"], page["shop_id"])).fetchall()
+
+        # Named `menu`, not `items`: Jinja resolves `d.items` to the dict's own
+        # .items() method, so a key called "items" silently renders a bound method.
+        menu, sources, with_figure = [], {}, 0
+        for r in rows:
+            kcal = source = protein_g = fat_g = carbs_g = salt_g = None
+            if r["chain_kcal"] is not None and r["source_page"]:
+                # The chain's own published numbers, with the page it came from.
+                kcal, source = r["chain_kcal"], "chain"
+                protein_g = r["chain_p"]
+                fat_g = r["chain_f"]
+                carbs_g = r["chain_c"]
+                salt_g = r["chain_salt"]
+                sources.setdefault("chain", {
+                    "page": r["source_page"],
+                    "file": r["source_url"],
+                    "updated": r["source_updated"],
+                })
+            elif r["table_kcal"] is not None:
+                # A composition-table entry the dish IS
+                kcal, source = r["table_kcal"], "table"
+                protein_g = r["table_p"]
+                fat_g = r["table_f"]
+                carbs_g = r["table_c"]
+            elif r["min_kcal"] is not None:
+                # Precomputed MEXT culinary decomposition or linked entry
+                kcal, source = r["min_kcal"], r["min_provenance"] or "mext_calc"
+                protein_g = r["min_p"]
+                fat_g = r["min_f"]
+                carbs_g = r["min_c"]
+                salt_g = r["min_salt"]
+
+            if kcal is not None:
+                with_figure += 1
+            visual = classify_dish_visual(r["name"])
+            menu.append({
+                "id": r["item_id_pk"],
+                "name": r["name"],
+                "price_yen": r["price_yen"],
+                "price_max_yen": r["price_max_yen"],
+                "tax_incl": bool(r["tax_incl"]),
+                "mealtime": r["mealtime"],
+                "kcal": kcal,
+                "kcal_source": source,
+                "protein_g": protein_g,
+                "fat_g": fat_g,
+                "carbs_g": carbs_g,
+                "salt_g": salt_g,
+                "official_name": r["official_name"],
+                "food_slug": r["food_slug"],
+                "food_page_type": r["food_page_type"],
+                "visual": visual,
+            })
+        shop_dict = dict(shop) if shop else {}
+        shop_dict["brand_logo"] = get_chain_brand_badge(shop_dict.get("name") or page.get("slug") or "")
+        return {
+            "shop": shop_dict,
+            "menu": menu,
+            "sources": sources,
+            "with_figure": with_figure,
+        }
+    finally:
+        conn.close()
+
+
+def shops_index(lang):
+    """Chains that have a page, most complete first. Non-indexable ones are still
+    listed — they are reachable, they just do not go in the sitemap."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT sp.slug, sp.indexable, s.name, s.item_count, s.price_min, s.price_max,
+                      COUNT(cn.id) AS published
+               FROM shop_pages sp
+               JOIN shops s ON s.id = sp.shop_id
+               LEFT JOIN shop_menu_items smi ON smi.shop_id = s.id
+               LEFT JOIN chain_nutrition cn ON cn.id = smi.chain_nutrition_id
+               WHERE sp.lang = ?
+               GROUP BY sp.id
+               ORDER BY published DESC, s.item_count DESC""", (lang,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["brand_logo"] = get_chain_brand_badge(d.get("name") or d.get("slug") or "")
+            out.append(d)
+        return out
     finally:
         conn.close()

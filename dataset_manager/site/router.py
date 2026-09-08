@@ -162,6 +162,113 @@ def dish_page(request: Request, slug: str):
     })
 
 
+@router.get("/shops", response_class=HTMLResponse)
+def shops_page(request: Request):
+    """Chain menus index. Prices next to the calories each chain publishes."""
+    lang = SITE_LANG
+    shops = queries.shops_index(lang)
+    url = seo.base_url(lang) + "/shops"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"), (t(lang, "shops"), None)]
+    return _render(request, "shops.html", lang, {
+        "shops": shops,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
+        "meta_description": t(lang, "shops_intro"),
+    })
+
+
+@router.get("/shops/{slug}", response_class=HTMLResponse)
+def shop_page(request: Request, slug: str):
+    """One chain's menu: price and the chain's own published calorie, per dish.
+
+    A page that failed the index gate in scripts/build_shops still renders and is
+    still crawlable — it carries `noindex, follow`, so it passes link equity on to
+    the food pages while staying out of the index it has not earned.
+    """
+    lang = SITE_LANG
+    page = queries.get_shop_page(lang, slug)
+    if not page:
+        raise HTTPException(status_code=404, detail="Not found")
+    data = queries.get_shop_page_data(page)
+    url = seo.base_url(lang) + f"/shops/{quote(slug)}"
+    name = data["shop"].get("name", slug)
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
+              (t(lang, "shops"), seo.base_url(lang) + "/shops"),
+              (name, None)]
+    return _render(request, "shop.html", lang, {
+        "page": page, "d": data, "name": name,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
+        "meta_description": page.get("meta_description"),
+        "noindex": not page.get("indexable"),
+    })
+
+
+@router.get("/menu", response_class=HTMLResponse)
+def menu_index_page(request: Request):
+    """Chain menus directory with quick search, side-by-side calories, and AI tools."""
+    lang = SITE_LANG
+    shops = queries.shops_index(lang)
+    url = seo.base_url(lang) + "/menu"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"), (t(lang, "menu"), None)]
+    jsonld = [
+        seo.breadcrumbs_jsonld(crumbs),
+        seo.chain_directory_jsonld(lang, shops),
+    ]
+    return _render(request, "menus.html", lang, {
+        "shops": shops,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(j) for j in jsonld],
+        "meta_description": t(lang, "menu_intro"),
+    })
+
+
+@router.get("/menu/{slug}", response_class=HTMLResponse)
+def menu_page(request: Request, slug: str):
+    """One chain's menu: side-by-side prices & calories, order tray calculator, and AI estimator."""
+    lang = SITE_LANG
+    page = queries.get_shop_page(lang, slug)
+    if not page:
+        raise HTTPException(status_code=404, detail="Not found")
+    data = queries.get_shop_page_data(page)
+    canonical_slug = page.get("slug", slug)
+    url = seo.base_url(lang) + f"/menu/{quote(canonical_slug)}"
+    name = data["shop"].get("name", slug)
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
+              (t(lang, "menu"), seo.base_url(lang) + "/menu"),
+              (name, None)]
+    shop_info = data.get("shop", {})
+    jsonld = [
+        seo.breadcrumbs_jsonld(crumbs),
+        seo.restaurant_menu_jsonld(
+            lang, name, url, data.get("menu", []),
+            description=page.get("meta_description"),
+            price_min=shop_info.get("price_min"),
+            price_max=shop_info.get("price_max"),
+        ),
+    ]
+    return _render(request, "menu.html", lang, {
+        "page": page, "d": data, "name": name,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(j) for j in jsonld],
+        "meta_description": page.get("meta_description"),
+        "noindex": not page.get("indexable"),
+    })
+
+
+
+@router.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Silence 404s for browsers probing default favicon.ico."""
+    return Response(status_code=204)
+
+
+
+
 @router.get("/foods", response_class=HTMLResponse)
 def browse_page(request: Request, page: int = 1, sort: str = "name",
                 category: str = ""):

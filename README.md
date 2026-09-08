@@ -74,6 +74,59 @@ changes. The analyzer caches results in the database, which on an ephemeral
 container filesystem means the cache resets on redeploy — correct behaviour,
 just slower on the first request for a given photo.
 
+## Chain menus
+
+`/shops/{chain}` puts a chain's menu price and its calorie side by side — the one
+thing the calorie aggregators do not show. The prices come from a dated menu
+snapshot; **the calories are the chain's own published figures**, never ours and
+never a model's.
+
+A composition table cannot cost a composed restaurant dish: matching a menu name
+against MEXT resolves it to an ingredient of the dish, which in an audit produced
+a cheeseburger costed as cheese and a champagne as French bread. So MEXT is used
+only to link a dish to its food page (`match_method = 'name-equal'`, exact names
+only), and the figure itself comes from the chain.
+
+```bash
+uv run python main.py import-menus data/raw/menus/menu-items.ja.csv
+uv run python main.py match-menus --no-llm     # interlinks only, spends nothing
+uv run python main.py import-chain-nutrition all
+uv run python main.py build-shops              # slugs, titles, index gate
+uv run python main.py build-shops --report
+```
+
+**Attribution is structural.** A calorie is only carried out of `get_shop_page_data`
+together with the source it came from, so a template cannot print a number without
+one, and every page shows the chain's own update date and its 「目安」 wording with
+a link to the official page. A dish the chain has not published shows 未公表.
+
+**Keeping figures honest.** Chains revise monthly. `import-chain-nutrition` is the
+refresh — it is idempotent, and on a re-run it reports what moved (added, withdrawn,
+and every revised figure with its old and new value) rather than overwriting in
+silence. `chain-status` shows how stale each chain is:
+
+```bash
+uv run python main.py chain-status --stale-after 30
+```
+
+Refreshing a live site is a full loop, because the database ships inside the image:
+
+```bash
+uv run python main.py import-chain-nutrition all && uv run python main.py build-shops
+uv run python tools/export_site_db.py       # rebuild the deployable extract
+git add data/metadata/site.db && git commit && git push    # host redeploys
+```
+
+**A shop page earns its index slot.** `shop_pages.indexable` defaults to 0 and is
+set by `build-shops` only when a menu has at least 15 dishes, a real price, and at
+least 40% of dishes carrying a sourced calorie. Pages that fail still render and
+still link onward, but carry `noindex, follow` and stay out of the sitemap — a menu
+reprint with no added fact is what got a competitor's menu pages deindexed.
+
+Adding a chain is a `Chain` entry in `dataset_manager/extractors/chains.py`. Check
+the chain's `robots.txt` first: some publishers disallow the paths their nutrition
+data sits on, and those chains are off the table until they say otherwise.
+
 ## Data, licences and what is not here
 
 `data/` is gitignored. That is partly size — the OpenFoodFacts export alone is

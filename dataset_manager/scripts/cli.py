@@ -358,6 +358,137 @@ def build_sitemaps_cmd():
     build_site.build_sitemaps()
 
 
+@app.command("import-menus")
+def import_menus_cmd(
+    csv_path: str = typer.Argument(..., help="The frozen menu CSV to import"),
+    imported_at: Optional[str] = typer.Option(
+        None, help="Snapshot date shown on every shop page (default: today)"),
+):
+    """Import the restaurant-menu snapshot into shops / shop_menu_items.
+
+    A dated snapshot, not a feed: scraped descriptions and store photos are not
+    imported, and every rejected row is reported rather than repaired.
+    """
+    from pathlib import Path
+    from ..extractors.menus import import_menus
+    from . import build_site
+
+    path = Path(csv_path)
+    if not path.exists():
+        console.print(f"[red]No such file: {path}[/red]")
+        raise typer.Exit(1)
+
+    conn = build_site.get_conn()
+    try:
+        stats = import_menus(conn, path.read_text(encoding="utf-8"), imported_at=imported_at)
+    finally:
+        conn.close()
+
+    console.print(
+        f"[green]Imported {stats['shops']} shops / {stats['items']} items[/green] "
+        f"(kept {stats['matches_kept']} existing matches)")
+    console.print(
+        f"  read {stats['rows']} rows — dropped: blank {stats['blank']}, "
+        f"non-food {stats['non_food']}, menu-section rows {stats['section_label']}; "
+        f"collapsed {stats['duplicates']} duplicates; {stats['no_price']} rows have no usable price")
+
+
+@app.command("match-menus")
+def match_menus_cmd(
+    limit: Optional[int] = typer.Option(None, help="Cap dishes processed (testing)"),
+    rebuild: bool = typer.Option(False, help="Discard existing matches and re-resolve"),
+    no_llm: bool = typer.Option(False, "--no-llm", help="Deterministic pass only, spend nothing"),
+):
+    """Resolve menu dishes to composition-table entries (never to a model's number)."""
+    from . import build_shops, build_site
+    conn = build_site.get_conn()
+    try:
+        build_shops.match_items(conn, limit=limit, rebuild=rebuild, use_llm=not no_llm)
+    finally:
+        conn.close()
+
+
+@app.command("chain-status")
+def chain_status_cmd(stale_after: int = typer.Option(30, help="Warn past this many days")):
+    """Which chains we hold figures for, and how stale each one is."""
+    from ..extractors.chains import CHAINS, chain_status
+    from . import build_site
+
+    conn = build_site.get_conn()
+    try:
+        rows = chain_status(conn)
+    finally:
+        conn.close()
+
+    if not rows:
+        console.print("[yellow]No chain nutrition imported yet.[/yellow]")
+        return
+    for r in rows:
+        age = r["days_since_fetch"]
+        tone = "red" if age is not None and age > stale_after else "green"
+        console.print(
+            f"[{tone}]{r['chain']}[/{tone}]: {r['figures']} figures · "
+            f"chain published {r['source_updated'] or '?'} · "
+            f"we fetched {r['fetched_at']}"
+            + (f" ({age}d ago)" if age is not None else ""))
+    missing = [k for k, c in CHAINS.items()
+               if c.shop_name not in {r["chain"] for r in rows}]
+    if missing:
+        console.print(f"[yellow]registered but never imported: {', '.join(missing)}[/yellow]")
+
+
+@app.command("import-chain-nutrition")
+def import_chain_nutrition_cmd(
+    chain: str = typer.Argument("all", help="Chain key, or 'all'"),
+):
+    """Import per-dish calories as published by the chains themselves."""
+    from ..extractors.chains import CHAINS, import_chain
+    from . import build_site
+
+    keys = list(CHAINS) if chain == "all" else [chain]
+    unknown = [k for k in keys if k not in CHAINS]
+    if unknown:
+        console.print(f"[red]Unknown chain(s): {', '.join(unknown)}. "
+                      f"Known: {', '.join(CHAINS)}[/red]")
+        raise typer.Exit(1)
+
+    conn = build_site.get_conn()
+    try:
+        for key in keys:
+            stats = import_chain(conn, CHAINS[key])
+            console.print(
+                f"[green]{stats['chain']}[/green]: {stats['published_rows']} published rows "
+                f"(chain updated {stats['source_updated'] or 'unknown'}) -> linked to "
+                f"{stats['linked']} of {stats['menu_items']} menu items "
+                f"({stats['linked_exact']} by exact name, "
+                f"{stats['ambiguous_skipped']} refused as ambiguous)")
+            if not stats["was_empty"]:
+                # A refresh, not a first import: say what the chain actually moved.
+                console.print(
+                    f"  changes: {len(stats['added'])} new, {len(stats['removed'])} withdrawn, "
+                    f"{len(stats['changed'])} figures revised")
+                for name, was, now in stats["changed"][:10]:
+                    console.print(f"    {name}: {was:.0f} -> {now:.0f} kcal")
+                if len(stats["changed"]) > 10:
+                    console.print(f"    ... and {len(stats['changed']) - 10} more")
+    finally:
+        conn.close()
+
+
+@app.command("build-shops")
+def build_shops_cmd(report: bool = typer.Option(False, help="Print coverage + gate report only")):
+    """Build shop_pages: slugs, titles, and the index gate."""
+    from . import build_shops, build_site
+    conn = build_site.get_conn()
+    try:
+        if report:
+            build_shops.report(conn)
+        else:
+            build_shops.build_pages(conn)
+    finally:
+        conn.close()
+
+
 @app.command("build-site")
 def build_site_cmd():
     """Run all site builders in order: names, pages, links, search, sitemaps."""
@@ -367,6 +498,29 @@ def build_site_cmd():
     build_site.build_links()
     build_site.build_search()
     build_site.build_sitemaps()
+
+
+@app.command("precompute-nutrition")
+def precompute_nutrition_cmd(
+    shop_id: int = typer.Option(None, "--shop-id", "-s", help="Specific shop ID to precompute"),
+    limit: int = typer.Option(None, "--limit", "-l", help="Limit number of dishes to process"),
+):
+    """Precompute and store verified nutritional values for menu items."""
+    from . import build_site
+    from .precompute_nutrition import precompute_menu_nutrition
+    conn = build_site.get_conn()
+    try:
+        console.print("[cyan]Precomputing menu item nutrition across corpus...[/cyan]")
+        stats = precompute_menu_nutrition(conn, shop_id=shop_id, limit=limit)
+        console.print(
+            f"[green]Completed![/green] Processed {stats['total']} items:\n"
+            f"  - Official Chain (Tier 1): {stats['chain']}\n"
+            f"  - Direct Government Table (Tier 2): {stats['table']}\n"
+            f"  - MEXT Culinary Calculation (Tier 3): {stats['mext_calc']}\n"
+            f"  - Unresolved: {stats['unresolved']}"
+        )
+    finally:
+        conn.close()
 
 
 if __name__ == '__main__':

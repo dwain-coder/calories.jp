@@ -54,6 +54,12 @@ MEDIA = {
         "alt_ja": "本がぎっしり並んだ書棚",
         "credit": "", "credit_url": "", "focus": "50% 50%",
     },
+    "menu": {
+        "file": "menu.jpg",
+        "alt_en": "A Japanese restaurant spread with nigiri sushi, a bowl of ramen, gyoza dumplings and green tea",
+        "alt_ja": "握り寿司、ラーメン、焼き餃子、お茶が並ぶ日本の外食テーブル風景",
+        "credit": "", "credit_url": "", "focus": "50% 50%",
+    },
 }
 
 # Optional video per slot. Nothing plays unless a slot is filled in here, and

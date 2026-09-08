@@ -37,3 +37,9 @@ docs/handover.html
 
 # Superseded handover under the old brand name; kept locally, not in the repo.
 docs/Calorie-Atlas-handover.pdf
+
+# Stray local scratch database from the chain-menu extractor.
+shops.db
+
+# Local throwaway verification scripts.
+scratch/
