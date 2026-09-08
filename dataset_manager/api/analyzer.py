@@ -386,12 +386,8 @@ def calculate_nutrition_for_dishes(dishes_in, lang="ja"):
     }
 
 
-def decompose_dish_text(dish_name: str, shop_name: str = None):
-    """Decompose a named restaurant dish/meal into ingredients and grams.
-
-    Uses Gemini when configured, or a rich culinary composition heuristic.
-    """
-    name = (dish_name or "").strip()
+def _decompose_with_model(name, shop_name=None):
+    """Gemini's reading of the whole dish name, or None."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
         try:
@@ -424,6 +420,18 @@ Respond ONLY with a valid JSON object:
         except Exception:
             pass
 
+    return None
+
+
+def _heuristic_components(name, shop_name=None):
+    """Ingredients and grams for one dish name, from its words alone.
+
+    A ladder of keyword tests, and the reason the estimates were not
+    dish-specific: the first branch that matches wins and nothing else in
+    the name is read. Kept as it is — it encodes a lot of real menu
+    vocabulary — and wrapped by decompose_dish_text, which now hands it one
+    dish at a time and then applies any weight the name stated.
+    """
     # Culinary composition heuristic for Japanese restaurant dishes
     comps = []
 
@@ -1016,12 +1024,114 @@ Respond ONLY with a valid JSON object:
         rice_g = 100.0 if any(k in name for k in ("半", "小", "ミニ")) else (280.0 if any(k in name for k in ("大盛", "大盛り", "大")) else 200.0)
         comps.append({"name_ja": "ご飯", "name_en": "Accompaniment Rice", "estimated_grams": rice_g, "confidence": "high"})
 
+    return comps
+
+
+
+# 「＆」「＋」 and 「と」 join two dishes on one line: 「殻付き海老グリル＆大俵ハンバーグ」
+# is a plate of shrimp AND a burger. The keyword ladder stops at its first match,
+# so the shrimp was never read and the plate costed the same as the burger alone.
+_COMBINED = re.compile(r"\s*(?:[＆&]|\+|＋)\s*")
+
+# A weight the menu states about the dish itself: 「…ハンバーグ145g」, 「ダブル220g」,
+# 「リブアイステーキ [300G]」. Not a pack size and not a price.
+_STATED_G = re.compile(r"(\d{2,4})\s*(?:g|G|ｇ|グラム)?")
+
+# What a stated weight is a weight OF. A menu that says 145g beside a burger is
+# telling you the patty, not the sauce or the garnish, so the weight is applied
+# to the heaviest protein component and the rest of the plate is left alone.
+_MAIN_COMPONENT = (
+    "ハンバーグ", "牛肉", "豚肉", "鶏肉", "とんかつ", "から揚げ", "ステーキ",
+    "まぐろ", "サーモン", "えび", "うなぎ", "いくら", "ラム", "羊肉", "合いびき",
+)
+
+
+def _stated_grams(name):
+    """The weight the dish name claims for itself, or None.
+
+    A number under 20 g is a garnish or a typo rather than a portion, and one
+    over 1000 g is a sharing platter the ladder cannot model either way.
+    """
+    best = None
+    for m in _STATED_G.finditer(name or ""):
+        g = float(m.group(1))
+        if 20 <= g <= 1000:
+            best = g if best is None else max(best, g)
+    return best
+
+
+def _apply_stated_grams(name, comps):
+    """Scale the main component to the weight the name gives it.
+
+    「濃厚ビーフシチューの包み焼きハンバーグ145g」, its 110g sibling and the ダブル220g
+    all came out at 432.5 kcal because the ladder used a fixed patty weight and
+    never looked at the number. They differ by exactly that number.
+    """
+    grams = _stated_grams(name)
+    if not grams or not comps:
+        return comps
+    mains = [c for c in comps
+             if any(k in (c.get("name_ja") or "") for k in _MAIN_COMPONENT)]
+    if not mains:
+        return comps
+    main = max(mains, key=lambda c: c.get("estimated_grams") or 0)
+    doubled = 2 if any(k in name for k in ("ダブル", "Ｗ", "W", "2枚", "二枚")) else 1
+    main["estimated_grams"] = round(grams * doubled if doubled > 1 and grams < 200 else grams, 1)
+    main["confidence"] = "high"
+    main["grams_source"] = "stated"
+    return comps
+
+
+def _merge_components(comps):
+    """One row per ingredient, weights added, order kept.
+
+    Two halves of a combined dish both bring 「ご飯」; a reader should see one
+    portion of rice with the two weights added, not the same word twice.
+    """
+    out, seen = [], {}
+    for c in comps:
+        key = c.get("name_ja")
+        if key in seen:
+            prev = seen[key]
+            prev["estimated_grams"] = round(
+                (prev.get("estimated_grams") or 0) + (c.get("estimated_grams") or 0), 1)
+            continue
+        seen[key] = c
+        out.append(c)
+    return out
+
+
+def decompose_dish_text(dish_name: str, shop_name: str = None):
+    """Decompose a named restaurant dish/meal into ingredients and grams.
+
+    Uses Gemini when configured — it reads the whole name — or the keyword
+    ladder, which does not. Around the ladder this splits a combined dish into
+    its halves and applies any weight the name states, which is the difference
+    between a figure about this dish and a figure about its main word.
+    """
+    name = (dish_name or "").strip()
+    dishes = _decompose_with_model(name, shop_name)
+    if dishes:
+        return dishes
+
+    parts = [p for p in _COMBINED.split(name) if p.strip()] or [name]
+    comps = []
+    for part in parts:
+        comps.extend(_heuristic_components(part.strip(), shop_name))
+    comps = _merge_components(comps)
+    # Only when the dish is one thing. 「大俵ハンバーグ＆手ごねハンバーグ100g」 states
+    # 100 g about the second patty alone, and applying it to the merged pair
+    # turned two burgers into one small one.
+    if len(parts) == 1:
+        comps = _apply_stated_grams(name, comps)
     return [{
         "dish_ja": name,
         "dish_en": "Meal",
         "servings": 1,
         "components": comps,
     }]
+
+
 
 
 @router.get("/analyze-dish")

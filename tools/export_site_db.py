@@ -14,6 +14,7 @@ import argparse
 import os
 import sqlite3
 import sys
+import time
 from pathlib import Path
 
 DB_PATH = os.environ.get("DATABASE_PATH", "data/metadata/dataset_manager.db")
@@ -93,7 +94,22 @@ def main():
     conn.isolation_level = None
     conn.execute("VACUUM INTO ?", (str(tmp),))
     conn.close()
-    out.unlink()
+    # The repo lives in a OneDrive folder, so the file that is about to be
+    # replaced is periodically opened by the sync client and Windows refuses to
+    # unlink an open file. The export has already done all its work by this
+    # point; failing here leaves a 650 MB uncompacted database sitting where
+    # the 34 MB deploy artefact belongs, which is worse than waiting a moment.
+    for attempt in range(12):
+        try:
+            out.unlink()
+            break
+        except PermissionError:
+            if attempt == 11:
+                raise SystemExit(
+                    f"{out} is held open by another process (OneDrive, or a "
+                    f"running server). The compacted copy is at {tmp} — close "
+                    f"the holder and rename it over {out}.")
+            time.sleep(2.5)
     tmp.replace(out)
     for leftover in (out.with_name(out.name + "-wal"), out.with_name(out.name + "-shm")):
         leftover.unlink(missing_ok=True)

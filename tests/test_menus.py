@@ -177,3 +177,51 @@ class TestNotADish(unittest.TestCase):
             self.assertTrue(menuterms.is_drink(name, classify_dish_visual(name)["category"]), name)
         for name in ("ハンバーグ", "醤油らーめん", "茶碗蒸し"):
             self.assertFalse(menuterms.is_drink(name, classify_dish_visual(name)["category"]), name)
+
+
+class TestDishNameIsRead(unittest.TestCase):
+    """The estimator matched one keyword and ignored the rest of the name, so
+    a 145g burger, its 110g sibling and a ダブル220g all cost 432.5 kcal, and a
+    plate with shrimp on it cost the same as the plate without."""
+
+    def _kcal(self, name):
+        from dataset_manager.api.analyzer import (
+            decompose_dish_text, calculate_nutrition_for_dishes)
+        res = calculate_nutrition_for_dishes(decompose_dish_text(name), lang="ja")
+        return res["totals"].get("energy_kcal"), res
+
+    def test_a_stated_weight_changes_the_figure(self):
+        small, _ = self._kcal("濃厚ビーフシチューの包み焼きハンバーグ110g")
+        large, _ = self._kcal("濃厚ビーフシチューの包み焼きハンバーグ145g")
+        self.assertGreater(large, small)
+        self.assertGreater(large - small, 50)
+
+    def test_the_stated_weight_reaches_the_main_component(self):
+        from dataset_manager.api.analyzer import decompose_dish_text
+        comps = decompose_dish_text("US産リブアイステーキ 自家製醤油ソース [300G]")[0]["components"]
+        beef = [c for c in comps if c["name_ja"] == "牛肉"]
+        self.assertEqual(beef[0]["estimated_grams"], 300.0)
+
+    def test_a_garnish_weight_is_not_read_as_a_portion(self):
+        from dataset_manager.api.analyzer import _stated_grams
+        self.assertIsNone(_stated_grams("薬味 5g"))          # too small to be a portion
+        self.assertIsNone(_stated_grams("大俵ハンバーグ"))      # says nothing
+        self.assertEqual(_stated_grams("ステーキ 200g"), 200.0)
+
+    def test_both_halves_of_a_combined_dish_are_counted(self):
+        plain, _ = self._kcal("大俵ハンバーグ")
+        combo, _ = self._kcal("大俵ハンバーグ＆エビフライ")
+        self.assertGreater(combo, plain)
+
+    def test_a_stated_weight_is_left_alone_when_it_names_one_of_two_dishes(self):
+        """「…＆手ごねハンバーグ100g」 states 100 g about the second patty; applying
+        it to the merged pair turned two burgers into one small one."""
+        both, _ = self._kcal("大俵ハンバーグ＆手ごねハンバーグ100g")
+        one, _ = self._kcal("大俵ハンバーグ")
+        self.assertGreater(both, one)
+
+    def test_a_dish_that_cannot_be_fully_costed_reports_it(self):
+        """The shrimp resolves to no table row, so the total would be the
+        burger's alone. precompute_nutrition refuses to store that."""
+        _, res = self._kcal("殻付き海老グリル＆大俵ハンバーグ")
+        self.assertTrue(res.get("unmatched"))

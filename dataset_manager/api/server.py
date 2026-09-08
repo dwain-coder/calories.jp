@@ -3,6 +3,7 @@ from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from typing import Optional
+import os
 import sqlite3
 import csv
 import io
@@ -14,20 +15,59 @@ from .database import search_items, get_item_details, DB_PATH
 # and without it SITE_DOMAIN_JA is unset and every canonical URL says localhost.
 load_dotenv()
 
+# The interactive docs describe every internal endpoint, the shape of the
+# database behind them and the parameters that reach it. robots.txt asks
+# crawlers not to read /docs, which is a request rather than a control — the
+# page answered 200 to anyone who typed it. Off unless deliberately switched on.
+API_DOCS = os.environ.get("SITE_API_DOCS", "").lower() in ("1", "true", "yes")
+
 app = FastAPI(
     title="Food Dataset Manager API",
     description="A unified API for massive food data aggregation across global datasets.",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs" if API_DOCS else None,
+    redoc_url="/redoc" if API_DOCS else None,
+    openapi_url="/openapi.json" if API_DOCS else None,
 )
 
-# Enable CORS
+# `allow_origins=["*"]` with `allow_credentials=True` is not a wildcard — the
+# middleware echoes back whichever Origin asked and adds
+# Access-Control-Allow-Credentials, so any site could make credentialed calls
+# to this API on a visitor's behalf. The JSON API is public and anonymous, so
+# it needs no credentials at all; reads stay open to everyone.
+_ALLOWED = [o for o in os.environ.get("SITE_CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=_ALLOWED or ["*"],
+    allow_credentials=bool(_ALLOWED),
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# Headers a static site should always send. None of them need the app to know
+# anything about the request, so they go on every response including errors.
+#
+# No CSP script-src here: the pages carry inline <script> blocks, so any policy
+# strict enough to matter would have to be 'unsafe-inline', which is a policy
+# that permits exactly what it is meant to stop. The three directives below are
+# the ones that still bite with inline scripts present — no framing, no plugins,
+# no injected <base> — and a real script-src wants nonces, which is its own job.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Content-Security-Policy": "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Frame-Options": "DENY",
+}
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for key, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(key, value)
+    return response
 
 @app.get("/")
 def read_root(request: Request):

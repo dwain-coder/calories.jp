@@ -57,11 +57,33 @@ def asset(path):
             _asset_versions[path] = ""
     v = _asset_versions[path]
     return f"{path}?v={v}" if v else path
+
+
+# A Jinja global rather than a key in _render's context: base.html is also
+# reached by templates that do not come through _render, and a missing `asset`
+# there is not a wrong URL, it is a 500 on the whole page.
+templates.env.globals["asset"] = asset
+
 SITEMAP_DIR = Path("data/sitemaps")
-# Page caching is opt-in for production (set SITE_CACHE_MAX_AGE=3600 there);
-# default revalidates every request so development is never stale.
-_MAX_AGE = int(os.environ.get("SITE_CACHE_MAX_AGE", "0"))
-CACHE = {"Cache-Control": f"public, max-age={_MAX_AGE}" if _MAX_AGE else "no-cache"}
+
+# Every page is rendered from a database that only changes when a new image is
+# deployed, and the site was sending `no-cache` on all 4,000 of them: Cloudflare
+# reported cf-cache-status: DYNAMIC and forwarded every hit, so each visitor paid
+# for a fresh render of a page identical to the last one.
+#
+# Caching is opt-in for production and stays off in development, because a
+# stale page while editing one is worse than a slow one. Railway always injects
+# RAILWAY_ENVIRONMENT, so a deployment can tell itself apart from a laptop
+# without anyone having to remember a variable; SITE_CACHE_MAX_AGE still wins
+# when it is set, including `0` to switch caching off in production.
+_DEPLOYED = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_SERVICE_ID"))
+_MAX_AGE = int(os.environ.get("SITE_CACHE_MAX_AGE") or (3600 if _DEPLOYED else 0))
+
+# stale-while-revalidate lets the edge answer instantly from a slightly old copy
+# and refresh behind the reader, so a deploy is never a cliff of slow requests.
+CACHE = {"Cache-Control":
+         f"public, max-age={_MAX_AGE}, stale-while-revalidate=86400" if _MAX_AGE
+         else "no-cache"}
 
 # Set SITE_NOINDEX=1 while the site is on a temporary hostname. A staging URL
 # that gets crawled becomes a duplicate of the real one, and the cleanup after
@@ -80,7 +102,6 @@ SITE_LANG = LANGS[0]
 def _render(request, name, lang, ctx, headers=CACHE):
     base = {
         "request": request,
-        "asset": asset,
         "lang": lang,
         "other_lang": "ja" if lang == "en" else "en",
         "t": lambda key, **fmt: t(lang, key, **fmt),
@@ -110,10 +131,19 @@ def _render(request, name, lang, ctx, headers=CACHE):
 def home(request: Request):
     lang = SITE_LANG
     data = queries.home_data(lang)
+    counts = data.get("counts") or {}
+    jsonld = [
+        seo.website_jsonld(lang),
+        seo.dataset_jsonld(lang, {
+            "食品ページ": counts.get("food"),
+            "料理ページ": counts.get("dish"),
+        }),
+    ]
     return _render(request, "home.html", lang, {
         "data": data,
         "canonical": seo.base_url(lang) + "/",
         "alternates": {l: seo.base_url(l) + "/" for l in LANGS},
+        "jsonld": [seo.jsonld_script(j) for j in jsonld],
     })
 
 

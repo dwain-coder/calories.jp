@@ -39,7 +39,8 @@ def precompute_menu_nutrition(conn: sqlite3.Connection, shop_id: int = None, lim
 
     rows = cur.execute(query, params).fetchall()
     total = len(rows)
-    stats = {"total": total, "chain": 0, "table": 0, "mext_calc": 0, "unresolved": 0}
+    stats = {"total": total, "chain": 0, "table": 0, "mext_calc": 0,
+             "unresolved": 0, "incomplete": 0}
 
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     inserts = []
@@ -70,11 +71,23 @@ def precompute_menu_nutrition(conn: sqlite3.Connection, shop_id: int = None, lim
             continue
 
         # Tier 3: Culinary recipe decomposition
+        #
+        # Stored only when every part of the dish was costed. 「殻付き海老グリル＆
+        # 大俵ハンバーグ」 decomposes into shrimp and a burger, and the shrimp
+        # resolves to no composition-table row — so the total is the burger's,
+        # and printing it would say a plate with shrimp on it costs what the
+        # plate without it costs. A dish that cannot be fully costed gets a dash.
         try:
             decomps = decompose_dish_text(dish_name, shop_name)
             res = calculate_nutrition_for_dishes(decomps, lang="ja")
             totals = res.get("totals") or {}
             kcal = totals.get("energy_kcal")
+            if res.get("unmatched"):
+                # Counted here, not also in the else below: an incomplete dish
+                # is one unresolved dish, and double-counting it reported more
+                # failures than there were rows.
+                stats["incomplete"] += 1
+                kcal = None
             if kcal and kcal > 0:
                 p = totals.get("protein_g")
                 f = totals.get("fat_g")

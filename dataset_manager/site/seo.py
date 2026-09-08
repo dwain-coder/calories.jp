@@ -212,6 +212,78 @@ def chain_directory_jsonld(lang, shops):
     }
 
 
+def website_jsonld(lang, counts=None):
+    """WebSite + the search box, and the Organization behind the site.
+
+    The home page carried no structured data at all — the one page most likely
+    to be granted a sitelinks search box, and the only page type that never said
+    what it was. `SearchAction` tells a search engine the shape of a query URL
+    so it can offer the site's own search from the result; `Organization` is
+    what a knowledge panel reads.
+
+    The operator's name is whatever SITE_OPERATOR says. It is left out entirely
+    rather than guessed at: an organisation named in structured data is a claim
+    about a real party.
+    """
+    base = base_url(lang)
+    site = {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": f"{base}/#website",
+        "url": base + "/",
+        "name": SITE_NAME[lang],
+        "inLanguage": "ja" if lang == "ja" else "en",
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": f"{base}/search?q={{search_term_string}}",
+            },
+            "query-input": "required name=search_term_string",
+        },
+    }
+    if lang == "ja":
+        site["description"] = (
+            "文部科学省『日本食品標準成分表』などの公的データをもとに、"
+            "食品・料理・外食メニューのカロリーと栄養成分を検索できます。")
+    operator = os.environ.get("SITE_OPERATOR", "").strip()
+    if operator:
+        site["publisher"] = {"@type": "Organization", "name": operator,
+                             "url": base + "/", "@id": f"{base}/#operator"}
+    return site
+
+
+def dataset_jsonld(lang, counts=None):
+    """The corpus, described as a Dataset.
+
+    Google indexes Dataset markup separately (Dataset Search), and what this
+    site holds — every value of the national composition tables, with the
+    source named — is a dataset before it is a set of pages.
+    """
+    base = base_url(lang)
+    data = {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "@id": f"{base}/#dataset",
+        "name": "食品成分データベース（calories.jp）" if lang == "ja" else "calories.jp food composition data",
+        "description": (
+            "文部科学省『日本食品標準成分表2023年版（八訂）』、農林水産省『うちの郷土料理』、"
+            "USDA FoodData Central を出典とする食品成分データ。"
+            if lang == "ja" else
+            "Food composition data sourced from MEXT, MAFF and USDA FoodData Central."),
+        "url": base + "/sources",
+        "inLanguage": "ja" if lang == "ja" else "en",
+        "isAccessibleForFree": True,
+        "creator": {"@type": "Organization", "name": SITE_NAME[lang], "url": base + "/"},
+    }
+    if counts:
+        data["variableMeasured"] = [
+            {"@type": "PropertyValue", "name": k, "value": v}
+            for k, v in counts.items() if v
+        ]
+    return data
+
+
 def jsonld_script(data):
     return json.dumps(data, ensure_ascii=False)
 
