@@ -42,5 +42,5 @@ window.MEAL_I18N = {remove: {{ t('remove') | tojson }},
                     fat: {{ t('fat') | tojson }},
                     carbs: {{ t('carbs') | tojson }}};
 </script>
-<script src="/static/meal_calc.js" defer></script>
+<script src="{{ asset('/static/meal_calc.js') }}" defer></script>
 {% endblock %}

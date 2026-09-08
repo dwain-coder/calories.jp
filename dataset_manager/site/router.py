@@ -1,4 +1,5 @@
 """Public HTML site: pages at the root, robots.txt, sitemaps."""
+import hashlib
 import os
 from pathlib import Path
 from urllib.parse import quote
@@ -31,6 +32,31 @@ def resolve_category(lang, slug):
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+
+
+# --- cache-busted asset URLs -------------------------------------------------
+# Cloudflare caches /static/site.css for four hours, and the URL never changed,
+# so a deployed CSS fix reached nobody until that expired: the mobile menu
+# layout shipped and the live site kept serving a 26-minute-old stylesheet.
+#
+# Appending a hash of the file's own bytes gives each build a new URL, so the
+# cache is never asked for a stale one and never has to be purged by hand.
+# Read once per process: the files are baked into the image and cannot change
+# under a running server.
+_ASSET_ROOT = Path("static")
+_asset_versions = {}
+
+
+def asset(path):
+    """/static/site.css -> /static/site.css?v=<hash of its bytes>."""
+    if path not in _asset_versions:
+        try:
+            data = (_ASSET_ROOT / path.split("/static/", 1)[-1]).read_bytes()
+            _asset_versions[path] = hashlib.sha256(data).hexdigest()[:10]
+        except OSError:
+            _asset_versions[path] = ""
+    v = _asset_versions[path]
+    return f"{path}?v={v}" if v else path
 SITEMAP_DIR = Path("data/sitemaps")
 # Page caching is opt-in for production (set SITE_CACHE_MAX_AGE=3600 there);
 # default revalidates every request so development is never stale.
@@ -54,6 +80,7 @@ SITE_LANG = LANGS[0]
 def _render(request, name, lang, ctx, headers=CACHE):
     base = {
         "request": request,
+        "asset": asset,
         "lang": lang,
         "other_lang": "ja" if lang == "en" else "en",
         "t": lambda key, **fmt: t(lang, key, **fmt),

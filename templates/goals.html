@@ -54,5 +54,5 @@
   </table>
 </div>
 <script>window.GOALS_I18N = {maintenance: {{ t('maintenance') | tojson }}, kcal: {{ t('kcal') | tojson }}};</script>
-<script src="/static/goals.js" defer></script>
+<script src="{{ asset('/static/goals.js') }}" defer></script>
 {% endblock %}

@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap">
-<link rel="stylesheet" href="/static/site.css">
+<link rel="stylesheet" href="{{ asset('/static/site.css') }}">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='2' fill='%23B7282E'/></svg>">
 </head>
 <body>
@@ -78,7 +78,7 @@
     </div>
   </div>
 </footer>
-<script src="/static/suggest.js" defer></script>
-<script src="/static/ambient.js" defer></script>
+<script src="{{ asset('/static/suggest.js') }}" defer></script>
+<script src="{{ asset('/static/ambient.js') }}" defer></script>
 </body>
 </html>

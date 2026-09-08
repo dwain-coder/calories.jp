@@ -51,5 +51,5 @@
   </div>
   <p class="calc-note">{{ t('dv_note') }}</p>
   {% if d.macro_quality %}<p class="calc-note">{{ t('quality_macro_note') }}</p>{% endif %}
-  <script src="/static/calc.js" defer></script>
+  <script src="{{ asset('/static/calc.js') }}" defer></script>
 </section>

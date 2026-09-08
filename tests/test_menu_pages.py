@@ -1,4 +1,5 @@
 """Test for the new /menu and /menu/{slug} pages."""
+import re
 import sqlite3
 import unittest
 from fastapi.testclient import TestClient
@@ -182,3 +183,26 @@ class TestIndexGate(unittest.TestCase):
         self.assertFalse(gate({"items": 40, "resolved": 8, "priced": 5})[0])    # 20%
         self.assertFalse(gate({"items": 40, "resolved": 40, "priced": 0})[0])   # no price
         self.assertTrue(gate({"items": 40, "resolved": 20, "priced": 5})[0])    # 50%
+
+
+class TestAssetCacheBusting(unittest.TestCase):
+    """Cloudflare caches /static/site.css for four hours and the URL never
+    changed, so the deployed mobile layout reached nobody: the live site kept
+    serving a stylesheet 26 minutes older than the fix."""
+
+    def test_every_stylesheet_and_script_carries_a_version(self):
+        for path in ("/", "/menu", "/analyzer", "/meal-calculator"):
+            html = client.get(path).text
+            self.assertTrue(re.search(r"/static/site\.css\?v=[0-9a-f]{10}", html), path)
+            self.assertNotIn('"/static/site.css"', html)
+            self.assertFalse(re.search(r'"/static/[a-z_]+\.js"', html), path)
+
+    def test_the_version_follows_the_file(self):
+        from dataset_manager.site.router import asset
+        self.assertNotEqual(asset("/static/site.css"), asset("/static/suggest.js"))
+        self.assertRegex(asset("/static/site.css"), r"^/static/site\.css\?v=[0-9a-f]{10}$")
+
+    def test_a_versioned_url_still_serves_the_file(self):
+        r = client.get("/static/site.css?v=deadbeef12")
+        self.assertEqual(r.status_code, 200)
+        self.assertGreater(len(r.content), 1000)
