@@ -6,7 +6,7 @@
       "name": "calories",
       "runtimeExecutable": "uv",
       "runtimeArgs": ["run", "python", "main.py", "serve"],
-      "port": 8000
+      "port": 8010
     }
   ]
 }
