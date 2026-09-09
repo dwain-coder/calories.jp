@@ -58,32 +58,59 @@ class TestFiguresComeFromOneSource(unittest.TestCase):
 
 class TestTheDataItselfIsConsistent(unittest.TestCase):
 
-    def test_no_page_shows_macros_that_contradict_its_calories(self):
-        """4/9/4 against the stated energy, on EVERY chain page.
+    def test_no_displayed_row_fails_the_reconciliation_rule(self):
+        """Every row the site SHOWS must satisfy the rule the site applies.
 
-        Checked across all 193 rather than the one page the defect was spotted
-        on. A row whose macros imply a different total than the calories beside
-        them contains a wrong number, and the reader can see it.
+        Checked across all 193 chain pages, using the production predicate
+        rather than a second copy of the arithmetic — a test that reimplements
+        the rule tests its own copy, and the first version of this one failed
+        on 46 correct rows because it used naive 4/9/4 while production had
+        moved on to counting fibre at 2 kcal and exempting ethanol.
         """
         import sqlite3
         conn = sqlite3.connect("data/metadata/site.db")
+        conn.row_factory = sqlite3.Row
+        fibre = {r["item_id"]: r["amount"] for r in conn.execute(
+            "SELECT item_id, amount FROM nutrients WHERE code = 'FIB-'")}
         slugs = [r[0] for r in conn.execute(
             "SELECT slug FROM shop_pages WHERE lang = 'ja'")]
         conn.close()
+
         bad = []
         for slug in slugs:
             page = queries.get_shop_page("ja", slug)
             if not page:
                 continue
             for row in queries.get_shop_page_data(page)["menu"]:
-                kcal, p, f, c = (row.get("kcal"), row.get("protein_g"),
-                                 row.get("fat_g"), row.get("carbs_g"))
-                if not kcal or None in (p, f, c):
-                    continue
-                implied = p * 4 + f * 9 + c * 4
-                if abs(implied - kcal) / kcal > 0.30:
-                    bad.append((slug, row["name"], kcal, round(implied)))
-        self.assertFalse(bad, f"{len(bad)} rows contradict themselves: {bad[:5]}")
+                if row.get("protein_g") is None:
+                    continue          # suppressed or never stored; nothing shown
+                if not queries._macros_reconcile(
+                        row.get("kcal"), row["protein_g"], row["fat_g"],
+                        row["carbs_g"], fibre.get(row.get("item_id")), row["name"]):
+                    bad.append((slug, row["name"], row.get("kcal")))
+        self.assertFalse(bad, f"{len(bad)} shown rows fail the rule: {bad[:5]}")
+
+    def test_the_rule_counts_fibre_and_ethanol(self):
+        """Naive 4/9/4 rejects 282 of 2,621 MEXT food pages, all of them
+        correct: agar is 160 kcal against 330 implied because MEXT counts
+        dietary fibre at about 2 kcal a gram. Spirits report no macros at all.
+        """
+        # agar-like: 80 g of carbohydrate that is nearly all fibre
+        self.assertTrue(queries._macros_reconcile(160, 0.2, 0.1, 80.0, 74.0, "粉寒天"))
+        # the same numbers without the fibre allowance do not reconcile
+        self.assertFalse(queries._macros_reconcile(160, 0.2, 0.1, 80.0, 0.0, "粉寒天"))
+        # a spirit: real calories, no macros to show for them
+        self.assertTrue(queries._macros_reconcile(237, 0.0, 0.0, 0.0, 0.0, "ウオッカ"))
+
+    def test_a_rounding_gap_on_a_tiny_serving_is_not_a_contradiction(self):
+        """8 kcal of konnyaku against 14 implied is 75% and means nothing."""
+        self.assertTrue(queries._macros_reconcile(8, 0.1, 0.0, 3.3, 2.2, "こんにゃく"))
+
+    def test_a_real_contradiction_is_still_caught(self):
+        """87.6 g of carbohydrate in a chicken meatball: the estimator matched
+        ひじき and weighed it as the dried seaweed."""
+        self.assertFalse(queries._macros_reconcile(
+            270, 13.8, 4.8, 87.6, 0.0, "ひじき入り鶏つくね 2個"))
 
 
 if __name__ == "__main__":
