@@ -1025,6 +1025,26 @@ def sum_micros(item_grams, codes):
     return totals, len(contributing)
 
 
+def _macros_reconcile(kcal, protein_g, fat_g, carbs_g, name, tolerance=0.30):
+    """Whether protein/fat/carbohydrate account for the stated energy.
+
+    Atwater: 4 kcal a gram of protein and of carbohydrate, 9 of fat. A set that
+    implies a different total than the figure printed beside it contains at
+    least one wrong number, and a reader can see that without being told.
+
+    Alcohol is exempt. Ethanol carries 7 kcal a gram and appears in none of the
+    three columns, so a beer honestly reports ~0 protein, ~0 fat, 3 g carbohydrate
+    and 136 kcal. Every one of the 48 rows that failed this check corpus-wide
+    was a drink except two.
+    """
+    if not kcal or None in (protein_g, fat_g, carbs_g):
+        return True                      # nothing to contradict
+    if menuterms.is_drink(name):
+        return True
+    implied = protein_g * 4 + fat_g * 9 + carbs_g * 4
+    return abs(implied - kcal) / kcal <= tolerance
+
+
 def _row_get(row, column, default=None):
     """A column that older extracts do not have yet."""
     try:
@@ -1357,6 +1377,16 @@ def get_shop_page_data(page):
                 fat_g = r["min_f"]
                 carbs_g = r["min_c"]
                 salt_g = r["min_salt"]
+
+            # Macros that do not add up to the calories beside them are wrong
+            # whichever of the two is at fault, and showing both invites the
+            # reader to spot the contradiction. 「ひじき入り鶏つくね」 came out at
+            # 87.6 g of carbohydrate because the estimator matched ひじき and
+            # weighed it as the DRIED seaweed; the energy figure was fine.
+            # Drop the breakdown and keep the calorie, rather than print a set
+            # that cannot all be true.
+            if not _macros_reconcile(kcal, protein_g, fat_g, carbs_g, r["name"]):
+                protein_g = fat_g = carbs_g = None
 
             # A row carrying neither a price nor a calorie is a name and two
             # dashes. This page exists to put those two side by side.

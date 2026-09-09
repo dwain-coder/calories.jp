@@ -363,8 +363,9 @@
           </div>
         </div>
 
-        <div style="margin-top: 0.85rem;">
+        <div style="margin-top: 0.85rem;" id="modal-ingredients-block">
           <h4 style="font-size: 0.88rem; margin: 0 0 0.35rem;">構成具材・分量内訳:</h4>
+          <p class="calc-note" id="modal-ingredients-note" style="margin: 0 0 0.4rem;"></p>
           <ul class="dish-ai-ingredients-list" id="modal-ingredients-list"></ul>
         </div>
 
@@ -1061,7 +1062,29 @@ document.addEventListener("DOMContentLoaded", function() {
     const name = card ? card.querySelector(".menu-card-name").textContent.trim() : (tr ? tr.querySelector(".dish-title-wrap strong").textContent.trim() : "料理");
     const priceStr = card ? card.getAttribute("data-price") : (tr ? tr.getAttribute("data-price") : "0");
     const price = parseInt(priceStr, 10) || 0;
-    const published = card ? card.getAttribute("data-kcal") : (tr ? tr.getAttribute("data-kcal") : "");
+    const src = card || tr;
+    const attr = (n) => (src ? src.getAttribute(n) : "");
+    const published = attr("data-kcal");
+    // The row already carries the figures the page printed, and where they came
+    // from. Read both: showing a stored kcal beside AI-derived macros put
+    // 3.9g protein under a 552kcal steak, and neither number explained the other.
+    const kcalSource = attr("data-source") || "";
+    const storedMacros = {
+      p: parseFloat(attr("data-p")) || 0,
+      f: parseFloat(attr("data-f")) || 0,
+      c: parseFloat(attr("data-c")) || 0,
+      salt: parseFloat(attr("data-salt")) || 0,
+    };
+    const hasStoredMacros = storedMacros.p || storedMacros.f || storedMacros.c;
+    // Only the chain publishes an official value. mext_calc is this site's own
+    // estimate from a composition table, and calling it 公式公表 was wrong on
+    // 6,252 of 9,594 rows.
+    const SOURCE_LABEL = {
+      chain: "店舗公式公表値",
+      table: "成分表の値",
+      mext_calc: "推計値（成分表による計算）",
+    };
+    const provLabel = SOURCE_LABEL[kcalSource] || "AI具材推定値";
 
     currentModalDish = name;
     currentModalPrice = price;
@@ -1069,7 +1092,11 @@ document.addEventListener("DOMContentLoaded", function() {
     if (modalDishName) modalDishName.textContent = name;
     const modalPriceEl = document.getElementById("modal-dish-price");
     if (modalPriceEl) modalPriceEl.textContent = price > 0 ? `¥${price.toLocaleString()}` : "—";
-    if (modalBadge) modalBadge.textContent = published ? "公式公表 ＋ 具材詳細" : "AI料理具材推定";
+    if (modalBadge) {
+      modalBadge.textContent = kcalSource === "chain"
+        ? "公式公表 ＋ 具材詳細"
+        : (published ? provLabel + " ＋ 具材詳細" : "AI料理具材推定");
+    }
 
     // Setup hero photo
     const cardImg = card ? card.querySelector(".menu-card-img") : null;
@@ -1117,6 +1144,29 @@ document.addEventListener("DOMContentLoaded", function() {
     modalLoading.style.display = "block";
     modalContent.style.display = "none";
 
+    // Rule one: nothing shown may be incorrect. When the row already carries
+    // figures from a source, the analyzer is not asked at all — its reading of
+    // the dish NAME can miss the main ingredient (a roast beef steak came back
+    // as two sauces and a scoop of mash) and would sit under a total it
+    // contradicts. It is also a model call per modal open, for nothing.
+    const useStored = Boolean(published) && Boolean(hasStoredMacros);
+    const ingredientsBlock = document.getElementById("modal-ingredients-block");
+    if (useStored) {
+      currentModalKcal = parseInt(published, 10);
+      modalTotalKcal.textContent = currentModalKcal;
+      modalKcalNote.textContent = provLabel;
+      modalMacroP.textContent = (storedMacros.p ? storedMacros.p.toFixed(1) : "—") + "g";
+      modalMacroF.textContent = (storedMacros.f ? storedMacros.f.toFixed(1) : "—") + "g";
+      modalMacroC.textContent = (storedMacros.c ? storedMacros.c.toFixed(1) : "—") + "g";
+      modalMacroSalt.textContent = (storedMacros.salt ? storedMacros.salt.toFixed(1) : "—") + "g";
+      renderPFCRing(storedMacros.p, storedMacros.f, storedMacros.c);
+      if (ingredientsBlock) ingredientsBlock.style.display = "none";
+      modalLoading.style.display = "none";
+      modalContent.style.display = "block";
+      return;
+    }
+    if (ingredientsBlock) ingredientsBlock.style.display = "";
+
     try {
       const res = await fetch(`/api/analyze-dish?dish=${encodeURIComponent(name)}&shop=${encodeURIComponent(shopName)}`);
       if (!res.ok) throw new Error("API error " + res.status);
@@ -1127,19 +1177,37 @@ document.addEventListener("DOMContentLoaded", function() {
       currentModalKcal = published ? parseInt(published, 10) : calculatedKcal;
 
       modalTotalKcal.textContent = currentModalKcal;
-      modalKcalNote.textContent = published ? "店舗公式公表値" : "AI具材推定値";
-      const protG = totals.protein_g || 0;
-      const fatG = totals.fat_g || 0;
-      const carbG = totals.carbohydrate_g || 0;
+      modalKcalNote.textContent = published ? provLabel : "AI具材推定値";
+
+      // The macros must come from wherever the calories came from. Mixing a
+      // stored energy figure with the analyzer's own decomposition produced
+      // numbers that did not add up to the total printed above them — and the
+      // decomposition can miss the main ingredient entirely, which is how a
+      // roast beef steak came out as two sauces and a scoop of mash.
+      const protG = useStored ? storedMacros.p : (totals.protein_g || 0);
+      const fatG = useStored ? storedMacros.f : (totals.fat_g || 0);
+      const carbG = useStored ? storedMacros.c : (totals.carbohydrate_g || 0);
+      const saltG = useStored ? storedMacros.salt
+                              : (data.salt_g === null || data.salt_g === undefined ? null : data.salt_g);
 
       modalMacroP.textContent = (protG ? protG.toFixed(1) : "—") + "g";
       modalMacroF.textContent = (fatG ? fatG.toFixed(1) : "—") + "g";
       modalMacroC.textContent = (carbG ? carbG.toFixed(1) : "—") + "g";
-      modalMacroSalt.textContent = (data.salt_g !== null && data.salt_g !== undefined ? data.salt_g.toFixed(1) : "—") + "g";
+      modalMacroSalt.textContent = (saltG ? saltG.toFixed(1) : "—") + "g";
 
       renderPFCRing(protG, fatG, carbG);
 
       modalIngredientsList.innerHTML = "";
+      // The breakdown is the analyzer's own reading of the dish NAME, and it is
+      // not what produced the figure above when that came from a table. Saying
+      // so is the difference between a second opinion and a contradiction: the
+      // parts can miss the main ingredient and will not sum to the total.
+      const noteEl = document.getElementById("modal-ingredients-note");
+      if (noteEl) {
+        noteEl.textContent = useStored
+          ? "以下はAIが料理名から推定した内訳です。上のカロリー・栄養値とは別の推定であり、合計は一致しません。"
+          : "AIが料理名から推定した内訳です。";
+      }
       const comps = data.components || [];
       if (comps.length === 0) {
         modalIngredientsList.innerHTML = "<li style='color: var(--ink-faint); padding: 1rem;'>具材内訳データなし</li>";
