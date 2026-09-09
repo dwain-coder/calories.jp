@@ -714,6 +714,92 @@ def nutrient_index(lang, codes):
     return {r["code"]: dict(r) for r in rows}
 
 
+# The 47 prefectures, as MAFF's own dataset labels them. A category is a
+# prefecture when it is one of these; everything else in items.category is a
+# MEXT food group, and the two want different pages.
+PREFECTURES = (
+    "北海道県", "北海道",
+    "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+    "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+    "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県",
+    "岐阜県", "静岡県", "愛知県", "三重県",
+    "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県",
+    "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+    "徳島県", "香川県", "愛媛県", "高知県",
+    "福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
+)
+
+
+def is_prefecture(category):
+    return category in PREFECTURES
+
+
+def prefecture_data(lang, prefecture):
+    """One prefecture's regional dishes, and what makes its cooking its own.
+
+    MAFF publishes 「うちの郷土料理」 per prefecture and this corpus costs every
+    recipe, so the two together answer something neither does alone: not only
+    what 青森県 cooks, but what 青森県 cooks WITH that the rest of the country
+    does not.
+    """
+    conn = get_connection()
+    try:
+        dishes = [dict(r) for r in conn.execute(
+            # No calorie column: a dish is costed from its ingredients at
+            # request time and has no stored figure, so the category template's
+            # kcal column renders thirty blanks. MAFF's own 主な材料 says more
+            # about a regional dish than a number would anyway.
+            """SELECT sp.slug, COALESCE(nm.name, sp.title) AS name,
+                      rd.region, rd.main_ingredients, rd.occasion
+               FROM site_pages sp
+               JOIN items i ON i.id = sp.item_id
+               JOIN regional_dishes rd ON rd.item_id = i.id
+               LEFT JOIN item_names nm ON nm.item_id = sp.item_id
+                    AND nm.lang = sp.lang AND nm.is_primary = 1
+               WHERE sp.lang = ? AND sp.page_type = 'dish' AND i.category = ?
+               ORDER BY sp.title""", (lang, prefecture))]
+        if not dishes:
+            return None
+
+        # An ingredient is characteristic when this prefecture reaches for it far
+        # more often than the country does. Sugar and soy sauce are in everything,
+        # so a raw count says nothing; the ratio is what carries the fact.
+        signature = [dict(r) for r in conn.execute(
+            """WITH here AS (
+                   SELECT l.mext_item_id AS iid, COUNT(DISTINCT l.dish_item_id) AS n
+                   FROM recipe_ingredient_links l
+                   JOIN items d ON d.id = l.dish_item_id AND d.category = ?
+                   WHERE l.mext_item_id IS NOT NULL GROUP BY l.mext_item_id
+               ), everywhere AS (
+                   SELECT mext_item_id AS iid, COUNT(DISTINCT dish_item_id) AS n
+                   FROM recipe_ingredient_links
+                   WHERE mext_item_id IS NOT NULL GROUP BY mext_item_id
+               )
+               SELECT COALESCE(nm.name, i.name) AS name, sp.slug,
+                      here.n AS used_here, everywhere.n AS used_total
+               FROM here JOIN everywhere USING (iid)
+               JOIN items i ON i.id = here.iid
+               LEFT JOIN site_pages sp ON sp.item_id = i.id AND sp.lang = ?
+                    AND sp.page_type = 'food'
+               LEFT JOIN item_names nm ON nm.item_id = i.id AND nm.lang = ?
+                    AND nm.is_primary = 1
+               WHERE here.n >= 2
+               ORDER BY (1.0 * here.n / everywhere.n) DESC, here.n DESC
+               LIMIT 8""", (prefecture, lang, lang))]
+    finally:
+        conn.close()
+
+    # Sub-regions as MAFF writes them, minus the ones that just say "everywhere".
+    areas = sorted({d["region"] for d in dishes
+                    if d.get("region") and "全域" not in d["region"]})
+    return {
+        "dishes": dishes,
+        "n": len(dishes),
+        "signature": signature,
+        "areas": areas[:12],
+    }
+
+
 def cooking_yields(lang):
     """Every 重量変化率 MEXT publishes, with the food it belongs to.
 

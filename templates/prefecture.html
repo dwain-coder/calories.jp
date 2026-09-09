@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ heading }}</h1>
+<p class="alt-name">{{ t('pref_lede', pref=label, n=d.n) }}</p>
+
+{% if d.signature %}
+<div class="card pref-signature">
+  <h2>{{ t('pref_signature_title', pref=label) }}</h2>
+  <p class="license">{{ t('pref_signature_note') }}</p>
+  <ul class="atlas-chips">
+    {% for s in d.signature %}
+      <li>
+        {% if s.slug %}<a class="atlas-chip" href="/food/{{ s.slug }}">{{ s.name }}</a>
+        {% else %}<span class="atlas-chip">{{ s.name }}</span>{% endif %}
+        <span class="serving-note">{{ t('pref_signature_ratio', here=s.used_here, total=s.used_total) }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="card">
+<div class="table-scroll">
+<table class="nutrition-table stack-table" id="pref-dishes">
+  <thead>
+    <tr>
+      <th>{{ t('name_col') }}</th>
+      <th>{{ t('pref_main_ingredients') }}</th>
+      <th>{{ t('region') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for x in d.dishes %}
+    <tr>
+      <td><a href="/dish/{{ x.slug }}">{{ x.name }}</a></td>
+      <td data-label="{{ t('pref_main_ingredients') }}">{{ x.main_ingredients or '—' }}</td>
+      <td data-label="{{ t('region') }}">{{ x.region or '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+
+{% if d.areas %}
+<p class="license">{{ t('pref_areas') }} {{ d.areas|join('・') }}</p>
+{% endif %}
+
+<p class="license">{{ t('pref_source_note') }}</p>
+
+<nav class="pref-siblings">
+  <h2>{{ t('pref_others') }}</h2>
+  <ul class="atlas-chips">
+    {% for slug, name in siblings %}
+      <li><a class="atlas-chip" href="/category/{{ slug }}">{{ name }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>
+{% endblock %}

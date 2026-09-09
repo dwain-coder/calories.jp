@@ -319,10 +319,44 @@ def browse_page(request: Request, page: int = 1, sort: str = "name",
     })
 
 
+def _prefecture_page(request, lang, cslug, prefecture):
+    """A prefecture's regional cooking, rather than a table of blank calories.
+
+    MAFF's dishes share items.category with MEXT's food groups, so both were
+    rendering through the same comparison template — which lists calories, and a
+    dish has none stored. Prefectures get their own page: what is cooked, what
+    it is cooked with, and which ingredients are more this prefecture's than
+    anyone else's.
+    """
+    data = queries.prefecture_data(lang, prefecture)
+    if not data:
+        raise HTTPException(status_code=404, detail="Not found")
+    heading = t(lang, "pref_title", pref=prefecture)
+    url = seo.base_url(lang) + f"/category/{quote(cslug)}"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
+              (t(lang, "regional_cuisine"), None), (prefecture, None)]
+    siblings = [(p, p) for p in queries.PREFECTURES if p != prefecture and p != "北海道県"]
+    jsonld = [
+        seo.breadcrumbs_jsonld(crumbs),
+        seo.ranking_jsonld(lang, heading, url,
+                           [{"slug": d["slug"], "name": d["name"]} for d in data["dishes"]]),
+    ]
+    return _render(request, "prefecture.html", lang, {
+        "d": data, "label": prefecture, "heading": heading,
+        "siblings": siblings,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(j) for j in jsonld],
+        "meta_description": t(lang, "pref_lede", pref=prefecture, n=data["n"]),
+    })
+
+
 @router.get("/category/{cslug}", response_class=HTMLResponse)
 def category_page(request: Request, cslug: str):
     lang = SITE_LANG
     ja_cat = resolve_category(lang, cslug)
+    if ja_cat and queries.is_prefecture(ja_cat):
+        return _prefecture_page(request, lang, cslug, ja_cat)
     data = queries.category_data(lang, ja_cat) if ja_cat else None
     if not data:
         raise HTTPException(status_code=404, detail="Not found")
