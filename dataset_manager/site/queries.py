@@ -1024,6 +1024,14 @@ def sum_micros(item_grams, codes):
     return totals, len(contributing)
 
 
+def _row_get(row, column, default=None):
+    """A column that older extracts do not have yet."""
+    try:
+        return row[column]
+    except (IndexError, KeyError):
+        return default
+
+
 def food_nutrition_json(item_id):
     """Per-100g full-precision macros + portions, only for items with a page
     (clean corpus gate)."""
@@ -1276,8 +1284,10 @@ def get_shop_page_data(page):
                       min.fat_g AS min_f, min.carbohydrate_g AS min_c, min.salt_g AS min_salt,
                       min.provenance AS min_provenance,
                       sp.slug AS food_slug, sp.page_type AS food_page_type,
-                      ii.url AS db_image_url
+                      ii.url AS db_image_url,
+                      pp.file AS product_image
                FROM shop_menu_items smi
+               LEFT JOIN product_photos pp ON pp.shop_menu_item_id = smi.id
                LEFT JOIN chain_nutrition cn ON cn.id = smi.chain_nutrition_id
                LEFT JOIN nutrition n ON n.item_id = smi.item_id
                LEFT JOIN menu_item_nutrition min ON min.shop_menu_item_id = smi.id
@@ -1306,11 +1316,15 @@ def get_shop_page_data(page):
             food_img = get_dish_image(r["name"], visual["category"])
             # url is now a local photograph of that kind of dish; the
             # bundled file behind local_fallback is what onerror falls to.
-            image_url = r["db_image_url"] or food_img["url"]
-            image_card_url = r["db_image_url"] or food_img["card_url"]
+            # A photograph of THIS dish at THIS chain first, then a licensed
+            # photograph of the food itself, then one of the right kind of
+            # dish, then nothing. Only the last two are illustrations.
+            exact = _row_get(r, "product_image") or r["db_image_url"]
+            image_url = exact or food_img["url"]
+            image_card_url = exact or food_img["card_url"]
             image_full_url = image_url
             image_fallback = food_img["local_fallback"]
-            representational_note = ("" if r["db_image_url"]
+            representational_note = ("" if exact
                                      else food_img["representational_note"])
             kcal = source = protein_g = fat_g = carbs_g = salt_g = None
             if r["chain_kcal"] is not None and r["source_page"]:
