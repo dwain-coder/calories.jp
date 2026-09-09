@@ -1014,9 +1014,9 @@ def food_nutrition_json(item_id):
 
 # ---------------------------------------------------------------- sitemaps
 
-SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "nutrients", "blog", "pages")
+SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "nutrients", "column", "pages")
 STATIC_PAGES = ("", "foods", "menu", "nutrients", "cooking-yield", "meal-calculator",
-                "analyzer", "goals", "sources", "api", "blog",
+                "analyzer", "goals", "sources", "api", "column",
                 "guides/cooking-and-calories", "about", "privacy", "contact")
 
 
@@ -1047,9 +1047,11 @@ def sitemap_slugs(lang, section):
             return [f"/menu/{r['slug']}" for r in conn.execute(
                 "SELECT slug FROM shop_pages WHERE indexable = 1 AND lang = ?"
                 " ORDER BY id", (lang,))]
-        if section == "blog":
+        if section == "column":
+            # The module and its tables are named `blog`; the site says コラム,
+            # which is what a Japanese reader calls this kind of page.
             from ..blog import store as blog_store
-            return [f"/blog/{slug}" for slug in blog_store.slugs()]
+            return [f"/column/{slug}" for slug in blog_store.slugs()]
         if section == "nutrients":
             from . import nutrient_pages
             return [f"/nutrient/{slug}" for slug in nutrient_pages.SLUGS]

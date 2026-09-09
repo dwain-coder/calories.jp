@@ -100,8 +100,8 @@ class TestSync(BlogTestCase):
             _post(1, "first-post", "First post", "<p>Body</p>")]))
         self.assertEqual(stats["stored"], 1)
         client = TestClient(app)
-        self.assertIn("First post", client.get("/blog").text)
-        r = client.get("/blog/first-post")
+        self.assertIn("First post", client.get("/column").text)
+        r = client.get("/column/first-post")
         self.assertEqual(r.status_code, 200)
         self.assertIn("Body", r.text)
 
@@ -176,7 +176,7 @@ class TestWebhook(BlogTestCase):
             r = client.post("/internal/sync-posts", headers={"x-webhook-secret": "right"})
             self.assertEqual(r.status_code, 502)
             # the last good copy is still being served
-            self.assertEqual(client.get("/blog/kept").status_code, 200)
+            self.assertEqual(client.get("/column/kept").status_code, 200)
 
 
 class TestDiscoverableAndRobust(BlogTestCase):
@@ -184,9 +184,9 @@ class TestDiscoverableAndRobust(BlogTestCase):
         from dataset_manager.blog import sync
         from dataset_manager.api.server import app
         sync.sync("https://wp.example", client=fake_wp([_post(1, "in-sitemap", "S", "<p>x</p>")]))
-        body = TestClient(app).get("/sitemap-blog-ja.xml").text
-        self.assertIn("/blog/in-sitemap", body)
-        self.assertIn("/blog</loc>", TestClient(app).get("/sitemap-pages-ja.xml").text)
+        body = TestClient(app).get("/sitemap-column-ja.xml").text
+        self.assertIn("/column/in-sitemap", body)
+        self.assertIn("/column</loc>", TestClient(app).get("/sitemap-pages-ja.xml").text)
 
     def test_a_post_carries_article_markup(self):
         from dataset_manager.blog import sync

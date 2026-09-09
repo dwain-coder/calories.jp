@@ -382,8 +382,17 @@ def category_page(request: Request, cslug: str):
     })
 
 
-@router.get("/blog", response_class=HTMLResponse)
-def blog_index(request: Request):
+# /blog was the path for about an hour, with nothing published on it. The
+# redirect costs one route and means a link written during that hour still works.
+@router.get("/blog", include_in_schema=False)
+@router.get("/blog/{slug:path}", include_in_schema=False)
+def blog_moved(slug: str = ""):
+    target = f"/column/{quote(slug)}" if slug else "/column"
+    return RedirectResponse(target, status_code=301)
+
+
+@router.get("/column", response_class=HTMLResponse)
+def column_index(request: Request):
     """Posts written in WordPress, rendered here.
 
     An empty list is a normal answer, not an error: the store is a volume that
@@ -391,9 +400,9 @@ def blog_index(request: Request):
     """
     lang = SITE_LANG
     posts = blog_store.recent(limit=30)
-    url = seo.base_url(lang) + "/blog"
+    url = seo.base_url(lang) + "/column"
     crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"), (t(lang, "blog_title"), None)]
-    return _render(request, "blog.html", lang, {
+    return _render(request, "column.html", lang, {
         "posts": posts,
         "canonical": url,
         "crumbs": crumbs,
@@ -402,21 +411,21 @@ def blog_index(request: Request):
     })
 
 
-@router.get("/blog/{slug}", response_class=HTMLResponse)
-def blog_post(request: Request, slug: str):
+@router.get("/column/{slug}", response_class=HTMLResponse)
+def column_post(request: Request, slug: str):
     lang = SITE_LANG
     post = blog_store.by_slug(slug)
     if not post:
         raise HTTPException(status_code=404, detail="Not found")
-    url = seo.base_url(lang) + f"/blog/{quote(slug)}"
+    url = seo.base_url(lang) + f"/column/{quote(slug)}"
     crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
-              (t(lang, "blog_title"), seo.base_url(lang) + "/blog"),
+              (t(lang, "blog_title"), seo.base_url(lang) + "/column"),
               (post["title"], None)]
     jsonld = [
         seo.breadcrumbs_jsonld(crumbs),
         seo.article_jsonld(lang, post, url),
     ]
-    return _render(request, "post.html", lang, {
+    return _render(request, "column_post.html", lang, {
         "post": post,
         "canonical": url,
         "crumbs": crumbs,

@@ -9,12 +9,12 @@
     {% for p in posts %}
       <li class="post-card">
         {% if p.image_url %}
-          <a href="/blog/{{ p.slug }}" class="post-thumb" tabindex="-1" aria-hidden="true">
+          <a href="/column/{{ p.slug }}" class="post-thumb" tabindex="-1" aria-hidden="true">
             <img src="{{ p.image_url }}" alt="{{ p.image_alt or '' }}" loading="lazy" decoding="async">
           </a>
         {% endif %}
         <div class="post-card-body">
-          <h2><a href="/blog/{{ p.slug }}">{{ p.title }}</a></h2>
+          <h2><a href="/column/{{ p.slug }}">{{ p.title }}</a></h2>
           {% if p.excerpt %}<p class="post-excerpt">{{ p.excerpt }}</p>{% endif %}
           <p class="post-meta">
             {% if p.published_at %}<time datetime="{{ p.published_at }}">{{ p.published_at[:10] }}</time>{% endif %}
