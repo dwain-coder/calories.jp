@@ -2,6 +2,8 @@
 joins through site_pages, which is never populated for OpenFoodFacts/Wikipedia/
 Wikidata/FoodKeeper items, so quarantined and share-alike data is structurally
 excluded from the public surface."""
+import sqlite3
+
 from ..api.database import get_connection, get_license_info
 from ..calc.nutrition import dish_nutrition
 from . import claims, servings
@@ -316,10 +318,16 @@ def get_dish_page_data(page):
     ]
     alternates = get_alternates(conn, item_id)
     jdi8 = conn.execute("SELECT score FROM jdi8_scores WHERE item_id = ?", (item_id,)).fetchone()
+    try:
+        img_row = conn.execute(
+            "SELECT * FROM item_images WHERE item_id = ?", (item_id,)).fetchone()
+        image = dict(img_row) if img_row else None
+    except sqlite3.OperationalError:
+        image = None      # table newer than the deployed extract
     conn.close()
     lic, warning = get_license_info(item["source"])
     return {
-        "item": item, "names": names, "dish": rd, "links": links,
+        "item": item, "names": names, "dish": rd, "links": links, "image": image,
         "computed": computed, "show_nutrition": show_nutrition, "breakdown": breakdown,
         "pfc": pfc_energy_split(computed["totals"]) if show_nutrition else None,
         "related": related, "alternates": alternates,
@@ -798,6 +806,41 @@ def prefecture_data(lang, prefecture):
         "signature": signature,
         "areas": areas[:12],
     }
+
+
+def item_image(item_id):
+    """The photograph for one item, with what has to be shown beside it.
+
+    Returns None when there is none, which is the common case: about a fifth of
+    the regional dishes have a freely-licensed photograph and the rest render
+    without one rather than with a picture of something else.
+    """
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM item_images WHERE item_id = ?", (item_id,)).fetchone()
+        return dict(row) if row else None
+    except sqlite3.OperationalError:
+        # The table arrived after the deployed extract was built.
+        return None
+    finally:
+        conn.close()
+
+
+def images_for(item_ids):
+    """{item_id: image} for a list of items, in one query, for index pages."""
+    ids = [i for i in item_ids if i]
+    if not ids:
+        return {}
+    conn = get_connection()
+    try:
+        marks = ",".join("?" * len(ids))
+        return {r["item_id"]: dict(r) for r in conn.execute(
+            f"SELECT * FROM item_images WHERE item_id IN ({marks})", ids)}
+    except sqlite3.OperationalError:
+        return {}
+    finally:
+        conn.close()
 
 
 def cooking_yields(lang):

@@ -12,6 +12,20 @@
   {% if other_name %}<p class="alt-name">{{ t('japanese_name') if other_lang == 'ja' else t('english_name') }}: {{ other_name }}</p>{% endif %}
   <p class="alt-name">{{ t('region') }}: {{ d.item.category }}</p>
 
+  {% if d.image %}
+  {# Freely licensed, and credited because CC BY and CC BY-SA both require it.
+     The credit is not a courtesy — it is the condition of use. #}
+  <figure class="dish-photo">
+    <img src="{{ d.image.url }}" alt="{{ d.item.name }}" loading="lazy" decoding="async"
+         {% if d.image.width %}width="{{ d.image.width }}" height="{{ d.image.height }}"{% endif %}>
+    <figcaption>
+      {% if d.image.page_url %}<a href="{{ d.image.page_url }}" rel="noopener nofollow" target="_blank">{{ d.image.source }}</a>{% else %}{{ d.image.source }}{% endif %}
+      · {{ d.image.credit }}
+      · {% if d.image.licence_url %}<a href="{{ d.image.licence_url }}" rel="noopener nofollow license" target="_blank">{{ d.image.licence }}</a>{% else %}{{ d.image.licence }}{% endif %}
+    </figcaption>
+  </figure>
+  {% endif %}
+
   {% if d.show_nutrition %}
   <section class="card">
     <h2>{{ t('nutrition_facts') }}</h2>

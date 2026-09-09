@@ -168,6 +168,30 @@ SITE_DDL = [
     "CREATE INDEX IF NOT EXISTS idx_chain_nutrition_shop ON chain_nutrition(shop_id)",
     "CREATE INDEX IF NOT EXISTS idx_chain_nutrition_key ON chain_nutrition(shop_id, name_key)",
 
+    # A photograph for an item, with the terms it may be shown under.
+    #
+    # licence and credit are NOT NULL because a free image whose attribution we
+    # did not keep is not usable: CC BY and CC BY-SA both require naming the
+    # author, and an image we cannot credit has to be dropped rather than shown.
+    #
+    # `matched_on` records HOW the image was tied to the dish — a Wikidata P18
+    # statement is an editor asserting this picture depicts this thing, while a
+    # name-matched Commons search hit is our own inference. Worth being able to
+    # tell apart later, and worth being able to purge one without the other.
+    """CREATE TABLE IF NOT EXISTS item_images (
+        item_id INTEGER PRIMARY KEY REFERENCES items(id),
+        url TEXT NOT NULL,
+        page_url TEXT,
+        width INTEGER,
+        height INTEGER,
+        source TEXT NOT NULL,
+        licence TEXT NOT NULL,
+        licence_url TEXT,
+        credit TEXT NOT NULL,
+        matched_on TEXT NOT NULL,
+        fetched_at TEXT NOT NULL
+    )""",
+
     # Search index. trigram tokenizer: substring matching works for Japanese.
     """CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
         item_id UNINDEXED, lang UNINDEXED, name, category,
