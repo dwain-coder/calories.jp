@@ -142,6 +142,25 @@ class TestNamesTheDish(unittest.TestCase):
         self.assertTrue(
             wikimedia.names_the_dish("ジンギスカン", "File:プレート（ジンギスカン・千葉）.jpg"))
 
+    def test_a_short_name_inside_a_longer_compound_is_refused(self):
+        """Three characters of kana land inside unrelated words often enough to
+        matter. All three were live: 「あずま」 showed a sweet-potato cultivar,
+        「ならえ」 showed military equipment from 「右へならえ」, 「豆腐飯」 a Chinese
+        set meal."""
+        self.assertFalse(wikimedia.names_the_dish("あずま", "File:紅あずま_(51045191038).jpg"))
+        self.assertFalse(wikimedia.names_the_dish("ならえ", "File:「右へならえ」装備.jpg"))
+        self.assertFalse(wikimedia.names_the_dish("豆腐飯", "File:燒汁鯖魚定食_雜菌豆腐飯.jpg"))
+
+    def test_a_short_name_standing_on_its_own_is_kept(self):
+        self.assertTrue(wikimedia.names_the_dish("納豆餅", "File:納豆餅.jpg"))
+        self.assertTrue(wikimedia.names_the_dish("お雑煮", "File:Ozoni_お雑煮_(31176080104).jpg"))
+        self.assertTrue(wikimedia.names_the_dish("えび天", "File:Bukkake_Udon_with_えび天.jpg"))
+
+    def test_a_long_name_may_still_follow_japanese(self):
+        """The left-boundary rule is only for short names; it would cost a long
+        one real matches."""
+        self.assertTrue(wikimedia.names_the_dish("ラーメン", "File:醤油ラーメン.jpg"))
+
     def test_short_names_are_not_searched_at_all(self):
         """A two-character name appears inside half of Commons."""
         self.assertFalse(wikimedia.names_the_dish("そば", "File:そば.jpg"))

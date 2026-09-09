@@ -117,6 +117,10 @@ _JA_CHAR = re.compile(r"[぀-ヺー-ヿ一-鿿々]")
 # guess — the Wikipedia article and the Wikidata statement.
 MIN_SEARCH_NAME = 3
 
+# At or below this length, a name must also be preceded by something that is
+# not Japanese — see names_the_dish.
+SHORT_NAME = 3
+
 
 def names_the_dish(name, title):
     """Whether `title` names this dish rather than merely containing its letters.
@@ -134,11 +138,20 @@ def names_the_dish(name, title):
         if at < 0:
             return False
         after = title[at + len(name):at + len(name) + 1]
-        # Only what FOLLOWS matters. A Japanese compound is headed by its last
+        before = title[at - 1] if at > 0 else ""
+        # What FOLLOWS always matters. A Japanese compound is headed by its last
         # element, so a qualifier in front leaves the dish itself: 「醤油ラーメン」
         # is ramen. Characters after it change the head into something else:
         # 「あずまや」 is a garden gazebo, not the dish 「あずま」.
-        if not _JA_CHAR.match(after or " "):
+        ends_cleanly = not _JA_CHAR.match(after or " ")
+        # For a SHORT name, what precedes matters too. Three characters of kana
+        # land inside unrelated compounds often enough to matter: 「あずま」 inside
+        # 「紅あずま」 is a sweet-potato cultivar, 「ならえ」 inside 「右へならえ」 was a
+        # photograph of military equipment. Long names do not need this, and it
+        # would cost them real matches like 「信州木島平笹ずし」.
+        starts_cleanly = (len(name) > SHORT_NAME
+                          or not _JA_CHAR.match(before or " "))
+        if ends_cleanly and starts_cleanly:
             return True
         start = at + 1
 
