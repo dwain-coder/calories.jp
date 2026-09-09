@@ -48,6 +48,8 @@ if _ENV.is_file():
             _k, _v = _line.split('=', 1)
             os.environ.setdefault(_k.strip(), _v.strip().strip('\'"'))
 
+FAIL_FAST = ("Same failure on every row. Fix the cause above rather than the "
+             "query — nothing here will work until it is fixed.")
 DB = "data/metadata/dataset_manager.db"
 OUT = Path("static/media/products")
 PAUSE = 0.35
@@ -85,7 +87,17 @@ def google(query, key, cx, free_only=True, count=5):
         params["rights"] = "cc_publicdomain|cc_attribute|cc_sharealike"
     r = httpx.get("https://www.googleapis.com/customsearch/v1",
                   params=params, timeout=30)
-    r.raise_for_status()
+    if r.status_code >= 400:
+        # Google explains the refusal in the body and nowhere else. Without
+        # this, every row prints an identical 403 and none of them says why.
+        try:
+            err = r.json().get("error", {})
+            reason = "; ".join(filter(None, [
+                err.get("message"),
+                *(d.get("reason", "") for d in err.get("errors", []))]))
+        except ValueError:
+            reason = r.text[:200]
+        raise RuntimeError(f"{r.status_code}: {reason}")
     return [{"url": i["link"], "page": i.get("image", {}).get("contextLink"),
              "host": i.get("displayLink"),
              "licence": "google:cc" if free_only else ""}
@@ -147,8 +159,10 @@ def main():
         query = f"{args.chain} {r['name']}"
         try:
             results = search(query)
-        except httpx.HTTPError as exc:
-            print(f"  {r['name'][:30]:32} search failed: {exc}")
+        except (httpx.HTTPError, RuntimeError) as exc:
+            print(f"  {r['name'][:30]:32} {exc}")
+            if hits == 0 and rows.index(r) >= 2:
+                sys.exit(FAIL_FAST)
             continue
         time.sleep(PAUSE)
         if not results:
