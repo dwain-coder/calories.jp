@@ -13,10 +13,20 @@
   <p class="alt-name">{{ t('region') }}: {{ d.item.category }}</p>
 
   {% if d.image %}
+  {% set is_category = d.image.matched_on and d.image.matched_on.startswith('category:') %}
+  {% set category = d.image.matched_on.split(':', 1)[1] if is_category else None %}
   {# Freely licensed, and credited because CC BY and CC BY-SA both require it.
-     The credit is not a courtesy — it is the condition of use. #}
-  <figure class="dish-photo">
-    <img src="{{ d.image.url }}" alt="{{ d.item.name }}" loading="lazy" decoding="async"
+     The credit is not a courtesy — it is the condition of use.
+
+     A category photograph is marked as one, in the picture and not only in the
+     caption. Only 375 of these dishes have a photograph of themselves; the rest
+     show the right KIND of dish, and a reader has to be able to tell which they
+     are looking at without reading the small print. #}
+  <figure class="dish-photo{% if is_category %} is-category{% endif %}">
+    {% if is_category %}<span class="photo-kind">{{ t('image_of_category', c=category) }}</span>{% endif %}
+    {# Eager and high priority: this is the first content image on the page, and
+       lazy-loading it made it arrive seconds after the text on a cold cache. #}
+    <img src="{{ d.image.url }}" alt="{{ d.item.name }}" fetchpriority="high" decoding="async"
          {% if d.image.width %}width="{{ d.image.width }}" height="{{ d.image.height }}"{% endif %}>
     <figcaption>
       {% if d.image.page_url %}<a href="{{ d.image.page_url }}" rel="noopener nofollow" target="_blank">{{ d.image.source }}</a>{% else %}{{ d.image.source }}{% endif %}

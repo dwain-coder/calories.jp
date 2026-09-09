@@ -173,3 +173,78 @@ class TestNamesTheDish(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEveryDishIsIllustrated(unittest.TestCase):
+    """375 dishes have a photograph of themselves. The rest show the right KIND
+    of dish, labelled as that — a page with nothing on it reads as broken, and a
+    page with the wrong photograph says something false."""
+
+    def _conn(self):
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def test_no_dish_page_is_left_without_an_image(self):
+        conn = self._conn()
+        try:
+            missing = conn.execute(
+                """SELECT COUNT(*) FROM site_pages sp
+                   WHERE sp.page_type = 'dish' AND sp.lang = 'ja'
+                     AND sp.item_id NOT IN (SELECT item_id FROM item_images)""").fetchone()[0]
+        except sqlite3.OperationalError:
+            self.skipTest("no images in this database")
+        finally:
+            conn.close()
+        self.assertEqual(missing, 0)
+
+    def test_a_category_image_says_it_is_one(self):
+        """It must never be mistaken for a photograph of that dish."""
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                """SELECT sp.slug, im.matched_on FROM item_images im
+                   JOIN site_pages sp ON sp.item_id = im.item_id AND sp.lang = 'ja'
+                   WHERE im.matched_on LIKE 'category:%' LIMIT 1""").fetchone()
+        finally:
+            conn.close()
+        if not row:
+            self.skipTest("no category images assigned")
+        html = client.get(f"/dish/{row['slug']}").text
+        category = row["matched_on"].split(":", 1)[1]
+        self.assertIn("photo-kind", html)
+        self.assertIn(f"{category}のイメージ写真", html)
+
+    def test_a_real_photograph_is_not_labelled_as_a_category(self):
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                """SELECT sp.slug FROM item_images im
+                   JOIN site_pages sp ON sp.item_id = im.item_id AND sp.lang = 'ja'
+                   WHERE im.matched_on NOT LIKE 'category:%' LIMIT 1""").fetchone()
+        finally:
+            conn.close()
+        if not row:
+            self.skipTest("no dish-specific images")
+        self.assertNotIn("photo-kind", client.get(f"/dish/{row['slug']}").text)
+
+    def test_the_label_matches_the_image_shown(self):
+        """Five categories have no usable photograph and fall back to 和食. The
+        label has to fall back with them, or a page reads 「卵のイメージ」 over a
+        photograph of osechi."""
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                """SELECT DISTINCT im.matched_on, im.url FROM item_images im
+                   WHERE im.matched_on LIKE 'category:%'""").fetchall()
+            cats = {r[0]: r[1] for r in conn.execute(
+                "SELECT category, url FROM category_images")}
+        except sqlite3.OperationalError:
+            self.skipTest("no category images")
+        finally:
+            conn.close()
+        for r in rows:
+            label = r["matched_on"].split(":", 1)[1]
+            self.assertIn(label, cats, f"{label} has no image of its own")
+            self.assertEqual(r["url"], cats[label],
+                             f"{label} is labelled over a different image")

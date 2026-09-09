@@ -18,11 +18,15 @@
 <meta name="theme-color" content="#FBFBF8">
 {% if jsonld is defined %}{% for j in jsonld %}
 <script type="application/ld+json">{{ j | safe }}</script>{% endfor %}{% endif %}
+{# Dish photographs are served from Wikimedia. Opening the connection while the
+   HTML is still parsing saves a DNS + TLS round trip on the first image. #}
+<link rel="preconnect" href="https://thumb.wikimedia.org" crossorigin>
+<link rel="preconnect" href="https://upload.wikimedia.org" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="{{ asset('/static/site.css') }}">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='2' fill='%23B7282E'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23B7282E'/><path d='M6 23h20c.6 0 1-.4 1-1s-.4-1-1-1H6c-.6 0-1 .4-1 1s.4 1 1 1z' fill='%23FFD700'/><path d='M8 20c0-5 3.6-9 8-9s8 4 8 9H8z' fill='%23FFFFFF'/><circle cx='16' cy='9.5' r='1.8' fill='%23FFD700'/><path d='M16 4.5c-.8 1-1 1.8-.4 2.8.4.6.4 1.2 0 1.7' stroke='%23FFD700' stroke-width='1.2' stroke-linecap='round' fill='none'/></svg>">
 </head>
 <body>
 <a class="skip-link" href="#main">{{ t('skip_to_content') }}</a>

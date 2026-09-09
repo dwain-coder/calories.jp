@@ -156,8 +156,15 @@ def names_the_dish(name, title):
         start = at + 1
 
 
-def search_commons(name, client=None, limit=6, width=800):
-    """Free-licensed Commons images whose own text mentions this dish by name."""
+def search_commons(name, client=None, limit=6, width=800, guard=True):
+    """Free-licensed Commons images for a search term.
+
+    `guard` decides whether the file must name the dish. It is on for dish
+    photographs, where the claim is "this is a picture of THIS dish" and a wrong
+    one is a lie. It is off when picking a representative photograph for a
+    CATEGORY, where the claim is only "this is a simmered dish" — those are few
+    enough to be looked at one by one, which is the actual check.
+    """
     owns = client is None
     client = _client(client)
     try:
@@ -180,8 +187,8 @@ def search_commons(name, client=None, limit=6, width=800):
         hit = _describe(page)
         # The guard. Without it the site publishes a portrait of a 13th-century
         # emperor as a photograph of grilled lamb, and a garden gazebo as 「あずま」.
-        if hit and names_the_dish(name, hit["title"]):
-            hit["matched_on"] = "commons-name"
+        if hit and (not guard or names_the_dish(name, hit["title"])):
+            hit["matched_on"] = "commons-name" if guard else "commons-category"
             out.append(hit)
     return out
 
