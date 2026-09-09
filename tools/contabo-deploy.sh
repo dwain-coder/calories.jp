@@ -166,7 +166,10 @@ if [[ "${VERIFY_ONLY}" -eq 0 ]]; then
   if [[ -d "${SRC_DIR}/.git" ]]; then
     would "git -C ${SRC_DIR} pull --ff-only"
   else
-    would "install -d -m 755 ${APP_DIR}/calories"
+    # 0700, matching the directory the env file was created in — and only when
+    # it does not already exist, so an existing 0700 is never widened to 0755
+    # by a deploy that was only meant to fetch code.
+    [[ -d "${APP_DIR}/calories" ]] || would "install -d -m 700 -o root -g root ${APP_DIR}/calories"
     would "git clone ${REPO} ${SRC_DIR}"
   fi
 
