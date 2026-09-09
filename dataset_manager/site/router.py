@@ -83,6 +83,10 @@ _MAX_AGE = int(os.environ.get("SITE_CACHE_MAX_AGE") or (3600 if _DEPLOYED else 0
 
 # stale-while-revalidate lets the edge answer instantly from a slightly old copy
 # and refresh behind the reader, so a deploy is never a cliff of slow requests.
+# An embed is cached like any other page, but never by a shared proxy under
+# someone else's domain — it is the same document wherever it is framed.
+EMBED_CACHE = {"Cache-Control": "public, max-age=600"}
+
 CACHE = {"Cache-Control":
          f"public, max-age={_MAX_AGE}, stale-while-revalidate=86400" if _MAX_AGE
          else "no-cache"}
@@ -650,6 +654,36 @@ def analyzer_page(request: Request):
     return _render(request, "analyzer.html", lang, {
         "canonical": seo.base_url(lang) + "/analyzer",
         "alternates": {l: seo.base_url(l) + "/analyzer" for l in LANGS},
+    })
+
+
+@router.get("/embed/analyzer", response_class=HTMLResponse)
+def embed_analyzer(request: Request):
+    """The analyzer alone, for an iframe on someone else's page.
+
+    noindex and canonical to /analyzer: an embed is a duplicate of a page that
+    already exists, and it must not compete with it in search.
+    """
+    lang = SITE_LANG
+    return _render(request, "embed_analyzer.html", lang, {
+        "seo_base": seo.base_url(lang),
+    }, headers=EMBED_CACHE)
+
+
+@router.get("/embed", response_class=HTMLResponse)
+def embed_index(request: Request):
+    """The snippet to copy, and what it does."""
+    lang = SITE_LANG
+    base = seo.base_url(lang)
+    url = base + "/embed"
+    crumbs = [(t(lang, "home"), base + "/"), (t(lang, "embed_title"), None)]
+    return _render(request, "embed.html", lang, {
+        "seo_base": base,
+        "rate_limit": analyzer_limits()[0],
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
+        "meta_description": t(lang, "embed_lede"),
     })
 
 

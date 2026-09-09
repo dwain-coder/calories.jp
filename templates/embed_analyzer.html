@@ -1,0 +1,67 @@
+{# The analyzer alone, for embedding in someone else's page.
+
+   Not extending base.html on purpose: an embed carries no site header, no
+   footer, no navigation and no skip link — a second copy of a site's chrome
+   inside an article is noise, and the frame is not a page the reader navigated
+   to. What it does carry is a link back, because a widget that does not say
+   where its numbers came from is exactly what this site does not publish. #}
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ t('ai_analyzer') }} | {{ site_name }}</title>
+{# An embed is a duplicate of /analyzer. It must never compete with it. #}
+<meta name="robots" content="noindex,nofollow">
+<link rel="canonical" href="{{ seo_base }}/analyzer">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="{{ asset('/static/site.css') }}">
+<style>
+  /* The host page owns the margins; the frame is exactly its content. */
+  body { background: transparent; margin: 0; padding: 0; }
+  .embed-wrap { padding: 0.2rem; }
+  .embed-wrap .analyzer-widget { margin: 0; }
+  .embed-credit {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.6rem; flex-wrap: wrap;
+    margin: 0.7rem 0 0; font-size: 0.76rem; color: var(--ink-faint);
+    font-family: var(--font-data);
+  }
+  .embed-credit a { color: var(--ink-soft); }
+  .embed-credit strong { color: var(--ink); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="embed-wrap">
+  {% include "partials/analyzer_widget.html" %}
+
+  <p class="embed-credit">
+    <span>{{ t('embed_source') }}</span>
+    <a href="{{ seo_base }}/analyzer" target="_blank" rel="noopener">
+      <strong>{{ site_name }}</strong> →</a>
+  </p>
+</div>
+
+<script>
+/* Tell the host page how tall to make the frame.
+   An iframe cannot size itself, so without this the widget is either clipped
+   when a result arrives or padded with dead space before one does. */
+(function () {
+  var last = 0;
+  function report() {
+    var h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+    if (h && Math.abs(h - last) > 2) {
+      last = h;
+      parent.postMessage({ caloriesJp: "height", height: h }, "*");
+    }
+  }
+  if (window.ResizeObserver) new ResizeObserver(report).observe(document.body);
+  window.addEventListener("load", report);
+  setInterval(report, 1000);   /* results arrive asynchronously */
+  report();
+})();
+</script>
+</body>
+</html>

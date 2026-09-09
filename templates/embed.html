@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ t('embed_title') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('embed_title') }}</h1>
+<p class="alt-name">{{ t('embed_lede') }}</p>
+
+<div class="card">
+  <div class="snippet-head">
+    <h2>{{ t('embed_snippet_title') }}</h2>
+    <button type="button" class="button-pill secondary" id="copy-embed"
+            data-label="{{ t('embed_copy') }}" data-done="{{ t('embed_copied') }}">
+      {{ t('embed_copy') }}
+    </button>
+  </div>
+  <p class="license">{{ t('embed_snippet_note') }}</p>
+<pre class="api-example" id="embed-snippet"><code>&lt;iframe src="{{ seo_base }}/embed/analyzer"
+        style="width:100%;border:0;height:420px"
+        loading="lazy" title="{{ t('ai_analyzer') }}"&gt;&lt;/iframe&gt;
+&lt;script&gt;
+addEventListener("message", function (e) {
+  if (e.origin !== "{{ seo_base }}") return;
+  if (!e.data || e.data.caloriesJp !== "height") return;
+  var f = document.querySelector('iframe[src^="{{ seo_base }}/embed/"]');
+  if (f) f.style.height = e.data.height + "px";
+});
+&lt;/script&gt;</code></pre>
+</div>
+
+<div class="card">
+  <h2>{{ t('embed_terms_title') }}</h2>
+  <ul class="api-terms">
+    <li>{{ t('embed_terms_free') }}</li>
+    <li>{{ t('embed_terms_rate', n=rate_limit) }}</li>
+    <li>{{ t('embed_terms_credit') }}</li>
+    <li>{{ t('embed_terms_estimate') }}</li>
+  </ul>
+</div>
+
+<h2>{{ t('embed_preview_title') }}</h2>
+<div class="card embed-preview">
+  <iframe src="{{ seo_base if seo_base.startswith('https') else '' }}/embed/analyzer"
+          style="width:100%;border:0;height:420px" loading="lazy"
+          title="{{ t('ai_analyzer') }}" id="embed-preview-frame"></iframe>
+</div>
+<script>
+addEventListener("message", function (e) {
+  if (!e.data || e.data.caloriesJp !== "height") return;
+  var f = document.getElementById("embed-preview-frame");
+  if (f) f.style.height = e.data.height + "px";
+});
+
+/* The snippet is the product of this page, and selecting ten lines out of a
+   horizontally scrolling <pre> on a phone is not something anyone will do. */
+(function () {
+  var btn = document.getElementById("copy-embed");
+  var pre = document.getElementById("embed-snippet");
+  if (!btn || !pre) return;
+
+  function fallback(text) {
+    /* clipboard.writeText needs a secure context; a plain-http preview or an
+       older browser lands here instead of silently doing nothing. */
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* nothing else to try */ }
+    document.body.removeChild(ta);
+  }
+
+  btn.addEventListener("click", function () {
+    var text = pre.innerText;
+    var done = function () {
+      btn.textContent = btn.dataset.done;
+      btn.classList.add("copied");
+      setTimeout(function () {
+        btn.textContent = btn.dataset.label;
+        btn.classList.remove("copied");
+      }, 2000);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(text); done(); });
+    } else {
+      fallback(text);
+      done();
+    }
+  });
+})();
+</script>
+{% endblock %}

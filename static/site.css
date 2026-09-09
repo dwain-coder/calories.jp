@@ -1891,3 +1891,45 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
      make the page itself scroll sideways. */
   .post-body table, .post-body pre { display: block; overflow-x: auto; }
 }
+
+/* ------------------------------------------------------------- Embed snippet */
+.snippet-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.8rem; flex-wrap: wrap;
+}
+.snippet-head h2 { margin: 0; }
+#copy-embed.copied { background: var(--verified-bg, #e8f5e9); border-color: #1e7e34; color: #1e7e34; }
+/* The snippet is meant to be read as well as copied, so it wraps rather than
+   running off the side — the copy button is what actually gets used. */
+#embed-snippet code { white-space: pre-wrap; word-break: break-word; }
+.embed-preview { padding: 0.6rem; }
+
+@media (max-width: 640px) {
+  .snippet-head { gap: 0.5rem; }
+  #copy-embed { width: 100%; justify-content: center; }
+}
+
+/* ------------------------------------------------- The analyzer as the hero
+   The upload control sits inside the hero card, so it must not look like a
+   second card stacked on a first one. */
+.hero-analyzer-split .analyzer-widget {
+  background: var(--paper-raised); border: 1px solid var(--hairline);
+  box-shadow: none; margin: 0 0 0.9rem; padding: 1rem 1.1rem;
+}
+.hero-analyzer-split .hero-search { margin-bottom: 0.7rem; }
+.hero-analyzer-split .upload-label { margin: 0; }
+/* A result can be long. Inside a two-column hero it would push the photograph
+   off the screen, so it scrolls within the card instead. */
+.hero-analyzer-split #analyzer-result:not(:empty) {
+  max-height: 26rem; overflow-y: auto; margin-top: 0.7rem;
+}
+
+@media (max-width: 820px) {
+  .hero-analyzer-split .analyzer-widget { text-align: left; }
+  .hero-analyzer-split #analyzer-result:not(:empty) { max-height: none; }
+}
+/* Says what the upload button is for. The hero's own sub-line is about where
+   the numbers come from, which is a different question. */
+.hero-analyzer-lede {
+  margin: 0 0 0.5rem; font-size: 0.92rem; color: var(--ink-soft); font-weight: 700;
+}

@@ -62,11 +62,27 @@ SECURITY_HEADERS = {
 }
 
 
+# /embed exists to be put in an iframe on someone else's page, so it is the one
+# place the site's blanket refusal to be framed has to be lifted. Set
+# EMBED_ALLOWED_ORIGINS to a space-separated list to restrict who may frame it;
+# unset means anyone, which is what a public widget is for.
+EMBED_FRAME_ANCESTORS = os.environ.get("EMBED_ALLOWED_ORIGINS", "").strip() or "*"
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
+    embeddable = request.url.path.startswith("/embed")
     for key, value in SECURITY_HEADERS.items():
+        if embeddable and key in ("X-Frame-Options", "Content-Security-Policy"):
+            continue
         response.headers.setdefault(key, value)
+    if embeddable:
+        # Everything the full policy says except the framing ban, which is the
+        # whole point of the route.
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            f"frame-ancestors {EMBED_FRAME_ANCESTORS}; object-src 'none'; base-uri 'self'")
     return response
 
 # --- WordPress publishes, this pulls ----------------------------------------
