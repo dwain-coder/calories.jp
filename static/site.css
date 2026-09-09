@@ -1885,10 +1885,14 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
    type scale and rhythm as the rest of the site rather than a theme's. */
 .post-list { list-style: none; margin: 1.4rem 0 0; padding: 0; display: grid; gap: 1.2rem; }
 .post-card {
-  display: grid; grid-template-columns: 12rem 1fr; gap: 1.1rem;
+  display: grid; grid-template-columns: 1fr; gap: 1.1rem;
   align-items: start; padding-bottom: 1.2rem;
   border-bottom: 1px solid var(--hairline);
 }
+/* The thumbnail column is reserved only when there is a thumbnail. A post with
+   no featured image omits .post-thumb entirely, and a fixed first column would
+   put the TEXT in it — 12rem wide, wrapping the title every few characters. */
+.post-card:has(.post-thumb) { grid-template-columns: 12rem 1fr; }
 .post-card:last-child { border-bottom: none; }
 .post-thumb img {
   width: 100%; aspect-ratio: 16 / 10; object-fit: cover;
@@ -1925,7 +1929,7 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 
 @media (max-width: 640px) {
   /* The thumbnail stops earning a column once it is a third of the screen. */
-  .post-card { grid-template-columns: 1fr; gap: 0.7rem; }
+  .post-card, .post-card:has(.post-thumb) { grid-template-columns: 1fr; gap: 0.7rem; }
   .post-thumb img { aspect-ratio: 16 / 9; }
   .post-body { line-height: 1.8; }
   /* Author HTML can carry a wide table or a long code block; neither may
