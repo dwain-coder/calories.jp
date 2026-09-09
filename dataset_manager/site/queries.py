@@ -1040,6 +1040,8 @@ def food_nutrition_json(item_id):
         dict(r) for r in conn.execute(
             "SELECT description, gram_weight FROM food_portions WHERE item_id = ?", (item_id,))
     ]
+    nutrients = food_nutrients(conn, item_id)
+    yields = food_cooking_yield(conn, item_id)
     names = get_names(conn, item_id)
     conn.close()
     lic, _ = get_license_info(item["source"])
@@ -1052,8 +1054,59 @@ def food_nutrition_json(item_id):
             {k: nut[k] for k in ("energy_kcal", "protein_g", "fat_g", "carbohydrate_g")}
             if nut else None
         ),
+        "nutrients": nutrients,
+        "cooking_yield": yields,
         "portions": portions,
     }
+
+
+def food_nutrients(conn, item_id):
+    """Every published value for a food, each carrying how it was arrived at.
+
+    `per_100g` above is four numbers with nothing attached, which is fine for a
+    page that renders its own footnote and wrong for anything reading over the
+    wire: 15.8% of what MEXT publishes is a parenthesised estimate and `Tr` is
+    stored as a zero. A consumer that cannot tell those apart will restate an
+    estimate as a measurement.
+
+    quality is 'measured' | 'estimated' | 'trace'. Salt (NACL_EQ) and the
+    micronutrients live here too — they are not in the `nutrition` table.
+    """
+    return [dict(r) for r in conn.execute(
+        """SELECT code, name, unit, amount, quality
+           FROM nutrients WHERE item_id = ? ORDER BY id""", (item_id,))]
+
+
+def food_cooking_yield(conn, item_id):
+    """The 重量変化率 rows MEXT publishes for this food, if any."""
+    return [dict(r) for r in conn.execute(
+        """SELECT method, rate_percent FROM cooking_yield
+           WHERE item_id = ? AND rate_percent IS NOT NULL
+           ORDER BY rate_percent""", (item_id,))]
+
+
+def cooking_yield_search(q, lang="ja", limit=20):
+    """Weight-change rates by food name, for callers that have a name not an id.
+
+    Same clean-corpus gate as everything else here: joined through site_pages,
+    so an ODbL row cannot answer.
+    """
+    conn = get_connection()
+    try:
+        return [dict(r) for r in conn.execute(
+            """SELECT cy.item_id, COALESCE(nm.name, sp.title) AS name,
+                      cy.method, cy.rate_percent, sp.slug
+               FROM cooking_yield cy
+               JOIN site_pages sp ON sp.item_id = cy.item_id
+                    AND sp.lang = ? AND sp.page_type = 'food'
+               LEFT JOIN item_names nm ON nm.item_id = cy.item_id
+                    AND nm.lang = ? AND nm.is_primary = 1
+               WHERE cy.rate_percent IS NOT NULL
+                 AND COALESCE(nm.name, sp.title) LIKE ?
+               ORDER BY cy.rate_percent
+               LIMIT ?""", (lang, lang, f"%{q}%", limit))]
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------- sitemaps

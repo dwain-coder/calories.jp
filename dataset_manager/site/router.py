@@ -469,6 +469,21 @@ def api_page(request: Request):
             "note": t(lang, "api_ep_nutrition_note"),
         },
         {
+            "method": "GET", "path": "/api/cooking-yield",
+            "summary": t(lang, "api_ep_yield"),
+            "params": [("q", t(lang, "api_p_q")), ("lang", t(lang, "api_p_lang")),
+                       ("limit", t(lang, "api_p_limit"))],
+            "example": f"curl '{base}/api/cooking-yield?q=もも 皮つき&lang=ja'",
+            "note": t(lang, "api_ep_yield_note"),
+        },
+        {
+            "method": "GET", "path": "/api/foods/{id}/cooking-yield",
+            "summary": t(lang, "api_ep_yield_item"),
+            "params": [("id", t(lang, "api_p_id"))],
+            "example": f"curl '{base}/api/foods/1/cooking-yield'",
+            "note": None,
+        },
+        {
             "method": "POST", "path": "/api/analyze-dish",
             "summary": t(lang, "api_ep_dish"),
             "params": [("dish", t(lang, "api_p_dish")), ("shop", t(lang, "api_p_shop")),

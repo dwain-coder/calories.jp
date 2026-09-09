@@ -54,3 +54,33 @@ def api_food_nutrition(item_id: int):
     if not data:
         raise HTTPException(status_code=404, detail="No public food with this id")
     return data
+
+
+@router.get("/foods/{item_id}/cooking-yield")
+def api_food_cooking_yield(item_id: int):
+    """What this food weighs after cooking, as a percentage of its raw weight."""
+    conn = queries.get_connection()
+    try:
+        if not conn.execute(
+                "SELECT 1 FROM site_pages WHERE item_id = ? LIMIT 1", (item_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="No public food with this id")
+        return queries.food_cooking_yield(conn, item_id)
+    finally:
+        conn.close()
+
+
+@router.get("/cooking-yield")
+def api_cooking_yield(
+    q: str = Query(..., min_length=1, max_length=100),
+    lang: str = Query("ja"),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Weight-change rates by food name.
+
+    A recipe is written in raw weights and a composition table in cooked ones,
+    so the two cannot be compared without this number. MEXT publishes it and
+    almost nothing else exposes it.
+    """
+    if lang not in LANGS:
+        raise HTTPException(status_code=400, detail=f"lang must be one of {', '.join(LANGS)}")
+    return queries.cooking_yield_search(q, lang, limit=limit)
