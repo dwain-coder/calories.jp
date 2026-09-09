@@ -39,6 +39,15 @@ import httpx  # noqa: E402
 
 from dataset_manager.images import wikimedia  # noqa: E402
 
+# Keys live in .env, which is gitignored. Read it here rather than making
+# the caller export them by hand every session.
+_ENV = Path(__file__).resolve().parents[1] / '.env'
+if _ENV.is_file():
+    for _line in _ENV.read_text(encoding='utf-8').splitlines():
+        if '=' in _line and not _line.lstrip().startswith('#'):
+            _k, _v = _line.split('=', 1)
+            os.environ.setdefault(_k.strip(), _v.strip().strip('\'"'))
+
 DB = "data/metadata/dataset_manager.db"
 OUT = Path("static/media/products")
 PAUSE = 0.35

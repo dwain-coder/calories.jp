@@ -158,6 +158,19 @@ def _nutrition_items(conn):
     }
 
 
+def _product_image(row):
+    """The chain's own photograph of this dish, if the table has one yet.
+
+    Read defensively: this runs against databases built before product_photos
+    existed, and a shop page that fails to build is worse than one without
+    photographs.
+    """
+    try:
+        return row["product_image"]
+    except (IndexError, KeyError):
+        return None
+
+
 def _shop_stats(conn, shop_id, with_nutrition):
     """Counts the index gate reads for one shop.
 
@@ -168,8 +181,10 @@ def _shop_stats(conn, shop_id, with_nutrition):
     """
     items = conn.execute(
         """SELECT smi.name, smi.item_id, smi.price_yen, cn.energy_kcal AS chain_kcal,
-                  min.energy_kcal AS shown_kcal, min.provenance
+                  min.energy_kcal AS shown_kcal, min.provenance,
+                  pp.file AS product_image
            FROM shop_menu_items smi
+           LEFT JOIN product_photos pp ON pp.shop_menu_item_id = smi.id
            LEFT JOIN chain_nutrition cn ON cn.id = smi.chain_nutrition_id
            LEFT JOIN menu_item_nutrition min ON min.shop_menu_item_id = smi.id
            WHERE smi.shop_id = ?""", (shop_id,)).fetchall()
@@ -180,7 +195,7 @@ def _shop_stats(conn, shop_id, with_nutrition):
         menuterms.is_extra(i["name"])
         or menuterms.is_drink(i["name"], classify_dish_visual(i["name"])["category"])
         or menuterms.says_nothing(i["price_yen"], i["shown_kcal"] or i["chain_kcal"])
-        or not food_images.has_photo(i["name"]))]
+        or not food_images.has_photo(i["name"], _product_image(i)))]
 
     def sourced(i):
         """The chain's own figure, or a composition-table row for this dish."""
