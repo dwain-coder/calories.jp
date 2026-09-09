@@ -220,18 +220,46 @@ working perfectly.
 ## Step 8 — The edge cache
 
 `/column` is cached for an hour like every other page, so a new post does not
-appear until it expires. Add a Cache Rule **above** the site-wide one, since the
-first match wins:
+appear until it expires. Do not cache it at all: it is a handful of pages
+answered from a local SQLite read, there is no origin to protect, and what
+matters is that a post is live the moment it is published.
 
-| Field | Value |
-|---|---|
-| If | `URI Path` starts with `/column` |
-| Then | Eligible for cache |
-| Edge TTL | Ignore cache-control, **60 seconds** |
-| Browser TTL | Respect origin TTL |
+Two Cache Rules, whose expressions must not overlap:
 
-The one place overriding the origin header is right: the app cannot know a post
-was published between two requests.
+| Rule | If | Then |
+|---|---|---|
+| `Column short TTL` | `URI Path` starts with `/column` | **Bypass cache**, Browser TTL **Bypass** |
+| `Cache HTML` | `not starts_with(path, "/internal") and not starts_with(path, "/column")` | Eligible for cache, edge and browser TTL from the origin header |
+
+**Every matching cache rule runs, in order, and a later one overrides an earlier
+one for the same setting.** It is not first-match-wins. With `Cache HTML`
+matching only on `/internal`, it also matched `/column`, ran second, and
+replaced the bypass with "eligible for cache" — the bypass rule looked correct,
+was deployed, was ordered first, and did nothing. Excluding `/column` from the
+second expression makes the two disjoint and the order irrelevant.
+
+Browser TTL must be **Bypass** too. Left on "respect origin" it takes the app's
+`max-age=3600`, and the browser you published from keeps showing the old page —
+the most confusing possible version of this.
+
+Verify with GET, not HEAD:
+
+```bash
+curl -s -D - -o /dev/null https://calories.jp/column | grep -i cf-cache-status
+curl -s -D - -o /dev/null https://calories.jp/menu   | grep -i cf-cache-status
+```
+
+`DYNAMIC` for `/column`, `HIT` on a second call for `/menu`. `curl -sI` sends
+HEAD, and its cache-status and `age` values do not track what a reader gets —
+three HEADs thirty seconds apart reported ages of 65, 152 and 567, because each
+landed on a different machine in the colo. Do not debug caching with `-I`.
+
+There is a zone-wide **Browser Cache TTL** under Caching → Configuration. Set it
+to *Respect Existing Headers*; a fixed value there silently overrides the
+per-route `Cache-Control` the app takes care to send.
+
+Also: editing a cache rule does not re-TTL what is already stored. After a rule
+change, purge the URL before concluding anything from what you measure.
 
 ---
 
