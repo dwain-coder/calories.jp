@@ -49,6 +49,17 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
+    # A missing file is the normal way to mistype a path, not a bug worth a
+    # traceback. Point at the template instead.
+    source = Path(args.csv_path)
+    if not source.is_file():
+        template = Path(__file__).resolve().parents[1] / "docs" / "granted-images.example.csv"
+        sys.exit(
+            f"{source} not found.\n"
+            f"Copy the template and fill it in as permissions arrive:\n"
+            f"    cp docs/granted-images.example.csv granted.csv\n"
+            f"(template: {template})")
+
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
     create_site_tables(conn)
@@ -56,7 +67,7 @@ def main():
 
     written = skipped = 0
     problems = []
-    with open(args.csv_path, encoding="utf-8-sig", newline="") as fh:
+    with source.open(encoding="utf-8-sig", newline="") as fh:
         for n, row in enumerate(csv.DictReader(fh), 2):
             missing = [c for c in REQUIRED if not (row.get(c) or "").strip()]
             if missing:
