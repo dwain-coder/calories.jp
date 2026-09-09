@@ -84,7 +84,9 @@ ARTICLES = {
     "和え物": "おひたし",
     "鍋物": "闇鍋",
     "肉": "焼肉",
-    "野菜": "野菜",
+    # Not the article 「野菜」 — its lead image is a market stall, and a crate of
+    # cabbages is not what a vegetable DISH looks like.
+    "野菜": "煮しめ",
     "豆": "煮豆",
     "穀類": "おにぎり",
     "いも": "芋煮",
