@@ -1,0 +1,61 @@
+rank,chain,menu_rows,domain,confidence,note
+1,ジョナサン,343,skylark.co.jp,high,Skylark group — one entry covers 8 brands
+2,ガスト,312,skylark.co.jp,high,Skylark group
+3,はま寿司,305,hama-sushi.co.jp,high,Zensho
+4,夢庵,285,skylark.co.jp,high,Skylark group
+5,ココス,283,cocos-jpn.co.jp,high,Zensho
+6,かっぱ寿司,270,kappasushi.jp,high,
+7,スターバックス コーヒー,231,starbucks.co.jp,high,
+8,磯丸水産,216,sfpdining.jp,medium,SFP Dining — verify
+9,くら寿司,210,kurasushi.co.jp,high,confirmed in chain_nutrition source_url
+10,幸楽苑,205,kourakuen.co.jp,high,
+11,ビッグボーイ,205,bigboyjapan.co.jp,medium,verify
+12,藍屋,203,skylark.co.jp,high,Skylark group
+13,元気寿司,203,genkisushi.co.jp,high,
+14,スシロー,203,akindo-sushiro.co.jp,high,
+15,コメダ珈琲店,203,komeda.co.jp,high,
+16,すし松,200,matsuyafoods.co.jp,high,Matsuya group
+17,ジョイフル,198,joyfull.co.jp,high,
+18,ロイヤルホスト,185,royalhost.jp,high,
+19,デニーズ,184,dennys.jp,high,
+20,びっくりドンキー,179,bikkuri-donkey.com,medium,verify
+21,焼肉きんぐ,175,yakiniku-king.jp,medium,Monogatari Corp — verify
+22,バーミヤン,172,skylark.co.jp,high,Skylark group
+23,IVY PLACE,171,,none,independent — no chain site
+24,牛角,154,gyukaku.ne.jp,medium,Colowide — verify
+25,ピザーラ,154,pizza-la.co.jp,high,
+26,串カツ田中,153,kushi-tanaka.com,medium,verify
+27,ムーチョ モダン メキシカーノ,153,,none,independent
+28,ほっともっと,151,hottomotto.com,high,Plenus
+29,82 ALE HOUSE GRAND,150,,none,independent
+30,魚屋路,149,skylark.co.jp,high,Skylark group
+31,FRIDAYS,146,tgifridays.co.jp,medium,verify
+32,SMOKEHOUSE,143,,none,independent
+33,ステーキガスト,142,skylark.co.jp,high,Skylark group
+34,カレーハウスCoCo壱番屋,141,ichibanya.co.jp,high,
+35,プロント,138,pronto.co.jp,high,
+36,サイゼリヤ,134,saizeriya.co.jp,high,
+37,Burger Mania,133,,none,independent
+38,なか卯,131,nakau.co.jp,high,Zensho
+39,鳥貴族,130,torikizoku.co.jp,high,
+40,大戸屋,130,ootoya.com,high,
+41,フォルクス,130,,low,Anrakutei group — verify
+42,から好し,122,skylark.co.jp,high,Skylark group
+43,レインボーカフェ • 東京アメリカンクラブ,119,,none,members club
+44,chawan,118,,none,independent
+45,ゆで太郎,116,yudetarou.jp,medium,verify
+46,タリーズコーヒー,114,tullys.co.jp,high,
+47,すしの銚子丸,114,choushimaru.co.jp,high,
+48,まんまの,113,,none,independent
+49,T.Y.ハーバー ブルワリーレストラン,112,,none,independent
+50,AlohaTable WAIKIKI,112,,none,independent
+51,日高屋,110,hiday.co.jp,medium,Hiday Hidaka — verify
+52,上島珈琲店,109,ueshima-coffee-ten.jp,medium,UCC — verify
+53,モスバーガー,106,mos.jp,high,confirmed in chain_nutrition source_url
+54,松屋,105,matsuyafoods.co.jp,high,
+55,CICADA,103,,none,independent
+56,いきなり！ステーキ,101,ikinaristeak.com,medium,Pepper Food Service — verify
+57,肉五郎,100,,none,independent
+58,餃子の王将,99,ohsho.co.jp,high,
+59,サルヴァトーレ・クオモ,99,,none,independent
+60,松のや,98,matsuyafoods.co.jp,high,Matsuya group

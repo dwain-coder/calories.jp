@@ -3,6 +3,7 @@
 Assigns appetizing, high-resolution food images to every dish across
 chains and culinary categories.
 """
+import hashlib
 import re
 import sqlite3
 from functools import lru_cache
@@ -564,6 +565,46 @@ def _best_match(text):
     return chosen[1] if chosen else None
 
 
+
+@lru_cache(maxsize=1)
+def _variants():
+    """{concept: [row, ...]} — several photographs of the same kind of dish.
+
+    A Commons category is a set of photographs of one subject, so every entry
+    is still a photograph of that dish. Six of them let a 123-row sushi menu
+    stop showing one picture down the page.
+    """
+    from .queries import get_connection
+    out = {}
+    try:
+        conn = get_connection()
+    except Exception:
+        return out
+    try:
+        for r in conn.execute(
+                "SELECT * FROM dish_photo_variants ORDER BY concept, idx"):
+            out.setdefault(r["concept"], []).append(dict(r))
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+    return out
+
+
+def _variant_for(concept, dish_name):
+    """One of the variants, chosen by the dish's name.
+
+    Hashed on the name rather than shuffled, so a dish keeps its photograph
+    between deploys — a menu that reshuffles every build looks broken. md5
+    because Python salts hash() per process and the choice would not survive
+    a restart.
+    """
+    pool = _variants().get(concept)
+    if not pool:
+        return None
+    digest = hashlib.md5((dish_name or "").encode("utf-8")).hexdigest()
+    return pool[int(digest, 16) % len(pool)]
+
 def get_dish_image(dish_name: str, category_hint: Optional[str] = None) -> Dict[str, Any]:
     """Resolve an authentic food photo for any dish name.
 
@@ -583,7 +624,7 @@ def get_dish_image(dish_name: str, category_hint: Optional[str] = None) -> Dict[
     # Japanese Wikipedia article about it, beats a stock image of roughly the
     # right colour. Only 21 bundled files existed for 39 keys, so a chain menu
     # showed the same picture forty times.
-    photo = _photos().get(matched_key)
+    photo = _variant_for(matched_key, name) or _photos().get(matched_key)
     if photo:
         return {
             "url": photo["file"],
@@ -591,7 +632,7 @@ def get_dish_image(dish_name: str, category_hint: Optional[str] = None) -> Dict[
             "thumb_url": photo["file"],
             "local_fallback": (item_data or {}).get(
                 "local", "/static/media/food/default.webp"),
-            "category": (item_data or {}).get("category", photo["article"]),
+            "category": (item_data or {}).get("category") or photo.get("article", ""),
             "alt": f"{name}の参考料理写真（イメージ）",
             "representational_note": REPRESENTATIONAL,
             "credit": photo.get("credit"),
@@ -626,3 +667,18 @@ def get_dish_image(dish_name: str, category_hint: Optional[str] = None) -> Dict[
         "alt": f"{name}の参考料理写真（イメージ）",
         "representational_note": REPRESENTATIONAL,
     }
+
+
+def has_photo(dish_name, exact_image=None):
+    """Whether this row can be shown with a photograph rather than a tile.
+
+    The menu pages are photo-led, and a card with a coloured square where the
+    food should be reads as broken rather than as honest. A row without a
+    picture is hidden — which costs real information, so it is one predicate
+    used by BOTH the page and the 品数 count, the way is_extra and says_nothing
+    already are. Two copies of this rule would drift and print a number that
+    disagrees with the rows beneath it.
+    """
+    if exact_image:
+        return True
+    return classify_key(dish_name) != "culinary_default"

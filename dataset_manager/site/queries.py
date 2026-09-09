@@ -9,6 +9,7 @@ from ..calc.nutrition import dish_nutrition
 from . import claims, servings
 from . import menuterms
 from .brand_assets import get_chain_brand_badge, classify_dish_visual
+from . import food_images
 from .food_images import get_dish_image
 from .i18n import MICRO_DV
 
@@ -1320,6 +1321,10 @@ def get_shop_page_data(page):
             # photograph of the food itself, then one of the right kind of
             # dish, then nothing. Only the last two are illustrations.
             exact = _row_get(r, "product_image") or r["db_image_url"]
+            # Photo-led pages: a card with a coloured square where the food
+            # should be reads as broken. Same predicate the 品数 count uses.
+            if not food_images.has_photo(r["name"], exact):
+                continue
             image_url = exact or food_img["url"]
             image_card_url = exact or food_img["card_url"]
             image_full_url = image_url

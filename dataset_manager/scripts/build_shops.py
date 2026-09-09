@@ -25,6 +25,7 @@ import unicodedata
 from . import build_site
 from ..database.site_schema import create_site_tables
 from ..site import foodterms, menuterms
+from ..site import food_images
 from ..site.brand_assets import classify_dish_visual
 
 # --- the index gate ---------------------------------------------------------
@@ -178,7 +179,8 @@ def _shop_stats(conn, shop_id, with_nutrition):
     items = [i for i in items if not (
         menuterms.is_extra(i["name"])
         or menuterms.is_drink(i["name"], classify_dish_visual(i["name"])["category"])
-        or menuterms.says_nothing(i["price_yen"], i["shown_kcal"] or i["chain_kcal"]))]
+        or menuterms.says_nothing(i["price_yen"], i["shown_kcal"] or i["chain_kcal"])
+        or not food_images.has_photo(i["name"]))]
 
     def sourced(i):
         """The chain's own figure, or a composition-table row for this dish."""
