@@ -101,8 +101,13 @@ first thing every WordPress bot tries.
 D=/home/caloriescolumn/web/column-origin.calories.jp/public_html
 C=/home/caloriescolumn/conf/web/column-origin.calories.jp
 sudo -u caloriescolumn wp config set DISALLOW_FILE_EDIT true --raw --path="$D"
-printf 'User-agent: *\nDisallow: /\n' | sudo tee $D/robots.txt >/dev/null
-sudo chown caloriescolumn:caloriescolumn $D/robots.txt
+sudo tee $C/nginx.conf_frontend >/dev/null <<'FRONT'
+set $wp_frontend 1;
+if ($request_uri ~ ^/(wp-admin|wp-login\.php|wp-json|wp-content|wp-includes|wp-cron\.php)) { set $wp_frontend 0; }
+if ($arg_nvt_sso) { set $wp_frontend 0; }
+if ($wp_frontend) { return 301 https://calories.jp/column; }
+FRONT
+sudo cp $C/nginx.conf_frontend $C/nginx.ssl.conf_frontend
 echo 'location = /xmlrpc.php { deny all; access_log off; log_not_found off; return 403; }' \
   | sudo tee $C/nginx.conf_xmlrpc >/dev/null
 sudo cp $C/nginx.conf_xmlrpc $C/nginx.ssl.conf_xmlrpc
@@ -111,8 +116,16 @@ sudo nginx -t && sudo systemctl reload nginx
 
 Three separate reasons:
 
-- **`robots.txt`** — the same posts exist at `calories.jp/column/…`, and the
-  origin must not be indexed as a duplicate of them.
+- **The front-end 301** — WordPress still serves its own theme, and every post
+  exists there as a duplicate of `calories.jp/column/…`. A redirect removes the
+  URL rather than asking Google to ignore it, which `noindex` only achieves if
+  the page stays crawlable.
+  It must spare four things or the site breaks: `/wp-json` (the app reads it),
+  `/wp-content` (post images, rendered on calories.jp), `/wp-admin` and
+  `/wp-login.php`, and the root carrying `?nvt_sso=` — the passwordless login
+  link from `hestia-wp-login.sh` arrives there.
+  Server level, not a `location /`: the template declares one already and
+  nginx refuses a duplicate.
 - **`DISALLOW_FILE_EDIT`** — closes the theme editor, the usual path from a
   stolen password to running code.
 - **`xmlrpc.php`** — pingback amplification and brute-force. The Hestia
@@ -125,10 +138,21 @@ Verify, and do not skip the POST:
 curl -s -o /dev/null -w 'home        %{http_code}\n' https://column-origin.calories.jp/
 curl -s -o /dev/null -w 'xmlrpc POST %{http_code}\n' -X POST https://column-origin.calories.jp/xmlrpc.php
 curl -s https://column-origin.calories.jp/wp-json/wp/v2/posts | head -c 80
+
+R="--resolve column-origin.calories.jp:443:5.104.81.60"
+for p in / /sample-page/; do
+  printf '%-14s %s\n' "$p" "$(curl -sk $R -o /dev/null -w '%{http_code}' https://column-origin.calories.jp$p)"
+done
+curl -sk $R -o /dev/null -w 'sso root %{http_code}\n' 'https://column-origin.calories.jp/?nvt_sso=x'
 ```
 
-200, **403**, JSON. A `GET` to `xmlrpc.php` returns `405` from WordPress itself
-even when unprotected, so it proves nothing.
+200, **403**, JSON, then **301** on the front-end paths and **200** on the
+SSO root. A `GET` to `xmlrpc.php` returns `405` from WordPress itself even
+when unprotected, so it proves nothing.
+
+Check these against the origin with `--resolve`. The site-wide Cache Rule
+matches this subdomain too, so the edge will serve you a copy of the
+WordPress front page from before the redirect existed.
 
 nginx reloads gracefully; a request issued in the same breath can still be
 served by the old worker. If the POST says 200, wait a second and repeat before
