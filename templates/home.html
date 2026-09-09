@@ -3,10 +3,17 @@
 {% block title %}{{ site_name }} — {{ t('tagline') }}{% endblock %}
 {% block content %}
 {% set media_slot = "home-hero" %}
-<div class="hero-split">
+{# The analyzer IS the hero. A photograph is the shortest route into the
+   database — it asks nothing of a reader who does not yet know what the food is
+   called — so it is the first thing on the page rather than a section below the
+   fold. The name search sits under it, because searching by name is the other
+   thing people arrive wanting to do, not a lesser one. #}
+<div class="hero-split hero-analyzer-split">
   <section class="hero">
     <h1>{{ t('tagline_a') }} <span class="hl">{{ t('tagline_b') }}</span></h1>
     <p class="hero-sub">{{ t('footer_note') }}</p>
+    <p class="hero-analyzer-lede">{{ t('analyzer_intro') }}</p>
+    {% with heading = false, redirect_to = '/analyzer' %}{% include "partials/analyzer_widget.html" %}{% endwith %}
     <form class="hero-search suggest-box" action="/search" method="get" role="search">
       <input type="search" name="q" placeholder="{{ t('search_placeholder') }}" aria-label="{{ t('search') }}" data-suggest="{{ lang }}" autocomplete="off">
       <button type="submit">{{ t('search') }}</button>
@@ -74,12 +81,6 @@
 </section>
 {% endif %}
 
-{# A photo is the shortest route into the database, so the analyzer runs
-   here rather than only behind a link. #}
-<section class="home-analyzer">
-  {% with heading = true, redirect_to = '/analyzer' %}{% include "partials/analyzer_widget.html" %}{% endwith %}
-  <p class="analyzer-more"><a href="/analyzer">{{ t('analyzer_open_full') }}</a></p>
-</section>
 
 <section class="home-tools">
   <a class="tool-card card" href="/meal-calculator">
