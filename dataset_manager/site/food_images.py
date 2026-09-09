@@ -4,6 +4,8 @@ Assigns appetizing, high-resolution food images to every dish across
 chains and culinary categories.
 """
 import re
+import sqlite3
+from functools import lru_cache
 from typing import Dict, Any, Optional
 
 UNSPLASH_BASE = "https://images.unsplash.com"
@@ -222,6 +224,52 @@ DISH_PHOTO_CATALOG = {
 
 # Ordered rules: more specific patterns come before broader patterns
 CLASSIFICATION_RULES = [
+    # Dish kinds added with the Wikimedia photograph set. Specific first:
+    # the matcher takes the pattern ending last and breaks ties on this order,
+    # so 定食 and セット sit at the bottom where a real dish name outranks them.
+    (r"焼き鳥|やきとり|串焼き|つくね|ねぎま|手羽", "yakitori"),
+    (r"枝豆|えだまめ", "edamame"),
+    (r"冷奴|ひややっこ|湯豆腐", "hiyayakko"),
+    (r"おでん|関東煮", "oden"),
+    (r"刺身|お造り|舟盛り|盛り合わせ刺", "sashimi"),
+    (r"天ぷら|天麩羅|かき揚げ", "tempura"),
+    (r"だし巻き|出汁巻き|卵焼き|玉子焼き|厚焼き玉子", "tamagoyaki"),
+    (r"コロッケ|クリームコロッケ", "korokke"),
+    (r"たこ焼き|タコ焼き|たこやき", "takoyaki"),
+    (r"お好み焼き|もんじゃ|チヂミ", "okonomiyaki"),
+    (r"焼きそば|焼そば|ヤキソバ", "yakisoba"),
+    (r"茶碗蒸し|ちゃわん蒸し", "chawanmushi"),
+    (r"漬物|お新香|浅漬け|キムチ", "tsukemono"),
+    (r"オムライス|オムハヤシ", "omurice"),
+    (r"グラタン|ラザニア", "gratin"),
+    (r"ドリア", "doria"),
+    (r"リゾット", "risotto"),
+    (r"サンドイッチ|サンドウィッチ|クラブハウス", "sandwich"),
+    (r"ローストビーフ", "roast_beef"),
+    (r"ステーキ|サーロイン|フィレ肉|リブロース", "steak_plate"),
+    (r"ナポリタン", "napolitan"),
+    (r"麻婆|マーボー|マーボ", "mapo_tofu"),
+    (r"酢豚", "subuta"),
+    (r"エビチリ|海老チリ|えびチリ", "ebi_chili"),
+    (r"炒飯|チャーハン|焼き飯|ピラフ", "chahan"),
+    (r"焼売|シュウマイ|シューマイ", "shumai"),
+    (r"つけ麺|つけめん", "ramen_tsukemen"),
+    (r"ビビンバ|ビビンパ|石焼ビビンバ", "bibimbap"),
+    (r"サムギョプサル|サムギョプ", "samgyeopsal"),
+    (r"フォー|フォ―", "pho"),
+    (r"タコス|タコライス|ブリトー", "tacos"),
+    (r"ケバブ|シュラスコ", "kebab"),
+    (r"カレーライス|カレー丼|カツカレー|カレー", "curry_rice"),
+    (r"ショートケーキ|イチゴケーキ", "shortcake"),
+    (r"あんみつ|みつ豆|白玉", "anmitsu"),
+    (r"どら焼き|たい焼き|大福|団子|まんじゅう", "dorayaki"),
+    (r"ソフトクリーム", "soft_serve"),
+    (r"スムージー|フラッペ|シェイク", "smoothie"),
+    (r"カクテル|モヒート|カシス|ジントニック", "cocktail"),
+    (r"日本酒|純米|大吟醸|冷酒|熱燗", "sake_drink"),
+    (r"焼酎|芋焼酎|麦焼酎", "shochu"),
+    (r"ワイン|グラスワイン|赤ワイン|白ワイン", "wine_drink"),
+
     # Specific burger variations
     (r"チーズバーガー|とびきりチーズ|チーズ.*バーガー|ダブル.*チーズ", "burger_cheese"),
     # Like the cheese rule above, these have to reach the end of the compound.
@@ -261,13 +309,13 @@ CLASSIFICATION_RULES = [
 
     # Curry, Rice, Pizza, Gyoza
     (r"カレー|カツカレー", "curry"),
-    (r"炒飯|チャーハン|ピラフ|オムライス|天丼|海鮮丼|親子丼", "gyudon_beef"),
+    (r"ピラフ", "chahan"),
     (r"ピザ|ピッツァ|マルゲリータ", "pizza"),
-    (r"餃子|ギョーザ|点心|焼売|春巻|小籠包", "gyoza"),
+    (r"餃子|ギョーザ|点心|小籠包|春巻", "gyoza"),
 
     # Fries, Sides & Salads
     (r"オニオンフライ|オニオンリング", "onion_rings"),
-    (r"ポテト|フレンチフライ|ハッシュポテト|コロッケ", "french_fries"),
+    (r"ポテト|フレンチフライ|ハッシュポテト", "french_fries"),
     (r"サラダ|コールスロー|生野菜|アボカド|シーザー", "salad_green"),
 
     # Soups
@@ -286,11 +334,42 @@ CLASSIFICATION_RULES = [
     (r"茶|ティー|紅茶|烏龍|緑茶|ほうじ茶|抹茶", "tea_matcha"),
     (r"ジュース|コーラ|ソーダ|フロート|シェイク|ジンジャーエール", "juice_beverage"),
     (r"ビール|ハイボール|サワー|酒|ワイン", "beer_alcohol"),
+
+    # Formats, not dishes. Last, so 「牛丼」 keeps the beef-bowl
+    # photograph and 「唐揚げ定食」 is not a generic tray.
+    (r"天丼|海鮮丼|親子丼|中華丼|鉄火丼|うな丼|丼", "donburi_rice"),
+    (r"弁当|べんとう|ベントー", "bento"),
+    (r"定食|御膳|セット|ランチ", "teishoku"),
 ]
 
 
 def _build_photo_url(photo_id: str, width: int = 160, height: int = 160, quality: int = 85) -> str:
     return f"{UNSPLASH_BASE}/{photo_id}?auto=format&fit=crop&w={width}&h={height}&q={quality}"
+
+
+REPRESENTATIONAL = "※写真はイメージです（料理ジャンル・具材構成に基づく参考写真）"
+
+
+@lru_cache(maxsize=1)
+def _photos():
+    """{concept: row} for dish kinds that have a real, freely-licensed photo.
+
+    Fetched by tools/fetch_menu_photos.py from the lead image of the Japanese
+    Wikipedia article about that kind of dish. Read once — it is ~80 rows and
+    does not change between deploys.
+    """
+    from .queries import get_connection
+    try:
+        conn = get_connection()
+    except Exception:
+        return {}
+    try:
+        return {r["concept"]: dict(r) for r in conn.execute("SELECT * FROM dish_photos")}
+    except sqlite3.Error:
+        # An older extract has no such table. Bundled photographs, not a 500.
+        return {}
+    finally:
+        conn.close()
 
 
 # A dish name stops being the dish at the first of these. What follows is the
@@ -352,15 +431,38 @@ def get_dish_image(dish_name: str, category_hint: Optional[str] = None) -> Dict[
     name = (dish_name or "").strip()
     matched_key = classify_key(name)
 
-    item_data = DISH_PHOTO_CATALOG.get(matched_key, DISH_PHOTO_CATALOG["culinary_default"])
-    photo_id = item_data["id"]
+    item_data = DISH_PHOTO_CATALOG.get(matched_key)
+    # A freely-licensed photograph of that kind of dish, fetched from the
+    # Japanese Wikipedia article about it, beats a stock image of roughly the
+    # right colour. Only 21 bundled files existed for 39 keys, so a chain menu
+    # showed the same picture forty times.
+    photo = _photos().get(matched_key)
+    if photo:
+        return {
+            "url": photo["file"],
+            "card_url": photo["file"],
+            "thumb_url": photo["file"],
+            "local_fallback": (item_data or {}).get(
+                "local", "/static/media/food/default.webp"),
+            "category": (item_data or {}).get("category", photo["article"]),
+            "alt": f"{name}の参考料理写真（イメージ）",
+            "representational_note": REPRESENTATIONAL,
+            "credit": photo.get("credit"),
+            "licence": photo.get("licence"),
+            "page_url": photo.get("page_url"),
+        }
 
+    item_data = item_data or DISH_PHOTO_CATALOG["culinary_default"]
+    local = item_data["local"]
+    # The catalogue's Unsplash ids are deliberately not built into URLs here:
+    # a chain menu renders 200-340 rows and would fetch that many third-party
+    # images per page load. The bundled file is served instead.
     return {
-        "url": _build_photo_url(photo_id, width=720, height=720, quality=88),
-        "card_url": _build_photo_url(photo_id, width=480, height=360, quality=85),
-        "thumb_url": _build_photo_url(photo_id, width=240, height=240, quality=85),
-        "local_fallback": item_data["local"],
+        "url": local,
+        "card_url": local,
+        "thumb_url": local,
+        "local_fallback": local,
         "category": item_data["category"],
         "alt": f"{name}の参考料理写真（イメージ）",
-        "representational_note": "※写真はイメージです（料理ジャンル・具材構成に基づく参考写真）",
+        "representational_note": REPRESENTATIONAL,
     }

@@ -1304,11 +1304,12 @@ def get_shop_page_data(page):
             # renders 200-340 rows, and hotlinking that many third-party images
             # costs the reader a request each and tells Unsplash who is reading.
             food_img = get_dish_image(r["name"], visual["category"])
-            local = food_img["local_fallback"]
-            image_url = r["db_image_url"] or local
-            image_card_url = image_url
+            # url is now a local photograph of that kind of dish; the
+            # bundled file behind local_fallback is what onerror falls to.
+            image_url = r["db_image_url"] or food_img["url"]
+            image_card_url = r["db_image_url"] or food_img["card_url"]
             image_full_url = image_url
-            image_fallback = local
+            image_fallback = food_img["local_fallback"]
             representational_note = ("" if r["db_image_url"]
                                      else food_img["representational_note"])
             kcal = source = protein_g = fat_g = carbs_g = salt_g = None

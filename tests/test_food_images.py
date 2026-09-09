@@ -33,14 +33,15 @@ class TestFoodImages(unittest.TestCase):
         for name, expected_cat in cases:
             img = get_dish_image(name)
             self.assertEqual(img["category"], expected_cat, f"Mismatch for {name}")
-            self.assertTrue(img["url"].startswith("https://images.unsplash.com/"))
-            self.assertTrue(img["thumb_url"].startswith("https://images.unsplash.com/"))
+            # Served from here, not hotlinked: a chain menu is 200-340 rows.
+            self.assertTrue(img["url"].startswith("/static/"))
+            self.assertTrue(img["thumb_url"].startswith("/static/"))
             self.assertTrue(img["local_fallback"].startswith("/static/media/food/"))
 
     def test_default_fallback_dish(self):
         img = get_dish_image("未知の創作スペシャル料理")
         self.assertEqual(img["category"], "料理")
-        self.assertTrue(img["url"].startswith("https://images.unsplash.com/"))
+        self.assertTrue(img["url"].startswith("/static/"))
 
     def test_menu_page_renders_food_images(self):
         conn = sqlite3.connect(DB_PATH)
