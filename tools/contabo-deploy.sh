@@ -93,19 +93,35 @@ fi
 
 if [[ -f "${APP_DIR}/docker-compose.yml" ]]; then
   ok "compose file present"
-  if grep -qE '^\s{2}calories:' "${APP_DIR}/docker-compose.yml"; then
-    ok "'calories' service defined"
+  # Either file will do — compose merges the override automatically, and the
+  # override is the safer place to put it first.
+  OVERRIDE="${APP_DIR}/docker-compose.override.yml"
+  if grep -qE '^\s{2}calories:' "${APP_DIR}/docker-compose.yml" 2>/dev/null; then
+    ok "'calories' service defined in docker-compose.yml"
+    COMPOSE_FILES=("${APP_DIR}/docker-compose.yml")
+  elif [[ -f "${OVERRIDE}" ]] && grep -qE '^\s{2}calories:' "${OVERRIDE}"; then
+    ok "'calories' service defined in docker-compose.override.yml"
+    COMPOSE_FILES=("${APP_DIR}/docker-compose.yml" "${OVERRIDE}")
   else
-    bad "'calories' service not in ${APP_DIR}/docker-compose.yml — add it first (docs/deploy-contabo.md §3)"
+    bad "'calories' service not defined — see docs/deploy-contabo.md §3"
+    COMPOSE_FILES=("${APP_DIR}/docker-compose.yml")
+  fi
+
+  # The whole file must parse, or nothing here can start — and a bad edit to
+  # this file also stops postgres and the CMS from being managed.
+  if have docker && docker compose --project-directory "${APP_DIR}" config --services >/dev/null 2>&1; then
+    ok "compose files parse"
+  else
+    bad "compose files do not parse — run: docker compose --project-directory ${APP_DIR} config --services"
   fi
   # The mistake that took the site down: a volume over the image's own data dir.
-  if grep -qE ':/app/data' "${APP_DIR}/docker-compose.yml"; then
+  if grep -qE ':/app/data' "${COMPOSE_FILES[@]}" 2>/dev/null; then
     bad "a volume mounts over /app/data — that hides site.db and 502s every route"
   else
     ok "nothing mounted over /app/data"
   fi
   # The house rule: bind loopback, never publish.
-  if grep -E "\"[0-9.]*:?${PORT}:8000\"" "${APP_DIR}/docker-compose.yml" | grep -qv '127.0.0.1'; then
+  if grep -hE "\"[0-9.]*:?${PORT}:8000\"" "${COMPOSE_FILES[@]}" 2>/dev/null | grep -qv '127.0.0.1'; then
     bad "port ${PORT} is published beyond 127.0.0.1"
   else
     ok "port bound to 127.0.0.1 only"

@@ -101,48 +101,28 @@ every page would send `no-cache` and Cloudflare would forward every hit.
 
 ## 3. The compose service
 
-Add to `/opt/apps/docker-compose.yml` in the infrastructure repository, beside
-`postgres` and `cms`:
-
-```yaml
-  calories:
-    build:
-      context: ./calories/src
-    restart: unless-stopped
-    env_file:
-      - ./calories/.env
-    volumes:
-      # Blog posts are written at runtime and must outlive a rebuild. The
-      # composition database ships inside the image and is not mounted — a
-      # volume over /app/data would hide it and take the site down.
-      - calories-data:/data
-    ports:
-      - "127.0.0.1:8001:8000"   # nginx reaches it here; never published
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/robots.txt',timeout=5)\""]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-```
-
-and to the `volumes:` block at the foot of the file:
-
-```yaml
-  calories-data:
-```
-
-Bring it up:
+Put it in an **override file** rather than editing `docker-compose.yml`. Compose
+merges the two automatically, so a bad indent cannot stop postgres or the CMS
+from starting, and undoing it is `rm`.
 
 ```bash
-sudo docker compose --project-directory /opt/apps up -d --build calories
-sudo docker compose --project-directory /opt/apps ps calories
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8001/robots.txt   # 200
+sudo cp -a /opt/apps/docker-compose.yml /opt/apps/docker-compose.yml.bak-$(date +%F)
+sudo cp ~/calories-deploy/docs/calories.override.yml /opt/apps/docker-compose.override.yml
 ```
 
-> Do not `cd /opt/apps` before `sudo` — the directory is `0700 root` and the
-> `cd` runs as the invoking user. Pass `--project-directory`, as the CMS notes
-> already say.
+Validate before anything runs — this parses and resolves both files and starts
+nothing:
+
+```bash
+sudo docker compose --project-directory /opt/apps config --services
+```
+
+Expect `postgres`, `cms`, `calories`. If it errors, the running containers are
+untouched and only the override needs fixing.
+
+Fold the service into `docker-compose.yml` in the infrastructure repository once
+it has proven itself — that file is the source of truth, and the override is a
+way of getting there without risking it on the first attempt.
 
 ## 4. Public hostname
 

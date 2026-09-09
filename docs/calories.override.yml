@@ -1,0 +1,39 @@
+# /opt/apps/docker-compose.override.yml
+#
+# Compose merges this with docker-compose.yml automatically, so calories.jp can
+# be added without editing the file that postgres and the CMS depend on. A bad
+# indent here cannot break them, and removing the service is `rm` plus a `down`.
+#
+# Fold it into docker-compose.yml in the infrastructure repository once it has
+# proven itself — that file is the source of truth, and this is a way to get
+# there without risking it on the first attempt.
+
+name: novatise-apps
+
+services:
+  calories:
+    build:
+      context: ./calories/src
+    restart: unless-stopped
+    env_file:
+      - ./calories/.env
+    extra_hosts:
+      # Reach WordPress, which answers on the host's nginx and nowhere else.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Blog posts are written at runtime and must outlive a rebuild.
+      # NOT /app/data — the composition database ships inside the image there,
+      # and a volume over it hides the whole site.
+      - calories-data:/data
+    ports:
+      # nginx reaches it here. Never published beyond loopback.
+      - "127.0.0.1:8001:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/robots.txt',timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  calories-data:
