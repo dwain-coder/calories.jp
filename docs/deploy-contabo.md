@@ -28,8 +28,13 @@ is ready should not require putting anything on it yet.
 
 ```bash
 git clone https://github.com/dwain-coder/calories.jp.git ~/calories-deploy
-~/calories-deploy/tools/contabo-deploy.sh
+sudo ~/calories-deploy/tools/contabo-deploy.sh
 ```
+
+Run it with `sudo` even for the dry run. `/opt/apps/calories` is `0700 root` —
+it holds an API key and a webhook secret — so an unprivileged process cannot see
+into it and would report the env file missing when it only means it cannot look.
+The dry run still changes nothing; `sudo` only lets it read.
 
 Paths inside the script are absolute, so it does not care where it runs from.
 On a box that has not been set up yet it will report §2 and §3 as missing —

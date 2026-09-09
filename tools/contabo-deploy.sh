@@ -143,6 +143,11 @@ if [[ -f "${ENV_FILE}" ]]; then
   for key in WP_URL WP_HOST WP_WEBHOOK_SECRET BLOG_DB_PATH; do
     grep -q "^${key}=" "${ENV_FILE}" && ok "${key} set (blog)" || warn "${key} unset — /column renders empty"
   done
+elif [[ -d "${APP_DIR}/calories" && ! -x "${APP_DIR}/calories" ]]; then
+  # The directory is 0700 root, as it should be — a file holding an API key and
+  # a webhook secret is not world-readable. So an unprivileged preflight cannot
+  # see into it, and "not found" would be a lie: it means "cannot look".
+  bad "cannot read ${ENV_FILE} as $(whoami) — re-run with sudo"
 else
   bad "${ENV_FILE} not found (docs/deploy-contabo.md §2)"
 fi
