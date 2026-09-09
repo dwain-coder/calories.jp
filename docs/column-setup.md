@@ -8,11 +8,11 @@ and a post inherits `base.html`, so it looks like the rest of the site without
 anyone maintaining a second theme.
 
 ```
-Contabo                                   Railway
+column-origin.calories.jp                 calories.jp
 ┌──────────────────────┐                  ┌──────────────────────────┐
-│ WordPress + MariaDB  │                  │ FastAPI                  │
-│ wp-origin.calories.jp│                  │  /column, /column/{slug} │
-│ behind basic auth    │                  │  reads blog.db on volume │
+│ WordPress + MariaDB  │                  │ FastAPI in Docker        │
+│ HestiaCP vhost       │                  │  /column, /column/{slug} │
+│ caloriescolumn user  │                  │  reads blog.db on volume │
 └──────────┬───────────┘                  └────────────▲─────────────┘
            │ on publish: POST /internal/sync-posts     │
            │ header X-Webhook-Secret                   │
@@ -20,233 +20,165 @@ Contabo                                   Railway
                 app pulls /wp-json/wp/v2/posts?_embed
 ```
 
-Written for Ubuntu 22.04/24.04, which is the Contabo default. Run everything as
-a sudo-capable user, not as root.
+Both live on the same box. WordPress is **headless**: nothing proxies visitors
+to it, and the app is its only reader.
 
 ---
 
-## Step 0 — Two secrets, generated now
+## Step 0 — DNS
 
-Generate both and put them somewhere you will still have tomorrow. They are
-referenced throughout.
-
-```bash
-openssl rand -hex 32   # → WEBHOOK_SECRET
-openssl rand -base64 24 # → DB_PASSWORD
-```
-
----
-
-## Step 1 — DNS
-
-Cloudflare → calories.jp → DNS → **Add record**:
+Cloudflare → calories.jp → DNS → Add record:
 
 | Field | Value |
 |---|---|
 | Type | `A` |
-| Name | `wp-origin` |
-| IPv4 | your Contabo IP |
-| Proxy status | **Proxied** (orange cloud) |
-| TTL | Auto |
+| Name | `column-origin` |
+| IPv4 | the box |
+| Proxy | **Proxied** |
 
-Proxied keeps the box's real IP off public DNS and puts Cloudflare's WAF in
-front of WordPress.
+Must exist before step 2 — Let's Encrypt validates over HTTP.
 
-Then Cloudflare → SSL/TLS → Overview → set encryption mode to **Full (strict)**.
-The origin certificate in step 3 is what makes strict work.
+## Step 1 — The Hestia site
 
-## Step 2 — Server packages
-
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y nginx mariadb-server php8.3-fpm php8.3-mysql php8.3-xml \
-    php8.3-curl php8.3-gd php8.3-mbstring php8.3-zip php8.3-intl \
-    apache2-utils unzip curl
-```
-
-If `php8.3-*` is not found, use `php8.1-*` (22.04) and adjust the socket path in
-step 5 to match.
-
-Lock down MariaDB and create the database:
+`calories.jp` is owned by the `calories` user, and Hestia refuses to let a
+different user claim a subdomain of it. Turn the check off for the one command
+and put it straight back, rather than folding WordPress into the user that owns
+the main site:
 
 ```bash
-sudo mysql_secure_installation
+H=/usr/local/hestia/bin
+PASS=$(openssl rand -base64 18); echo "panel password: $PASS"
+sudo $H/v-add-user caloriescolumn "$PASS" you@example.com default caloriescolumn
+sudo $H/v-change-sys-config-value ENFORCE_SUBDOMAIN_OWNERSHIP no
+sudo $H/v-add-web-domain caloriescolumn column-origin.calories.jp
+sudo $H/v-change-sys-config-value ENFORCE_SUBDOMAIN_OWNERSHIP yes
+sudo grep -i ownership /usr/local/hestia/conf/hestia.conf
 ```
+
+That last line is not optional. The setting governs every site on the box, and
+leaving it off is a standing invitation to a subdomain takeover.
+
+## Step 2 — Template, PHP, certificate, database
 
 ```bash
-sudo mysql -e "CREATE DATABASE wp_calories CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-sudo mysql -e "CREATE USER 'wp_calories'@'localhost' IDENTIFIED BY 'PASTE_DB_PASSWORD';"
-sudo mysql -e "GRANT ALL ON wp_calories.* TO 'wp_calories'@'localhost'; FLUSH PRIVILEGES;"
+H=/usr/local/hestia/bin
+sudo $H/v-change-web-domain-tpl caloriescolumn column-origin.calories.jp wordpress
+sudo $H/v-change-web-domain-backend-tpl caloriescolumn column-origin.calories.jp PHP-8_3
+sudo $H/v-add-letsencrypt-domain caloriescolumn column-origin.calories.jp
+sudo $H/v-add-database caloriescolumn wp wpu 'A_GENERATED_PASSWORD'
 ```
 
-## Step 3 — Origin certificate
+Matching `column-origin.pricebest.jp` exactly: same template, same PHP, a real
+Let's Encrypt certificate rather than an origin cert. The database comes out as
+`caloriescolumn_wp` / `caloriescolumn_wpu`.
 
-Cloudflare → SSL/TLS → **Origin Server** → Create Certificate. Accept the
-defaults, hostname `wp-origin.calories.jp`, 15 years. You get two blocks.
+## Step 3 — WordPress
+
+`v-quick-install-app apps` throws a PHP fatal on this box and its `install`
+subcommand takes undocumented options, so use wp-cli, which is already there:
 
 ```bash
-sudo mkdir -p /etc/ssl/cloudflare
-sudo nano /etc/ssl/cloudflare/wp-origin.pem   # paste the CERTIFICATE block
-sudo nano /etc/ssl/cloudflare/wp-origin.key   # paste the PRIVATE KEY block
-sudo chmod 600 /etc/ssl/cloudflare/wp-origin.key
+D=/home/caloriescolumn/web/column-origin.calories.jp/public_html
+ADMINPW=$(openssl rand -base64 18); echo "WP admin password: $ADMINPW"
+sudo rm -f $D/index.html
+sudo -u caloriescolumn wp core download --locale=ja --path="$D"
+sudo -u caloriescolumn wp config create --path="$D" \
+  --dbname=caloriescolumn_wp --dbuser=caloriescolumn_wpu --dbpass='THE_DB_PASSWORD' \
+  --dbcharset=utf8mb4 --dbcollate=utf8mb4_unicode_ci
+sudo -u caloriescolumn wp core install --path="$D" \
+  --url=https://column-origin.calories.jp \
+  --title='calories.jp コラム' \
+  --admin_user=jon --admin_email=jon@novatise.com \
+  --admin_password="$ADMINPW"
 ```
 
-This certificate is only trusted by Cloudflare, which is the point — nothing
-reaches the origin except through them.
+Not `admin` as the username, whatever the neighbouring site does — it is the
+first thing every WordPress bot tries.
 
-## Step 4 — WordPress
+## Step 4 — Lock it down
 
 ```bash
-cd /tmp && curl -O https://ja.wordpress.org/latest-ja.tar.gz
-tar xzf latest-ja.tar.gz
-sudo mv wordpress /var/www/wp-calories
-sudo chown -R www-data:www-data /var/www/wp-calories
-sudo find /var/www/wp-calories -type d -exec chmod 755 {} \;
-sudo find /var/www/wp-calories -type f -exec chmod 644 {} \;
-```
-
-```bash
-sudo -u www-data cp /var/www/wp-calories/wp-config-sample.php /var/www/wp-calories/wp-config.php
-sudo -u www-data nano /var/www/wp-calories/wp-config.php
-```
-
-Set the database name, user and password, then paste fresh salts from
-<https://api.wordpress.org/secret-key/1.1/salt/> over the placeholder block, and
-add these lines above `/* That's all, stop editing! */`:
-
-```php
-define('DISALLOW_FILE_EDIT', true);
-define('CALORIES_JP_WEBHOOK_SECRET', 'PASTE_WEBHOOK_SECRET');
-define('FORCE_SSL_ADMIN', true);
-// Cloudflare terminates TLS, so PHP sees plain HTTP without this.
-if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
-    $_SERVER['HTTPS'] = 'on';
-}
-```
-
-## Step 5 — nginx, locked down
-
-This is the step that earns the whole architecture. WordPress is the most
-attacked software on the web, and here it is on your domain's DNS.
-
-Create the password file:
-
-```bash
-sudo htpasswd -c /etc/nginx/.htpasswd-wp dwain   # it will prompt for a password
-```
-
-```bash
-sudo nano /etc/nginx/sites-available/wp-origin
-```
-
-```nginx
-server {
-    listen 80;
-    server_name wp-origin.calories.jp;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name wp-origin.calories.jp;
-
-    ssl_certificate     /etc/ssl/cloudflare/wp-origin.pem;
-    ssl_certificate_key /etc/ssl/cloudflare/wp-origin.key;
-
-    root /var/www/wp-calories;
-    index index.php;
-
-    # Nothing here should ever be indexed. Nothing links to it, but say so.
-    add_header X-Robots-Tag "noindex, nofollow" always;
-
-    # The ONE path Railway calls. Public, read-only, no password.
-    location = /wp-json/wp/v2/posts {
-        try_files $uri /index.php?$args;
-    }
-
-    # Everything else needs the password, including the rest of the REST API.
-    location / {
-        auth_basic "closed";
-        auth_basic_user_file /etc/nginx/.htpasswd-wp;
-        try_files $uri $uri/ /index.php?$args;
-    }
-
-    location ~ \.php$ {
-        auth_basic "closed";
-        auth_basic_user_file /etc/nginx/.htpasswd-wp;
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
-    }
-
-    # index.php is reached through try_files above, so it must not demand a
-    # password of its own or the posts endpoint would too.
-    location = /index.php {
-        auth_basic off;
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
-    }
-
-    location = /xmlrpc.php { deny all; }
-    location ~* /(?:uploads|files)/.*\.php$ { deny all; }
-
-    client_max_body_size 32M;
-}
-```
-
-```bash
-sudo ln -s /etc/nginx/sites-available/wp-origin /etc/nginx/sites-enabled/
+D=/home/caloriescolumn/web/column-origin.calories.jp/public_html
+C=/home/caloriescolumn/conf/web/column-origin.calories.jp
+sudo -u caloriescolumn wp config set DISALLOW_FILE_EDIT true --raw --path="$D"
+printf 'User-agent: *\nDisallow: /\n' | sudo tee $D/robots.txt >/dev/null
+sudo chown caloriescolumn:caloriescolumn $D/robots.txt
+echo 'location = /xmlrpc.php { deny all; access_log off; log_not_found off; return 403; }' \
+  | sudo tee $C/nginx.conf_xmlrpc >/dev/null
+sudo cp $C/nginx.conf_xmlrpc $C/nginx.ssl.conf_xmlrpc
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Finish the WordPress install in a browser at
-`https://wp-origin.calories.jp/wp-admin/install.php` — the basic-auth prompt
-comes first, then WordPress's own.
+Three separate reasons:
 
-**Verify the lock before going further:**
+- **`robots.txt`** — the same posts exist at `calories.jp/column/…`, and the
+  origin must not be indexed as a duplicate of them.
+- **`DISALLOW_FILE_EDIT`** — closes the theme editor, the usual path from a
+  stolen password to running code.
+- **`xmlrpc.php`** — pingback amplification and brute-force. The Hestia
+  `wordpress` template does not block it; a bare install answers `POST` with
+  `200`.
 
-```bash
-curl -s -o /dev/null -w "admin        %{http_code}\n" https://wp-origin.calories.jp/wp-admin/
-curl -s -o /dev/null -w "posts API    %{http_code}\n" https://wp-origin.calories.jp/wp-json/wp/v2/posts
-```
-
-Expect **401** for the admin and **200** for the posts API. If the posts API
-also asks for a password, Railway cannot read it.
-
-## Step 6 — Railway
-
-**Add a volume.** This is the one new piece of infrastructure. Posts must
-survive a deploy, and the 34 MB corpus baked into the image is not writable.
-
-Railway → your service → **Variables → Volumes → New Volume**, mount path
-**`/data`**.
-
-> Mount it at `/data`, not `/app/data`. `/app/data` would shadow the directory
-> the composition database ships in and take the whole site down.
-
-Then Railway → Variables:
-
-| Variable | Value |
-|---|---|
-| `WP_URL` | `https://wp-origin.calories.jp` |
-| `WP_WEBHOOK_SECRET` | the hex string from step 0 |
-| `BLOG_DB_PATH` | `/data/blog.db` |
-
-`WP_WEBHOOK_SECRET` unset means `/internal/sync-posts` returns 404. A webhook
-that authenticates against an empty string is a door, not an endpoint.
-
-## Step 7 — The publish hook
-
-Appearance → Theme File Editor is disabled by `DISALLOW_FILE_EDIT`, so add this
-on the server, in the active theme's `functions.php`:
+Verify, and do not skip the POST:
 
 ```bash
-sudo -u www-data nano /var/www/wp-calories/wp-content/themes/twentytwentyfour/functions.php
+curl -s -o /dev/null -w 'home        %{http_code}\n' https://column-origin.calories.jp/
+curl -s -o /dev/null -w 'xmlrpc POST %{http_code}\n' -X POST https://column-origin.calories.jp/xmlrpc.php
+curl -s https://column-origin.calories.jp/wp-json/wp/v2/posts | head -c 80
 ```
+
+200, **403**, JSON. A `GET` to `xmlrpc.php` returns `405` from WordPress itself
+even when unprotected, so it proves nothing.
+
+nginx reloads gracefully; a request issued in the same breath can still be
+served by the old worker. If the POST says 200, wait a second and repeat before
+believing it.
+
+## Step 5 — Wire the app
+
+```bash
+D=/home/caloriescolumn/web/column-origin.calories.jp/public_html
+sudo cp -a /opt/apps/calories/.env /opt/apps/calories/.env.bak-$(date +%F)
+S=$(openssl rand -hex 32)
+sudo tee -a /opt/apps/calories/.env >/dev/null <<ENV
+WP_URL=https://column-origin.calories.jp
+WP_WEBHOOK_SECRET=$S
+BLOG_DB_PATH=/data/blog.db
+ENV
+sudo chmod 600 /opt/apps/calories/.env
+sudo -u caloriescolumn wp config set CALORIES_JP_WEBHOOK_SECRET "$S" --path="$D"
+sudo docker compose --project-directory /opt/apps up -d calories
+sudo grep -n "^[A-Z]" /opt/apps/calories/.env | cut -d= -f1
+```
+
+Both sides are set from one generated value, so they cannot disagree. That
+heredoc is deliberately unquoted so `$S` expands.
+
+**No `WP_HOST`.** It exists for reaching a vhost that does not resolve; this one
+does, over HTTPS by name. Setting it sends a `Host` header nginx cannot match
+and every fetch fails.
+
+The final list should be exactly the site keys, the Gemini key, and these three
+— nothing repeated. Appending twice is easy and leaves duplicates that resolve
+last-wins, which hides the mistake.
+
+## Step 6 — Publish automatically
+
+A must-use plugin, not the theme's `functions.php`: a WordPress update
+overwrites a bundled theme, and `DISALLOW_FILE_EDIT` means you could not repair
+it from the admin.
+
+Create `wp-content/mu-plugins/calories-sync.php`, owned by `caloriescolumn`:
 
 ```php
+<?php
+/**
+ * Plugin Name: calories.jp sync
+ */
 add_action('transition_post_status', function ($new, $old, $post) {
     if ($post->post_type !== 'post') return;
-    if ($new !== 'publish' && $old !== 'publish') return;   // publish, edit, unpublish
+    if ($new !== 'publish' && $old !== 'publish') return;
+    if (!defined('CALORIES_JP_WEBHOOK_SECRET')) return;
     wp_remote_post('https://calories.jp/internal/sync-posts', [
         'timeout'  => 30,
         'blocking' => false,
@@ -255,35 +187,57 @@ add_action('transition_post_status', function ($new, $old, $post) {
 }, 10, 3);
 ```
 
+```bash
+sudo -u caloriescolumn wp plugin list --status=must-use \
+  --path=/home/caloriescolumn/web/column-origin.calories.jp/public_html
+```
+
+mu-plugins load unconditionally and cannot be deactivated from the admin, so a
+compromised login cannot quietly switch the sync off.
+
 The payload is ignored — the app re-reads the REST API itself. A forged body
 cannot put content on the site; the worst a leaked secret buys is making us
 fetch our own WordPress.
 
-## Step 8 — First sync
-
-Publish one post in WordPress, then from anywhere:
+## Step 7 — Verify
 
 ```bash
-curl -X POST https://calories.jp/internal/sync-posts -H "X-Webhook-Secret: PASTE_WEBHOOK_SECRET"
+curl -X POST https://calories.jp/internal/sync-posts -H "X-Webhook-Secret: THE_SECRET"
+curl -s http://127.0.0.1:8001/column | grep -oE 'href="/column/[^"]+"' | head
+curl -s https://calories.jp/sitemap-column-ja.xml | grep -c '<loc>'
 ```
 
-Expect `{"fetched":1,"stored":1,"removed":0}`.
+`{"fetched":1,"stored":1,"removed":0}`, a post link, and a sitemap count of at
+least 1.
 
-## Step 9 — Verify
+Check the origin on `127.0.0.1:8001`, not the public URL — the edge caches
+`/column`, and a stale page will have you debugging a sync that worked.
 
-```bash
-curl -s -o /dev/null -w "column index  %{http_code}\n" https://calories.jp/column
-curl -s -o /dev/null -w "old /blog     %{http_code}\n" https://calories.jp/blog
-curl -s https://calories.jp/sitemap-column-ja.xml | grep -c "<loc>"
-```
+Grep for the link, not for a heading. The index renders `<h2><a href=…>`, so a
+pattern expecting text straight after `<h2>` matches nothing on a page that is
+working perfectly.
 
-Expect 200, 301, and a count of at least 1.
+## Step 8 — The edge cache
+
+`/column` is cached for an hour like every other page, so a new post does not
+appear until it expires. Add a Cache Rule **above** the site-wide one, since the
+first match wins:
+
+| Field | Value |
+|---|---|
+| If | `URI Path` starts with `/column` |
+| Then | Eligible for cache |
+| Edge TTL | Ignore cache-control, **60 seconds** |
+| Browser TTL | Respect origin TTL |
+
+The one place overriding the origin header is right: the app cannot know a post
+was published between two requests.
 
 ---
 
 ## How it behaves
 
-- **Publishing is live in seconds.** No redeploy.
+- **Publishing is live in about a minute.** No redeploy.
 - **Unpublishing in WordPress unpublishes here.** A post the sync no longer sees
   is deleted, so a removed post cannot outlive your ability to edit it.
 - **Editing replaces.** Posts are keyed on the WordPress id, not the slug, so
@@ -319,10 +273,11 @@ them.
 
 | Symptom | Cause |
 |---|---|
-| `404` from `/internal/sync-posts` | `WP_WEBHOOK_SECRET` not set on Railway |
+| `404` from `/internal/sync-posts` | `WP_WEBHOOK_SECRET` not set in `.env` |
 | `403` | the header does not match the variable |
-| `502` from the sync | Railway cannot reach `WP_URL` — check step 5's verify |
-| `401` from the posts API | the `location = /wp-json/wp/v2/posts` block is not matching |
+| `502` from the sync | the app cannot reach `WP_URL` — check step 4's verify |
+| Every fetch fails | `WP_HOST` is set; it must not be |
 | `stored: 0` | no posts with status `publish` |
-| Posts vanish after a deploy | `BLOG_DB_PATH` is not on the mounted volume |
-| Whole site 502 after adding the volume | it is mounted at `/app/data` — move it to `/data` |
+| Post synced but `/column` unchanged | the edge cache — check `127.0.0.1:8001` |
+| Posts vanish after a rebuild | `BLOG_DB_PATH` is not under the `/data` volume |
+| `xmlrpc POST` returns 200 | the `nginx.*conf_xmlrpc` files are missing, or nginx has not reloaded |
