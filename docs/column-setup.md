@@ -135,7 +135,7 @@ Three separate reasons:
 Verify, and do not skip the POST:
 
 ```bash
-curl -s -o /dev/null -w 'home        %{http_code}\n' https://column-origin.calories.jp/
+curl -s -o /dev/null -w 'wp-login    %{http_code}\n' https://column-origin.calories.jp/wp-login.php
 curl -s -o /dev/null -w 'xmlrpc POST %{http_code}\n' -X POST https://column-origin.calories.jp/xmlrpc.php
 curl -s https://column-origin.calories.jp/wp-json/wp/v2/posts | head -c 80
 
@@ -146,9 +146,10 @@ done
 curl -sk $R -o /dev/null -w 'sso root %{http_code}\n' 'https://column-origin.calories.jp/?nvt_sso=x'
 ```
 
-200, **403**, JSON, then **301** on the front-end paths and **200** on the
-SSO root. A `GET` to `xmlrpc.php` returns `405` from WordPress itself even
-when unprotected, so it proves nothing.
+**200** for wp-login, **403** for xmlrpc, JSON from the REST API, **301** on
+the front-end paths, and **200** on the SSO root. A `GET` to `xmlrpc.php`
+returns `405` from WordPress itself even when unprotected, so it proves
+nothing.
 
 Check these against the origin with `--resolve`. The site-wide Cache Rule
 matches this subdomain too, so the edge will serve you a copy of the
