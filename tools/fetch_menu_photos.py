@@ -79,6 +79,10 @@ def main():
     kept = missing = 0
     try:
         leads = wikimedia.wikipedia_lead_images(list(wanted.values()), client=client)
+        # An explicit file wins: it was chosen by looking at it.
+        for concept, filename in getattr(dish_concepts, 'FILES', {}).items():
+            if concept in wanted:
+                leads[wanted[concept]] = filename
         for concept, article in sorted(wanted.items()):
             filename = leads.get(article)
             hit = (wikimedia.commons_file(filename, client=client, width=WIDTH,

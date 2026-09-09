@@ -131,9 +131,11 @@
             </div>
           </div>
           <div class="menu-card-media">
+            {% if it.image_card_url or it.image_url %}
             <img src="{{ it.image_card_url or it.image_url }}" alt="{{ it.name }}（※イメージ）" class="menu-card-img" loading="lazy" decoding="async"
-                 onerror="if(!this.dataset.fallbackApplied && '{{ it.image_fallback }}'){ this.dataset.fallbackApplied='1'; this.src='{{ it.image_fallback }}'; } else { this.style.display='none'; var fb = this.nextElementSibling; if (fb) fb.style.display='flex'; }">
-            <div class="menu-card-fallback" style="display: none; {% if it.visual %}background: {{ it.visual.gradient }};{% endif %}">
+                 onerror="if(!this.dataset.fallbackApplied && '{{ it.image_fallback or "" }}'){ this.dataset.fallbackApplied='1'; this.src='{{ it.image_fallback or "" }}'; } else { this.style.display='none'; var fb = this.nextElementSibling; if (fb) fb.style.display='flex'; }">
+            {% endif %}
+            <div class="menu-card-fallback" style="{% if it.image_card_url or it.image_url %}display: none;{% else %}display: flex;{% endif %} {% if it.visual %}background: {{ it.visual.gradient }};{% endif %}">
               <span style="font-size: 2.2rem;">{% if it.visual %}{{ it.visual.icon }}{% else %}🍽️{% endif %}</span>
             </div>
             {% if it.representational_note %}<span class="card-rep-badge">※イメージ</span>{% endif %}
@@ -190,7 +192,7 @@
               <div class="dish-thumb-avatar" title="{{ it.name }}">
                 {% if it.image_url %}
                   <img src="{{ it.image_url }}" alt="{{ it.name }}（※イメージ）" class="dish-thumb-img" loading="lazy" decoding="async"
-                       onerror="if(!this.dataset.fallbackApplied && '{{ it.image_fallback }}'){ this.dataset.fallbackApplied='1'; this.src='{{ it.image_fallback }}'; } else { this.style.display='none'; var fb = this.nextElementSibling; if (fb) fb.style.display='flex'; }">
+                       onerror="if(!this.dataset.fallbackApplied && '{{ it.image_fallback or "" }}'){ this.dataset.fallbackApplied='1'; this.src='{{ it.image_fallback or "" }}'; } else { this.style.display='none'; var fb = this.nextElementSibling; if (fb) fb.style.display='flex'; }">
                 {% endif %}
                 <div class="dish-thumb-fallback" style="{% if it.image_url %}display: none;{% else %}display: flex;{% endif %} {% if it.visual %}background: {{ it.visual.gradient }};{% endif %}">
                   <span class="dish-thumb-icon">{% if it.visual %}{{ it.visual.icon }}{% else %}🍽️{% endif %}</span>

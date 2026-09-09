@@ -224,6 +224,55 @@ DISH_PHOTO_CATALOG = {
 
 # Ordered rules: more specific patterns come before broader patterns
 CLASSIFICATION_RULES = [
+    # Names found by auditing all 193 chain pages: the frequent unmatched
+    # rows were rice, eggs, natto, yakiniku cuts and izakaya sides, each
+    # showing a stock set-meal photograph.
+    (r"ハンバーグ|ハンバーグステーキ", "hamburg"),
+    (r"アヒージョ", "ajillo"),
+    (r"カルパッチョ", "carpaccio"),
+    (r"ブルスケッタ", "bruschetta"),
+    (r"生ハム|プロシュート|モルタデッラ|サラミ", "prosciutto"),
+    (r"ミネストローネ", "minestrone"),
+    (r"パエリア|パエージャ", "paella"),
+    (r"ナチョス|ナチョ", "nachos"),
+    (r"ブリトー|ブリート", "burrito"),
+    (r"フィッシュ&チップス|フィッシュアンドチップス", "fish_and_chips"),
+    (r"ソーセージ|ウインナー|ウィンナー|フランクフルト", "sausage"),
+    (r"ポップコーン", "popcorn"),
+    (r"ミックスナッツ|ナッツ|アーモンド", "nuts_snack"),
+    (r"オリーブ", "olive"),
+    (r"プリン|パンナコッタ", "pudding"),
+    (r"クレープ", "crepe_sweet"),
+    (r"ワッフル", "waffle"),
+    (r"クッキー|ビスケット", "cookie"),
+    (r"ガトーショコラ|チョコレート|チョコ", "chocolate"),
+    (r"レモネード|レモンスカッシュ", "lemonade"),
+    (r"ジンジャーエール|コーラ|コーク", "cola_drink"),
+    (r"ウーロン茶|烏龍茶", "oolong_tea"),
+    (r"ほうじ茶|緑茶|煎茶|玄米茶|麦茶", "green_tea"),
+    (r"ハイボール|ウイスキー|ウィスキー", "whisky"),
+    (r"レモンサワー|チューハイ|酎ハイ|サワー|ハイ$", "chuhai"),
+    (r"シャンパン|スパークリング", "champagne"),
+    (r"納豆", "natto"),
+    (r"ナムル", "namul"),
+    (r"キムチ", "kimchi"),
+    (r"チャーシュー|焼豚", "chashu"),
+    (r"天津飯", "tenshinhan"),
+    (r"冷やし中華|冷麺", "hiyashi_chuka"),
+    (r"もつ鍋|もつ煮", "motsunabe"),
+    (r"しゃぶしゃぶ|しゃぶ", "shabu"),
+    (r"すき焼き|すきやき", "sukiyaki"),
+    (r"うな重|うな丼|うなぎ|鰻|穴子|あなご", "unagi"),
+    (r"カツ丼|かつ丼", "katsudon"),
+    (r"おにぎり|おむすび", "onigiri"),
+    (r"味噌田楽|田楽", "miso_dengaku"),
+    (r"野菜炒め|温野菜", "yasai_itame"),
+    (r"牛タン|タン塩|上タン", "gyutan"),
+    (r"ホルモン|ミノ|シマチョウ|センマイ|ハツ|砂肝|かしら|せせり|レバー", "horumon"),
+    (r"アジフライ|カキフライ|エビフライ|白身フライ|海老フライ", "fry_seafood"),
+    (r"ココア", "cocoa_drink"),
+    (r"目玉焼き|温泉玉子|温泉卵|半熟玉子|半熟卵|生玉子|うずら", "tamago_egg"),
+
     # Dish kinds added with the Wikimedia photograph set. Specific first:
     # the matcher takes the pattern ending last and breaks ties on this order,
     # so 定食 and セット sit at the bottom where a real dish name outranks them.
@@ -233,7 +282,7 @@ CLASSIFICATION_RULES = [
     (r"おでん|関東煮", "oden"),
     (r"刺身|お造り|舟盛り|盛り合わせ刺", "sashimi"),
     (r"天ぷら|天麩羅|かき揚げ", "tempura"),
-    (r"だし巻き|出汁巻き|卵焼き|玉子焼き|厚焼き玉子", "tamagoyaki"),
+    (r"だし巻き卵|だし巻き玉子|だし巻き|出汁巻き|卵焼き|玉子焼き|厚焼き玉子", "tamagoyaki"),
     (r"コロッケ|クリームコロッケ", "korokke"),
     (r"たこ焼き|タコ焼き|たこやき", "takoyaki"),
     (r"お好み焼き|もんじゃ|チヂミ", "okonomiyaki"),
@@ -303,9 +352,9 @@ CLASSIFICATION_RULES = [
 
     # Meats & Bowls
     (r"牛丼|牛皿|すき焼き丼|焼肉丼|豚丼|カルビ丼", "gyudon_beef"),
-    (r"ステーキ|焼肉|カルビ|ハラミ|ロース|ハンバーグ", "yakiniku_steak"),
+    (r"焼肉|カルビ|ハラミ|ロース", "yakiniku_steak"),
     (r"かつ|カツ|とんかつ|ロースカツ|ヒレカツ|カツ丼|生姜焼き|ポーク", "tonkatsu_pork"),
-    (r"から揚げ|唐揚げ|チキン|ナゲット|ヤンニョム|手羽先|モスチキン", "karaage_chicken"),
+    (r"から揚げ|唐揚げ|からあげ|カラアゲ|竜田揚げ|チキン|ナゲット|ヤンニョム|手羽先|モスチキン", "karaage_chicken"),
 
     # Curry, Rice, Pizza, Gyoza
     (r"カレー|カツカレー", "curry"),
@@ -334,6 +383,14 @@ CLASSIFICATION_RULES = [
     (r"茶|ティー|紅茶|烏龍|緑茶|ほうじ茶|抹茶", "tea_matcha"),
     (r"ジュース|コーラ|ソーダ|フロート|シェイク|ジンジャーエール", "juice_beverage"),
     (r"ビール|ハイボール|サワー|酒|ワイン", "beer_alcohol"),
+
+    # Single common words. Anything more specific ends later and wins.
+    (r"ミルク|牛乳", "milk_drink"),
+    (r"チーズ", "cheese_plate"),
+    (r"ベーコン", "bacon_dish"),
+    (r"フライ", "fry_seafood"),
+    (r"玉子|たまご|卵", "tamago_egg"),
+    (r"ライス|ごはん|ご飯|白飯", "gohan_rice"),
 
     # Formats, not dishes. Last, so 「牛丼」 keeps the beef-bowl
     # photograph and 「唐揚げ定食」 is not a generic tray.
@@ -484,20 +541,27 @@ def classify_key(name: str) -> str:
     return _best_match(head) or _best_match(name or "") or "culinary_default"
 
 
+FORMAT_KEYS = {"teishoku", "bento", "donburi_rice", "gohan_rice"}
+
 def _best_match(text):
     # finditer, not search: search returns the LEFTMOST match, and a rule is a
     # list of alternatives. In 「ふんわりスフレパンケーキ」 the pancake rule matched
     # スフレ at position 4 and never looked at パンケーキ at 7, so it ended before
     # the dessert rule's ケーキ and lost a dish it had named correctly.
-    best = None  # ((end position, -rule index), key)
+    best = fallback = None  # ((end position, -rule index), key)
     for index, (pattern, key) in enumerate(CLASSIFICATION_RULES):
         ends = [m.end() for m in re.finditer(pattern, text, re.IGNORECASE)]
         if not ends:
             continue
         rank = (max(ends), -index)
+        if key in FORMAT_KEYS:
+            if fallback is None or rank > fallback[0]:
+                fallback = (rank, key)
+            continue
         if best is None or rank > best[0]:
             best = (rank, key)
-    return best[1] if best else None
+    chosen = best or fallback
+    return chosen[1] if chosen else None
 
 
 def get_dish_image(dish_name: str, category_hint: Optional[str] = None) -> Dict[str, Any]:
@@ -533,6 +597,19 @@ def get_dish_image(dish_name: str, category_hint: Optional[str] = None) -> Dict[
             "credit": photo.get("credit"),
             "licence": photo.get("licence"),
             "page_url": photo.get("page_url"),
+        }
+
+    if matched_key == "culinary_default":
+        # Nothing in the name was recognised. A stock set meal under
+        # 「からから船」 or an Italian secondi is a wrong picture, not a neutral
+        # one, and the page already has an honest answer: the coloured tile
+        # with the dish icon. url is None so the template falls to it.
+        return {
+            "url": None, "card_url": None, "thumb_url": None,
+            "local_fallback": None,
+            "category": DISH_PHOTO_CATALOG["culinary_default"]["category"],
+            "alt": name,
+            "representational_note": "",
         }
 
     item_data = item_data or DISH_PHOTO_CATALOG["culinary_default"]

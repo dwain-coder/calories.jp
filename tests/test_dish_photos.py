@@ -95,10 +95,16 @@ class TestTheRowsThatMatter(unittest.TestCase):
                 self.assertEqual(classify_key(name), key)
 
     def test_a_real_dish_name_outranks_the_word_set(self):
-        """定食 and セット sit at the bottom of the rules for this reason:
-        「唐揚げ定食」 is a karaage photograph, not a generic tray."""
-        self.assertEqual(classify_key("唐揚げ定食"), "teishoku")
-        self.assertEqual(classify_key("ハンバーグセット"), "teishoku")
+        """定食, 弁当, 丼 and セット name how a dish is served, not what it is.
+
+        They apply only when nothing else in the name matched, so 「唐揚げ定食」
+        shows karaage rather than a hotel kaiseki tray — which is what it did
+        while head-final put the format word ahead of the dish.
+        """
+        self.assertEqual(classify_key("唐揚げ定食"), "karaage_chicken")
+        self.assertEqual(classify_key("とんかつ定食"), "tonkatsu_pork")
+        self.assertEqual(classify_key("焼肉弁当"), "yakiniku_steak")
+        self.assertEqual(classify_key("日替わり定食"), "teishoku")
 
 
 if __name__ == "__main__":
