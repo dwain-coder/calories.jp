@@ -1060,8 +1060,16 @@ def food_nutrition_json(item_id):
 
 SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "nutrients", "column", "pages")
 STATIC_PAGES = ("", "foods", "menu", "nutrients", "cooking-yield", "meal-calculator",
-                "analyzer", "goals", "sources", "api", "column",
+                "analyzer", "goals", "sources", "api", "column", "embed",
                 "guides/cooking-and-calories", "about", "privacy", "contact")
+
+# Routes that serve HTML and are deliberately kept out of the sitemap. Named
+# here rather than merely absent, so the test below can tell "excluded on
+# purpose" from "someone added a page and forgot".
+UNLISTED_PAGES = frozenset({
+    "/search",           # a query's results are thin and duplicate the pages they link to
+    "/embed/analyzer",   # the widget itself; noindex, canonical to /analyzer
+})
 
 
 def sitemap_slugs(lang, section):
