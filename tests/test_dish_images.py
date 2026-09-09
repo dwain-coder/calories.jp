@@ -121,5 +121,36 @@ class TestStoredImages(unittest.TestCase):
         self.assertIn("Wikimedia Commons", html)
 
 
+class TestNamesTheDish(unittest.TestCase):
+    """Japanese has no word boundaries, so a substring match is not a word
+    match. Every case here was found on a live page or in a live search."""
+
+    def test_a_longer_word_that_merely_starts_with_the_name_is_refused(self):
+        """「あずまや」 is a garden gazebo. It was on the 「あずま」 page."""
+        self.assertFalse(wikimedia.names_the_dish("あずま", "File:あずまや_(20675474).jpg"))
+        self.assertFalse(wikimedia.names_the_dish("もち", "File:うぐいすもち.jpg"))
+
+    def test_a_qualifier_in_front_still_names_the_dish(self):
+        """A Japanese compound is headed by its last element, so 「醤油ラーメン」
+        is ramen — only what follows the name can change what it refers to."""
+        self.assertTrue(wikimedia.names_the_dish("ラーメン", "File:醤油ラーメン.jpg"))
+        self.assertTrue(wikimedia.names_the_dish("えび天", "File:Bukkake_Udon_with_えび天.jpg"))
+
+    def test_punctuation_and_digits_end_the_word(self):
+        self.assertTrue(wikimedia.names_the_dish("いももち", "File:20240307いももち.jpg"))
+        self.assertTrue(wikimedia.names_the_dish("けの汁", "File:家庭で作った、けの汁.jpg"))
+        self.assertTrue(
+            wikimedia.names_the_dish("ジンギスカン", "File:プレート（ジンギスカン・千葉）.jpg"))
+
+    def test_short_names_are_not_searched_at_all(self):
+        """A two-character name appears inside half of Commons."""
+        self.assertFalse(wikimedia.names_the_dish("そば", "File:そば.jpg"))
+
+    def test_an_unrelated_title_is_refused(self):
+        """A bento box was on the 「いもたこ」 page, matched through its
+        description — which is why only the title is checked now."""
+        self.assertFalse(wikimedia.names_the_dish("いもたこ", "File:あをによし弁当.jpeg"))
+
+
 if __name__ == "__main__":
     unittest.main()

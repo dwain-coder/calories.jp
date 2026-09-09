@@ -105,6 +105,44 @@ def _describe(page):
     }
 
 
+# Kana and kanji. Japanese has no spaces, so a name found inside a longer run of
+# them is usually a different word: 「あずま」 inside 「あずまや」 is a garden gazebo,
+# not the dish.
+# U+30FB (・) sits inside the katakana block but separates words rather than
+# joining them, so it is excluded; U+30FC (ー) is kept, because ラーメン needs it.
+_JA_CHAR = re.compile(r"[぀-ヺー-ヿ一-鿿々]")
+
+# Below this, a name matches too much to mean anything: 「もち」 appears inside
+# every mochi ever uploaded. Short names are left to the two sources that do not
+# guess — the Wikipedia article and the Wikidata statement.
+MIN_SEARCH_NAME = 3
+
+
+def names_the_dish(name, title):
+    """Whether `title` names this dish rather than merely containing its letters.
+
+    Checked against the file TITLE only. A match in a description or a category
+    was too loose in practice — it put a photograph of a bento box on 「いもたこ」 —
+    and a title is what an uploader chose to call the thing in the picture.
+    """
+    # A two-character name is a word fragment in a text search, not a dish.
+    if not name or not title or len(name) < MIN_SEARCH_NAME:
+        return False
+    start = 0
+    while True:
+        at = title.find(name, start)
+        if at < 0:
+            return False
+        after = title[at + len(name):at + len(name) + 1]
+        # Only what FOLLOWS matters. A Japanese compound is headed by its last
+        # element, so a qualifier in front leaves the dish itself: 「醤油ラーメン」
+        # is ramen. Characters after it change the head into something else:
+        # 「あずまや」 is a garden gazebo, not the dish 「あずま」.
+        if not _JA_CHAR.match(after or " "):
+            return True
+        start = at + 1
+
+
 def search_commons(name, client=None, limit=6, width=800):
     """Free-licensed Commons images whose own text mentions this dish by name."""
     owns = client is None
@@ -128,8 +166,8 @@ def search_commons(name, client=None, limit=6, width=800):
     for page in pages.values():
         hit = _describe(page)
         # The guard. Without it the site publishes a portrait of a 13th-century
-        # emperor as a photograph of grilled lamb.
-        if hit and name in hit["haystack"]:
+        # emperor as a photograph of grilled lamb, and a garden gazebo as 「あずま」.
+        if hit and names_the_dish(name, hit["title"]):
             hit["matched_on"] = "commons-name"
             out.append(hit)
     return out
@@ -191,15 +229,37 @@ def wikipedia_lead_images(names, client=None, chunk=20):
             except (httpx.HTTPError, ValueError):
                 continue
             # A redirect changes the title, so map the canonical title back to
-            # the name we asked about before recording the hit.
-            back = {r["to"]: r["from"] for r in payload.get("redirects", [])}
-            back.update({n["to"]: n["from"] for n in payload.get("normalized", [])})
+            # the name we asked about before recording the hit — but only when
+            # the redirect is about spelling.
+            #
+            # 「たこ飯」 redirects to 「たこめし」: the same dish written differently,
+            # so the article's photograph is a photograph of it.
+            #
+            # 「静岡おでん」 redirects to 「おでん」 because Wikipedia has no separate
+            # article, not because they are the same thing. Taking the general
+            # article's picture put one generic bowl of oden on 静岡おでん, 姫路おでん
+            # and 味噌おでん alike — and the regional difference is the whole
+            # reason those pages exist. A target contained in the name it came
+            # from is a broader subject, and is dropped.
+            asked = set(batch)
+            # A title can serve several of the names we asked about: 「たこめし」 is
+            # both a name in this batch and where 「たこ飯」 redirects to, so both
+            # earn the image and a single title->name mapping would drop one.
+            serves = {}
+            for r in payload.get("normalized", []):
+                serves.setdefault(r["to"], []).append(r["from"])
+            for r in payload.get("redirects", []):
+                if r["to"] in r["from"]:
+                    continue
+                serves.setdefault(r["to"], []).append(r["from"])
             for page in (payload.get("pages") or {}).values():
                 image = page.get("pageimage")
                 if not image:
                     continue
                 title = page.get("title")
-                found.setdefault(back.get(title, title), image)
+                for name in [title, *serves.get(title, [])]:
+                    if name in asked:
+                        found.setdefault(name, image)
             time.sleep(REQUEST_PAUSE)
     finally:
         if owns:
