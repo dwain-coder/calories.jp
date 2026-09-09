@@ -208,3 +208,32 @@ class TestDiscoverableAndRobust(BlogTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSameHostWordPress(BlogTestCase):
+    """On the Contabo box WordPress has no public name: the app asks nginx on
+    loopback for a vhost that only exists there."""
+
+    def test_a_host_header_is_sent_when_configured(self):
+        from dataset_manager.blog import sync
+        with mock.patch.object(sync, "WP_HOST", "wp.calories.internal"):
+            self.assertEqual(sync._headers(), {"Host": "wp.calories.internal"})
+
+    def test_nothing_is_forced_on_a_split_deployment(self):
+        from dataset_manager.blog import sync
+        with mock.patch.object(sync, "WP_HOST", ""):
+            self.assertIsNone(sync._headers())
+
+    def test_the_header_reaches_wordpress(self):
+        from dataset_manager.blog import sync, store
+        seen = {}
+
+        def handler(request):
+            seen["host"] = request.headers.get("host")
+            return httpx.Response(200, json=[_post(1, "p", "P", "<p>x</p>")])
+
+        with mock.patch.object(sync, "WP_HOST", "wp.calories.internal"):
+            sync.sync("http://127.0.0.1",
+                      client=httpx.Client(transport=httpx.MockTransport(handler)))
+        self.assertEqual(seen["host"], "wp.calories.internal")
+        self.assertIsNotNone(store.by_slug("p"))

@@ -74,10 +74,13 @@ SITEMAP_DIR = Path("data/sitemaps")
 # for a fresh render of a page identical to the last one.
 #
 # Caching is opt-in for production and stays off in development, because a
-# stale page while editing one is worse than a slow one. Railway always injects
-# RAILWAY_ENVIRONMENT, so a deployment can tell itself apart from a laptop
-# without anyone having to remember a variable; SITE_CACHE_MAX_AGE still wins
-# when it is set, including `0` to switch caching off in production.
+# stale page while editing one is worse than a slow one.
+#
+# SITE_CACHE_MAX_AGE decides it, and on a host that is not Railway it is the
+# only thing that does — set it in the compose env. Railway injects
+# RAILWAY_ENVIRONMENT by itself, so a deployment there still tells itself apart
+# from a laptop without anyone remembering a variable. Either way an explicit
+# SITE_CACHE_MAX_AGE wins, including `0` to switch caching off in production.
 _DEPLOYED = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_SERVICE_ID"))
 _MAX_AGE = int(os.environ.get("SITE_CACHE_MAX_AGE") or (3600 if _DEPLOYED else 0))
 

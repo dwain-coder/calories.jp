@@ -20,6 +20,17 @@ from . import store
 WP_URL = os.environ.get("WP_URL", "").rstrip("/")
 TIMEOUT = float(os.environ.get("WP_TIMEOUT", "20"))
 
+# When WordPress runs on the same host, WP_URL can point straight at it —
+# http://127.0.0.1 — and WP_HOST carries the name its vhost answers to. That
+# combination means WordPress needs no public DNS record, no certificate and no
+# password wall, because nothing outside the machine can reach it at all. On a
+# split deployment leave WP_HOST unset and WP_URL is used as written.
+WP_HOST = os.environ.get("WP_HOST", "").strip()
+
+
+def _headers():
+    return {"Host": WP_HOST} if WP_HOST else None
+
 # What a blog post may contain. No <script>, no <style>, no <iframe>, no event
 # handlers — nh3 strips attributes it does not know, so this is a floor and not
 # a filter that can be walked past.
@@ -103,7 +114,8 @@ def fetch(base_url=None, per_page=100, client=None):
         while True:
             r = client.get(f"{base}/wp-json/wp/v2/posts",
                            params={"per_page": per_page, "page": page,
-                                   "status": "publish", "_embed": "1"})
+                                   "status": "publish", "_embed": "1"},
+                           headers=_headers())
             # WordPress answers 400 for a page past the end rather than an empty
             # list, so that is the stop condition, not an error.
             if r.status_code == 400 and page > 1:
