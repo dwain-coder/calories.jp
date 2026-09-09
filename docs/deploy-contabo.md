@@ -22,11 +22,18 @@ Two things get better by being on this box rather than Railway:
 ## 0. Preflight
 
 Every step below is also driven by one script, dry-run by default like the other
-fleet scripts. Run this first — it reads and reports, and changes nothing:
+fleet scripts. It reads and reports and changes nothing, so run it before
+anything else — including before the clone in §1, since checking whether the box
+is ready should not require putting anything on it yet.
 
 ```bash
-./tools/contabo-deploy.sh
+git clone https://github.com/dwain-coder/calories.jp.git ~/calories-deploy
+~/calories-deploy/tools/contabo-deploy.sh
 ```
+
+Paths inside the script are absolute, so it does not care where it runs from.
+On a box that has not been set up yet it will report §2 and §3 as missing —
+that is the checklist, not a fault.
 
 It checks disk and RAM against this box's own floors, that port 8001 is free,
 that the compose service exists and binds loopback, that nothing mounts over
