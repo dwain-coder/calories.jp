@@ -14,7 +14,7 @@
   </div>
   <p class="license">{{ t('embed_snippet_note') }}</p>
 <pre class="api-example" id="embed-snippet"><code>&lt;iframe src="{{ seo_base }}/embed/analyzer"
-        style="width:100%;border:0;height:420px"
+        style="width:100%;border:0;height:180px"
         loading="lazy" title="{{ t('ai_analyzer') }}"&gt;&lt;/iframe&gt;
 &lt;script&gt;
 addEventListener("message", function (e) {
@@ -39,7 +39,7 @@ addEventListener("message", function (e) {
 <h2>{{ t('embed_preview_title') }}</h2>
 <div class="card embed-preview">
   <iframe src="{{ seo_base if seo_base.startswith('https') else '' }}/embed/analyzer"
-          style="width:100%;border:0;height:420px" loading="lazy"
+          style="width:100%;border:0;height:180px" loading="lazy"
           title="{{ t('ai_analyzer') }}" id="embed-preview-frame"></iframe>
 </div>
 <script>
