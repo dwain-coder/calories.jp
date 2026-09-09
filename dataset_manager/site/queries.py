@@ -1237,12 +1237,19 @@ def get_shop_page_data(page):
             visual = classify_dish_visual(r["name"])
             if menuterms.is_extra(r["name"]) or menuterms.is_drink(r["name"], visual["category"]):
                 continue
+            # A photograph of THIS dish if we licensed one, otherwise a bundled
+            # photograph of the right KIND of dish, labelled as such. The
+            # catalogue's Unsplash URLs are deliberately not used: a chain menu
+            # renders 200-340 rows, and hotlinking that many third-party images
+            # costs the reader a request each and tells Unsplash who is reading.
             food_img = get_dish_image(r["name"], visual["category"])
-            image_url = r["db_image_url"] or food_img["thumb_url"]
-            image_card_url = r["db_image_url"] or food_img.get("card_url", image_url)
-            image_full_url = r["db_image_url"] or food_img["url"]
-            image_fallback = food_img["local_fallback"]
-            representational_note = "※写真はイメージです（料理ジャンル・具材構成に基づく参考写真）"
+            local = food_img["local_fallback"]
+            image_url = r["db_image_url"] or local
+            image_card_url = image_url
+            image_full_url = image_url
+            image_fallback = local
+            representational_note = ("" if r["db_image_url"]
+                                     else food_img["representational_note"])
             kcal = source = protein_g = fat_g = carbs_g = salt_g = None
             if r["chain_kcal"] is not None and r["source_page"]:
                 # The chain's own published numbers, with the page it came from.

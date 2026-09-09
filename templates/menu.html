@@ -9,12 +9,21 @@
 <div class="menu-detail-header">
   <div class="menu-header-brand-row">
     {% if d.shop.brand_logo %}
-      <div class="chain-header-badge" style="background: {{ d.shop.brand_logo.bg }}; color: {{ d.shop.brand_logo.fg }};">
-        <span class="chain-brand-mark">{{ d.shop.brand_logo.mark }}</span>
+      <div class="chain-header-badge" style="background: {{ d.shop.brand_logo.bg }}; color: {{ d.shop.brand_logo.fg }};" title="{{ name }}">
+        {% if d.shop.brand_logo.logo_svg %}
+          {{ d.shop.brand_logo.logo_svg|safe }}
+        {% else %}
+          <span class="chain-brand-mark">{{ d.shop.brand_logo.mark }}</span>
+        {% endif %}
       </div>
     {% endif %}
     <div class="menu-title-wrap">
-      <h1>{{ page.title or name }}</h1>
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <h1>{{ page.title or name }}</h1>
+        {% if d.shop.brand_logo %}
+          <span class="chain-brand-pill" style="border: 1px solid {{ d.shop.brand_logo.bg }}; color: {{ d.shop.brand_logo.bg }}; font-weight: 700; font-size: 0.75rem; padding: 0.2rem 0.65rem; border-radius: 999px;">{{ d.shop.brand_logo.sub }}</span>
+        {% endif %}
+      </div>
       <p class="alt-name">
         <span class="badge">{{ t('dish_count', n=d.menu|length) }}</span>
         {% if d.shop.price_min and d.shop.price_max %}
@@ -43,6 +52,12 @@
 </div>
 {% endif %}
 
+<!-- Representational Image Notice Banner -->
+<div class="menu-image-disclaimer-banner">
+  <span class="disclaimer-icon">📷</span>
+  <span class="disclaimer-text"><strong>【写真表示について】</strong>メニュー写真は各料理のジャンル・具材構成に基づくイメージ参考写真です（※実物の店舗提供品とは盛り付け・仕様が異なる場合があります）。</span>
+</div>
+
 <!-- Quick Filter and Action Bar -->
 <div class="menu-controls-row">
   <div class="menu-search-box">
@@ -52,6 +67,10 @@
   </div>
   <span class="dish-filter-count-badge" id="dish-filter-count">全{{ d.menu|length }}品</span>
   <div class="menu-actions-right">
+    <div class="menu-view-switcher" role="group" aria-label="表示切り替え">
+      <button type="button" id="view-cards-btn" class="view-switch-btn active" title="カード表示（料理写真中心）">🖼️ 写真カード</button>
+      <button type="button" id="view-table-btn" class="view-switch-btn" title="詳細テーブル表示">📋 テーブル</button>
+    </div>
     <button type="button" id="toggle-analyzer-btn" class="button-pill secondary">
       📷 写真からAIカロリー解析
     </button>
@@ -74,14 +93,71 @@
   {% include "partials/analyzer_widget.html" %}
 </div>
 
-<!-- Menu Dishes Table -->
-<div class="card menu-table-card">
+<!-- Menu Dishes Cards View (Photo Centric matching reference design) -->
+<div id="menu-cards-view" class="menu-cards-view">
+  <div class="menu-cards-grid" id="menu-cards-grid">
+    {% for it in d.menu %}
+      <div class="menu-dish-card" id="dish-card-{{ loop.index }}"
+           data-row-id="{{ loop.index }}"
+           data-name="{{ it.name|lower }}"
+           data-price="{{ it.price_yen or 0 }}"
+           data-kcal="{{ it.kcal|round(0)|int if it.kcal is not none else '' }}"
+           data-p="{{ it.protein_g or 0 }}"
+           data-f="{{ it.fat_g or 0 }}"
+           data-c="{{ it.carbs_g or 0 }}"
+           data-salt="{{ it.salt_g or 0 }}"
+           data-source="{{ it.kcal_source or '' }}">
+        <div class="menu-card-body" data-row-id="{{ loop.index }}">
+          <div class="menu-card-text">
+            <h3 class="menu-card-name">{{ it.name }}</h3>
+            <div class="menu-card-price-row">
+              {% if it.price_yen %}
+                <span class="menu-card-price">¥{{ '{:,}'.format(it.price_yen) }}</span>
+                <span class="menu-card-tax">（税込）</span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </div>
+            <div class="menu-card-nutrition">
+              {% if it.kcal is not none %}
+                <span class="menu-card-kcal"><strong>{{ it.kcal|round(0)|int }}</strong> kcal</span>
+              {% else %}
+                <span class="menu-card-nokcal">未公表</span>
+              {% endif %}
+              {% if it.visual %}
+                <span class="dish-category-tag">{{ it.visual.category }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="menu-card-media">
+            <img src="{{ it.image_card_url or it.image_url }}" alt="{{ it.name }}（※イメージ）" class="menu-card-img" loading="lazy" decoding="async"
+                 onerror="if(!this.dataset.fallbackApplied && '{{ it.image_fallback }}'){ this.dataset.fallbackApplied='1'; this.src='{{ it.image_fallback }}'; } else { this.style.display='none'; var fb = this.nextElementSibling; if (fb) fb.style.display='flex'; }">
+            <div class="menu-card-fallback" style="display: none; {% if it.visual %}background: {{ it.visual.gradient }};{% endif %}">
+              <span style="font-size: 2.2rem;">{% if it.visual %}{{ it.visual.icon }}{% else %}🍽️{% endif %}</span>
+            </div>
+            {% if it.representational_note %}<span class="card-rep-badge">※イメージ</span>{% endif %}
+          </div>
+        </div>
+        <div class="menu-card-footer">
+          <button type="button" class="tray-add-btn card-tray-btn" data-row-id="{{ loop.index }}" data-name="{{ it.name }}" data-price="{{ it.price_yen or 0 }}"
+                  data-kcal="{{ it.kcal|round(0)|int if it.kcal is not none else '' }}"
+                  data-p="{{ it.protein_g or 0 }}" data-f="{{ it.fat_g or 0 }}" data-c="{{ it.carbs_g or 0 }}" data-salt="{{ it.salt_g or 0 }}"
+                  data-source="{{ it.kcal_source or '' }}" title="トレイに追加">＋ トレイ追加</button>
+          <button type="button" class="ai-micro-btn card-open-modal-btn dish-ai-btn" data-row-id="{{ loop.index }}" data-dish="{{ it.name }}" data-price="{{ it.price_yen or 0 }}" data-published="{{ it.kcal|round(0)|int if it.kcal is not none else '' }}">詳細・写真を見る ›</button>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Menu Dishes Table (Default hidden or switched via view toggle) -->
+<div class="card menu-table-card" id="menu-table-card" style="display: none;">
   <div class="table-scroll">
     <table class="nutrition-table stack-table menu-items-table" id="menu-items-table" data-shop-name="{{ name }}">
       <thead>
         <tr>
           <th style="width: 44px; text-align: center;">選択</th>
-          <th class="sortable-th" id="th-name" style="cursor: pointer;" title="料理名で並べ替え" aria-sort="none">{{ t('name_col') }} <span class="sort-arrow">⇅</span></th>
+          <th class="sortable-th" id="th-name" style="cursor: pointer;" title="料理名で並べ替え" aria-sort="none">{{ t('name_col') }} <small style="font-weight: normal; opacity: 0.75; font-size: 0.78rem;">（※写真はイメージです）</small> <span class="sort-arrow">⇅</span></th>
           <th class="sortable-th" id="th-price" style="cursor: pointer;" title="価格順で並べ替え" aria-sort="none">{{ t('price') }} <span class="sort-arrow">⇅</span></th>
           <th class="sortable-th" id="th-kcal" style="cursor: pointer;" title="カロリー順で並べ替え" aria-sort="none">{{ t('calories') }} <span class="sort-arrow">⇅</span></th>
           <th style="text-align: right;">解析・推定</th>
@@ -110,11 +186,15 @@
           </td>
           <td>
             <div class="dish-name-cell">
-              {% if it.visual %}
-                <div class="dish-thumb-avatar" style="background: {{ it.visual.gradient }};" title="{{ it.visual.category }}">
-                  <span class="dish-thumb-icon">{{ it.visual.icon }}</span>
+              <div class="dish-thumb-avatar" title="{{ it.name }}">
+                {% if it.image_url %}
+                  <img src="{{ it.image_url }}" alt="{{ it.name }}（※イメージ）" class="dish-thumb-img" loading="lazy" decoding="async"
+                       onerror="if(!this.dataset.fallbackApplied && '{{ it.image_fallback }}'){ this.dataset.fallbackApplied='1'; this.src='{{ it.image_fallback }}'; } else { this.style.display='none'; var fb = this.nextElementSibling; if (fb) fb.style.display='flex'; }">
+                {% endif %}
+                <div class="dish-thumb-fallback" style="{% if it.image_url %}display: none;{% else %}display: flex;{% endif %} {% if it.visual %}background: {{ it.visual.gradient }};{% endif %}">
+                  <span class="dish-thumb-icon">{% if it.visual %}{{ it.visual.icon }}{% else %}🍽️{% endif %}</span>
                 </div>
-              {% endif %}
+              </div>
               <div class="dish-title-wrap">
                 {% if it.food_slug %}
                   <a href="/{{ it.food_page_type }}/{{ it.food_slug }}" class="dish-link"><strong>{{ it.name }}</strong></a>
@@ -183,91 +263,121 @@
   </div>
 </div>
 
-<!-- Dish AI Analysis & Breakdown Modal -->
+<!-- Dish AI Analysis & Breakdown Modal (Split Screen matching user reference design) -->
 <div id="dish-ai-modal" class="dish-ai-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-dish-name">
-  <div class="dish-ai-modal-box">
+  <div class="dish-ai-modal-box dish-split-modal">
     <button type="button" class="dish-ai-close-btn" id="modal-close-btn" aria-label="閉じる">✕</button>
-    <div class="dish-ai-header">
-      <div style="display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.35rem;">
-        <span class="badge" id="modal-badge">AI料理推定</span>
-        <span id="modal-dish-icon" style="font-size: 1.4rem;">🍽️</span>
-      </div>
-      <h3 id="modal-dish-name">料理名</h3>
-      <p id="modal-shop-name" class="alt-name">{{ name }}</p>
-    </div>
 
-    <!-- AI Scanning Shimmer Loader -->
-    <div id="modal-loading" style="display: none;">
-      <div class="ai-scanner-box">
-        <div class="ai-scanner-laser"></div>
-        <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.8rem; color: var(--accent);">
-          ⚡ AIスキャン中: 料理の具材と調理状態を照合中...
+    <!-- Left Media Column: Big Hero Food Image -->
+    <div class="modal-split-media-col">
+      <div class="modal-hero-photo-wrap" id="modal-dish-photo-wrap">
+        <img id="modal-dish-img" class="modal-hero-photo" src="" alt="料理写真">
+        <div id="modal-dish-fallback" class="modal-hero-fallback" style="display: none;">
+          <span id="modal-dish-icon" style="font-size: 3.5rem;">🍽️</span>
         </div>
-        <div class="skeleton-line" style="width: 75%;"></div>
-        <div class="skeleton-line" style="width: 90%;"></div>
-        <div class="skeleton-line" style="width: 60%;"></div>
-        <div class="skeleton-line" style="width: 80%;"></div>
+      </div>
+      <div class="modal-rep-note">
+        <span>📷 ※写真はイメージです（料理ジャンル・具材構成に基づく参考写真）</span>
       </div>
     </div>
 
-    <!-- Loaded AI Nutrition Content -->
-    <div id="modal-content-area" style="display: none;">
-      <div class="dish-ai-hero-kcal">
-        <span class="num" id="modal-total-kcal">0</span>
-        <span>kcal</span>
-        <span id="modal-kcal-note" class="badge estimate" style="margin-left: 0.5rem;">AI具材推定値</span>
+    <!-- Right Content Column: Dish Info & Nutrition Details -->
+    <div class="modal-split-content-col">
+      <div class="dish-ai-header">
+        <div class="modal-header-badges">
+          <span class="badge" id="modal-badge">AI料理推定</span>
+          <span class="modal-chain-tag">{{ name }}</span>
+        </div>
+        <h3 id="modal-dish-name">料理名</h3>
+        <div class="modal-price-bar">
+          <span class="modal-price-val" id="modal-dish-price">¥0</span>
+          <span class="modal-price-sub">（税込目安）</span>
+        </div>
       </div>
 
-      <!-- PFC Ratio Donut Ring & Gauge -->
-      <div class="pfc-visualizer">
-        <svg class="pfc-ring-svg" viewBox="0 0 42 42">
-          <circle class="pfc-ring-bg" cx="21" cy="21" r="15.91549430918954"></circle>
-          <circle class="pfc-ring-p" id="pfc-circle-p" cx="21" cy="21" r="15.91549430918954" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
-          <circle class="pfc-ring-f" id="pfc-circle-f" cx="21" cy="21" r="15.91549430918954" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
-          <circle class="pfc-ring-c" id="pfc-circle-c" cx="21" cy="21" r="15.91549430918954" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
-        </svg>
-        <div class="pfc-legend-col">
-          <div class="pfc-legend-row">
-            <span><i class="pfc-dot p"></i>タンパク質 (P)</span>
-            <span class="pfc-pct" id="pfc-pct-p">0%</span>
+      <!-- AI Scanning Shimmer Loader -->
+      <div id="modal-loading" style="display: none;">
+        <div class="ai-scanner-box">
+          <div class="ai-scanner-laser"></div>
+          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.8rem; color: var(--accent);">
+            ⚡ AIスキャン中: 料理の具材と調理状態を照合中...
           </div>
-          <div class="pfc-legend-row">
-            <span><i class="pfc-dot f"></i>脂質 (F)</span>
-            <span class="pfc-pct" id="pfc-pct-f">0%</span>
+          <div class="skeleton-line" style="width: 75%;"></div>
+          <div class="skeleton-line" style="width: 90%;"></div>
+          <div class="skeleton-line" style="width: 60%;"></div>
+          <div class="skeleton-line" style="width: 80%;"></div>
+        </div>
+      </div>
+
+      <!-- Loaded AI Nutrition Content -->
+      <div id="modal-content-area" style="display: none;">
+        <div class="dish-ai-hero-kcal">
+          <span class="num" id="modal-total-kcal">0</span>
+          <span>kcal</span>
+          <span id="modal-kcal-note" class="badge estimate" style="margin-left: 0.5rem;">AI具材推定値</span>
+        </div>
+
+        <!-- PFC Ratio Donut Ring & Gauge -->
+        <div class="pfc-visualizer">
+          <svg class="pfc-ring-svg" viewBox="0 0 42 42">
+            <circle class="pfc-ring-bg" cx="21" cy="21" r="15.91549430918954"></circle>
+            <circle class="pfc-ring-p" id="pfc-circle-p" cx="21" cy="21" r="15.91549430918954" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+            <circle class="pfc-ring-f" id="pfc-circle-f" cx="21" cy="21" r="15.91549430918954" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+            <circle class="pfc-ring-c" id="pfc-circle-c" cx="21" cy="21" r="15.91549430918954" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+          </svg>
+          <div class="pfc-legend-col">
+            <div class="pfc-legend-row">
+              <span><i class="pfc-dot p"></i>タンパク質 (P)</span>
+              <span class="pfc-pct" id="pfc-pct-p">0%</span>
+            </div>
+            <div class="pfc-legend-row">
+              <span><i class="pfc-dot f"></i>脂質 (F)</span>
+              <span class="pfc-pct" id="pfc-pct-f">0%</span>
+            </div>
+            <div class="pfc-legend-row">
+              <span><i class="pfc-dot c"></i>炭水化物 (C)</span>
+              <span class="pfc-pct" id="pfc-pct-c">0%</span>
+            </div>
           </div>
-          <div class="pfc-legend-row">
-            <span><i class="pfc-dot c"></i>炭水化物 (C)</span>
-            <span class="pfc-pct" id="pfc-pct-c">0%</span>
+        </div>
+
+        <div class="dish-ai-macro-grid">
+          <div class="dish-ai-macro-item">
+            <div class="macro-label">タンパク質</div>
+            <div class="macro-val" id="modal-macro-p">0g</div>
+          </div>
+          <div class="dish-ai-macro-item">
+            <div class="macro-label">脂質</div>
+            <div class="macro-val" id="modal-macro-f">0g</div>
+          </div>
+          <div class="dish-ai-macro-item">
+            <div class="macro-label">炭水化物</div>
+            <div class="macro-val" id="modal-macro-c">0g</div>
+          </div>
+          <div class="dish-ai-macro-item">
+            <div class="macro-label">食塩相当量</div>
+            <div class="macro-val" id="modal-macro-salt">0g</div>
           </div>
         </div>
-      </div>
 
-      <div class="dish-ai-macro-grid">
-        <div class="dish-ai-macro-item">
-          <div class="macro-label">タンパク質</div>
-          <div class="macro-val" id="modal-macro-p">0g</div>
+        <div style="margin-top: 0.85rem;">
+          <h4 style="font-size: 0.88rem; margin: 0 0 0.35rem;">構成具材・分量内訳:</h4>
+          <ul class="dish-ai-ingredients-list" id="modal-ingredients-list"></ul>
         </div>
-        <div class="dish-ai-macro-item">
-          <div class="macro-label">脂質</div>
-          <div class="macro-val" id="modal-macro-f">0g</div>
-        </div>
-        <div class="dish-ai-macro-item">
-          <div class="macro-label">炭水化物</div>
-          <div class="macro-val" id="modal-macro-c">0g</div>
-        </div>
-        <div class="dish-ai-macro-item">
-          <div class="macro-label">食塩相当量</div>
-          <div class="macro-val" id="modal-macro-salt">0g</div>
+
+        <div style="margin-top: 1rem; display: flex; gap: 0.6rem; justify-content: flex-end;">
+          <button type="button" id="modal-add-tray-btn" class="button-pill primary">この推定値で注文トレイに追加</button>
         </div>
       </div>
 
-      <div style="margin-top: 1rem;">
-        <h4 style="font-size: 0.92rem; margin: 0 0 0.4rem;">構成具材・分量内訳（食品成分表より算定）:</h4>
-        <ul class="dish-ai-ingredients-list" id="modal-ingredients-list"></ul>
-      </div>
-
-      <div style="margin-top: 1.2rem; display: flex; gap: 0.6rem; justify-content: flex-end;">
-        <button type="button" id="modal-add-tray-btn" class="button-pill primary">この推定値で注文トレイに追加</button>
+      <!-- Navigation Footer (Previous / Next Buttons just like the user screenshot) -->
+      <div class="modal-nav-footer">
+        <button type="button" id="modal-prev-btn" class="modal-step-btn" title="前の料理へ">
+          ‹ Previous (前の料理)
+        </button>
+        <button type="button" id="modal-next-btn" class="modal-step-btn" title="次の料理へ">
+          Next (次の料理) ›
+        </button>
       </div>
     </div>
   </div>
@@ -365,16 +475,50 @@ document.addEventListener("DOMContentLoaded", function() {
     if (announcer) announcer.textContent = msg;
   }
 
-  // 1. Quick dish filter & Category Chips
+  // 1. Quick dish filter, View Switcher & Category Chips
   const filterInput = document.getElementById("dish-filter-input");
   const searchClearBtn = document.getElementById("search-clear-btn");
   const dishFilterCount = document.getElementById("dish-filter-count");
   const resetFiltersBtn = document.getElementById("reset-filters-btn");
   const tbody = document.getElementById("menu-tbody");
   const rows = Array.from(document.querySelectorAll("#menu-items-table tbody tr.dish-row"));
+  const cards = Array.from(document.querySelectorAll("#menu-cards-grid .menu-dish-card"));
   const noMsg = document.getElementById("no-dishes-msg");
   const chipButtons = document.querySelectorAll("#menu-chip-row .menu-chip");
   let activeFilter = "all";
+
+  // View Switcher (Photo Cards vs Detail Table)
+  const viewCardsBtn = document.getElementById("view-cards-btn");
+  const viewTableBtn = document.getElementById("view-table-btn");
+  const cardsView = document.getElementById("menu-cards-view");
+  const tableCard = document.getElementById("menu-table-card");
+
+  function setView(viewMode) {
+    if (viewMode === "table") {
+      if (cardsView) cardsView.style.display = "none";
+      if (tableCard) tableCard.style.display = "block";
+      if (viewCardsBtn) viewCardsBtn.classList.remove("active");
+      if (viewTableBtn) viewTableBtn.classList.add("active");
+    } else {
+      if (cardsView) cardsView.style.display = "block";
+      if (tableCard) tableCard.style.display = "none";
+      if (viewCardsBtn) viewCardsBtn.classList.add("active");
+      if (viewTableBtn) viewTableBtn.classList.remove("active");
+    }
+    try {
+      localStorage.setItem("calories_menu_view_pref", viewMode);
+    } catch(e) {}
+  }
+
+  if (viewCardsBtn) viewCardsBtn.addEventListener("click", () => setView("cards"));
+  if (viewTableBtn) viewTableBtn.addEventListener("click", () => setView("table"));
+
+  try {
+    const savedView = localStorage.getItem("calories_menu_view_pref");
+    if (savedView === "table") {
+      setView("table");
+    }
+  } catch(e) {}
 
   function applyFilters(isUserTyping) {
     const q = filterInput ? filterInput.value.trim().toLowerCase() : "";
@@ -384,11 +528,7 @@ document.addEventListener("DOMContentLoaded", function() {
       searchClearBtn.style.display = q ? "block" : "none";
     }
 
-    rows.forEach(function(row) {
-      const name = row.getAttribute("data-name") || "";
-      const kcalStr = row.getAttribute("data-kcal");
-      const kcal = kcalStr ? parseInt(kcalStr, 10) : null;
-
+    const testItem = function(name, kcal) {
       let matchesQuery = !q || name.includes(q);
       let matchesChip = true;
 
@@ -403,13 +543,24 @@ document.addEventListener("DOMContentLoaded", function() {
       } else if (activeFilter === "drinks") {
         matchesChip = /ビール|酒|茶|コーラ|ジュース|コーヒー|フロート|アイス|デザート|杏仁/.test(name);
       }
+      return matchesQuery && matchesChip;
+    };
 
-      if (matchesQuery && matchesChip) {
-        row.style.display = "";
-        visible++;
-      } else {
-        row.style.display = "none";
-      }
+    rows.forEach(function(row) {
+      const name = row.getAttribute("data-name") || "";
+      const kcalStr = row.getAttribute("data-kcal");
+      const kcal = kcalStr ? parseInt(kcalStr, 10) : null;
+      const isVisible = testItem(name, kcal);
+      row.style.display = isVisible ? "" : "none";
+      if (isVisible) visible++;
+    });
+
+    cards.forEach(function(card) {
+      const name = card.getAttribute("data-name") || "";
+      const kcalStr = card.getAttribute("data-kcal");
+      const kcal = kcalStr ? parseInt(kcalStr, 10) : null;
+      const isVisible = testItem(name, kcal);
+      card.style.display = isVisible ? "" : "none";
     });
 
     if (dishFilterCount) {
@@ -889,103 +1040,196 @@ document.addEventListener("DOMContentLoaded", function() {
     circleC.setAttribute("stroke-dashoffset", `-${pRatio + fRatio}`);
   }
 
+  const modalDishImg = document.getElementById("modal-dish-img");
+  const modalDishFallback = document.getElementById("modal-dish-fallback");
+  const modalDishIcon = document.getElementById("modal-dish-icon");
+  const modalDishPhotoWrap = document.getElementById("modal-dish-photo-wrap");
+  const modalPrevBtn = document.getElementById("modal-prev-btn");
+  const modalNextBtn = document.getElementById("modal-next-btn");
+
+  async function openDishModalById(rowId) {
+    if (!rowId) return;
+    currentModalRowId = String(rowId);
+
+    // Look in card or table row
+    const card = document.getElementById("dish-card-" + rowId);
+    const tr = document.getElementById("dish-row-" + rowId);
+
+    const name = card ? card.querySelector(".menu-card-name").textContent.trim() : (tr ? tr.querySelector(".dish-title-wrap strong").textContent.trim() : "料理");
+    const priceStr = card ? card.getAttribute("data-price") : (tr ? tr.getAttribute("data-price") : "0");
+    const price = parseInt(priceStr, 10) || 0;
+    const published = card ? card.getAttribute("data-kcal") : (tr ? tr.getAttribute("data-kcal") : "");
+
+    currentModalDish = name;
+    currentModalPrice = price;
+
+    if (modalDishName) modalDishName.textContent = name;
+    const modalPriceEl = document.getElementById("modal-dish-price");
+    if (modalPriceEl) modalPriceEl.textContent = price > 0 ? `¥${price.toLocaleString()}` : "—";
+    if (modalBadge) modalBadge.textContent = published ? "公式公表 ＋ 具材詳細" : "AI料理具材推定";
+
+    // Setup hero photo
+    const cardImg = card ? card.querySelector(".menu-card-img") : null;
+    const trImg = tr ? tr.querySelector(".dish-thumb-img") : null;
+    const imgEl = cardImg || trImg;
+    const catTag = (card ? card.querySelector(".dish-category-tag") : null) || (tr ? tr.querySelector(".dish-category-tag") : null);
+    const iconText = catTag ? catTag.textContent.trim() : "🍽️";
+
+    if (imgEl && imgEl.src) {
+      modalDishImg.src = imgEl.src;
+      modalDishImg.style.display = "block";
+      if (modalDishFallback) modalDishFallback.style.display = "none";
+      modalDishImg.onerror = function() {
+        this.style.display = "none";
+        if (modalDishFallback) {
+          modalDishFallback.style.display = "flex";
+          if (modalDishIcon) modalDishIcon.textContent = iconText;
+        }
+      };
+    } else {
+      modalDishImg.style.display = "none";
+      if (modalDishFallback) {
+        modalDishFallback.style.display = "flex";
+        if (modalDishIcon) modalDishIcon.textContent = iconText;
+      }
+    }
+
+    // Previous / Next buttons state based on visible items
+    const isTableView = (tableCard && tableCard.style.display !== "none");
+    const visibleItems = isTableView ?
+      rows.filter(r => r.style.display !== "none") :
+      cards.filter(c => c.style.display !== "none");
+
+    const currentIdx = visibleItems.findIndex(el => el.getAttribute("data-row-id") == rowId);
+    if (modalPrevBtn) {
+      modalPrevBtn.disabled = (currentIdx <= 0);
+      modalPrevBtn.dataset.targetId = (currentIdx > 0) ? visibleItems[currentIdx - 1].getAttribute("data-row-id") : "";
+    }
+    if (modalNextBtn) {
+      modalNextBtn.disabled = (currentIdx < 0 || currentIdx >= visibleItems.length - 1);
+      modalNextBtn.dataset.targetId = (currentIdx >= 0 && currentIdx < visibleItems.length - 1) ? visibleItems[currentIdx + 1].getAttribute("data-row-id") : "";
+    }
+
+    modal.style.display = "flex";
+    modalLoading.style.display = "block";
+    modalContent.style.display = "none";
+
+    try {
+      const res = await fetch(`/api/analyze-dish?dish=${encodeURIComponent(name)}&shop=${encodeURIComponent(shopName)}`);
+      if (!res.ok) throw new Error("API error " + res.status);
+      const data = await res.json();
+
+      const totals = data.totals || {};
+      const calculatedKcal = totals.energy_kcal ? Math.round(totals.energy_kcal) : (published ? parseInt(published, 10) : 0);
+      currentModalKcal = published ? parseInt(published, 10) : calculatedKcal;
+
+      modalTotalKcal.textContent = currentModalKcal;
+      modalKcalNote.textContent = published ? "店舗公式公表値" : "AI具材推定値";
+      const protG = totals.protein_g || 0;
+      const fatG = totals.fat_g || 0;
+      const carbG = totals.carbohydrate_g || 0;
+
+      modalMacroP.textContent = (protG ? protG.toFixed(1) : "—") + "g";
+      modalMacroF.textContent = (fatG ? fatG.toFixed(1) : "—") + "g";
+      modalMacroC.textContent = (carbG ? carbG.toFixed(1) : "—") + "g";
+      modalMacroSalt.textContent = (data.salt_g !== null && data.salt_g !== undefined ? data.salt_g.toFixed(1) : "—") + "g";
+
+      renderPFCRing(protG, fatG, carbG);
+
+      modalIngredientsList.innerHTML = "";
+      const comps = data.components || [];
+      if (comps.length === 0) {
+        modalIngredientsList.innerHTML = "<li style='color: var(--ink-faint); padding: 1rem;'>具材内訳データなし</li>";
+      } else {
+        comps.forEach(function(c) {
+          const ingName = c.identified ? (c.identified.name_ja || c.identified.name_en) : (c.db_match ? c.db_match.title : "具材");
+          const grams = c.ai_estimate && c.ai_estimate.estimated_grams ? Math.round(c.ai_estimate.estimated_grams) : null;
+          const ingKcal = c.calculated && c.calculated.energy_kcal ? Math.round(c.calculated.energy_kcal) : null;
+
+          const li = document.createElement("li");
+          li.innerHTML = `
+            <span><strong>${ingName}</strong>${grams ? `<span class="ing-grams">（約${grams}g）</span>` : ''}</span>
+            <span class="ing-kcal">${ingKcal !== null ? ingKcal + ' kcal' : '—'}</span>
+          `;
+          modalIngredientsList.appendChild(li);
+        });
+      }
+
+      modalLoading.style.display = "none";
+      modalContent.style.display = "block";
+
+      // Update the table row and card inline with color-coded calorie bar
+      if (!published && rowId && currentModalKcal > 0) {
+        const calCell = document.getElementById("calorie-cell-" + rowId);
+        const trayBtn = document.getElementById("tray-btn-" + rowId);
+        const trRow = document.getElementById("dish-row-" + rowId);
+        const cardEl = document.getElementById("dish-card-" + rowId);
+        if (trRow) trRow.setAttribute("data-kcal", currentModalKcal);
+        if (cardEl) {
+          cardEl.setAttribute("data-kcal", currentModalKcal);
+          const cardKcalEl = cardEl.querySelector(".menu-card-nutrition");
+          if (cardKcalEl) {
+            cardKcalEl.innerHTML = `<span class="menu-card-kcal"><strong>${currentModalKcal}</strong> kcal*</span>`;
+          }
+        }
+        if (calCell) {
+          const k = currentModalKcal;
+          const barClass = k < 350 ? "light" : (k <= 650 ? "mid" : "heavy");
+          const barW = Math.min(100, Math.round(k / 10));
+          calCell.innerHTML = `
+            <div class="kcal-cell-wrap">
+              <span class="badge estimate" title="AI料理具材推定による算出値">約<strong>${k}</strong> kcal*</span>
+              <div class="kcal-bar-track">
+                <div class="kcal-bar-fill ${barClass}" style="width: ${barW}%;"></div>
+              </div>
+            </div>`;
+        }
+        if (trayBtn) {
+          trayBtn.setAttribute("data-kcal", currentModalKcal);
+        }
+      }
+    } catch (err) {
+      modalLoading.innerHTML = `<p style="color: var(--seal); padding: 1.5rem;">解析に失敗しました: ${err.message}</p>`;
+    }
+  }
+
+  // Hook up card body click and dish AI buttons
   document.querySelectorAll(".dish-ai-btn").forEach(function(btn) {
-    btn.addEventListener("click", async function() {
-      const dish = this.getAttribute("data-dish");
-      const published = this.getAttribute("data-published");
-      const price = parseInt(this.getAttribute("data-price"), 10) || 0;
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
       const rowId = this.getAttribute("data-row-id");
-
-      currentModalDish = dish;
-      currentModalPrice = price;
-      currentModalRowId = rowId;
-
-      modalDishName.textContent = dish;
-      modalBadge.textContent = published ? "公式公表 ＋ 具材詳細" : "AI料理具材推定";
-
-      const tr = this.closest("tr");
-      const iconEl = tr ? tr.querySelector(".dish-thumb-icon") : null;
-      const modalDishIcon = document.getElementById("modal-dish-icon");
-      if (iconEl && modalDishIcon) {
-        modalDishIcon.textContent = iconEl.textContent;
-      }
-
-      modal.style.display = "flex";
-      modalLoading.style.display = "block";
-      modalContent.style.display = "none";
-
-      try {
-        const res = await fetch(`/api/analyze-dish?dish=${encodeURIComponent(dish)}&shop=${encodeURIComponent(shopName)}`);
-        if (!res.ok) throw new Error("API error " + res.status);
-        const data = await res.json();
-
-        const totals = data.totals || {};
-        const calculatedKcal = totals.energy_kcal ? Math.round(totals.energy_kcal) : (published ? parseInt(published, 10) : 0);
-        currentModalKcal = published ? parseInt(published, 10) : calculatedKcal;
-
-        modalTotalKcal.textContent = currentModalKcal;
-        modalKcalNote.textContent = published ? "店舗公式公表値" : "AI具材推定値";
-        const protG = totals.protein_g || 0;
-        const fatG = totals.fat_g || 0;
-        const carbG = totals.carbohydrate_g || 0;
-
-        modalMacroP.textContent = (protG ? protG.toFixed(1) : "—") + "g";
-        modalMacroF.textContent = (fatG ? fatG.toFixed(1) : "—") + "g";
-        modalMacroC.textContent = (carbG ? carbG.toFixed(1) : "—") + "g";
-        modalMacroSalt.textContent = (data.salt_g !== null && data.salt_g !== undefined ? data.salt_g.toFixed(1) : "—") + "g";
-
-        renderPFCRing(protG, fatG, carbG);
-
-        modalIngredientsList.innerHTML = "";
-        const comps = data.components || [];
-        if (comps.length === 0) {
-          modalIngredientsList.innerHTML = "<li style='color: var(--ink-faint); padding: 1rem;'>具材内訳データなし</li>";
-        } else {
-          comps.forEach(function(c) {
-            const ingName = c.identified ? (c.identified.name_ja || c.identified.name_en) : (c.db_match ? c.db_match.title : "具材");
-            const grams = c.ai_estimate && c.ai_estimate.estimated_grams ? Math.round(c.ai_estimate.estimated_grams) : null;
-            const ingKcal = c.calculated && c.calculated.energy_kcal ? Math.round(c.calculated.energy_kcal) : null;
-
-            const li = document.createElement("li");
-            li.innerHTML = `
-              <span><strong>${ingName}</strong>${grams ? `<span class="ing-grams">（約${grams}g）</span>` : ''}</span>
-              <span class="ing-kcal">${ingKcal !== null ? ingKcal + ' kcal' : '—'}</span>
-            `;
-            modalIngredientsList.appendChild(li);
-          });
-        }
-
-        modalLoading.style.display = "none";
-        modalContent.style.display = "block";
-
-        // Update the table row inline with color-coded calorie bar
-        if (!published && rowId && currentModalKcal > 0) {
-          const calCell = document.getElementById("calorie-cell-" + rowId);
-          const trayBtn = document.getElementById("tray-btn-" + rowId);
-          const tr = document.getElementById("dish-row-" + rowId);
-          if (tr) {
-            tr.setAttribute("data-kcal", currentModalKcal);
-          }
-          if (calCell) {
-            const k = currentModalKcal;
-            const barClass = k < 350 ? "light" : (k <= 650 ? "mid" : "heavy");
-            const barW = Math.min(100, Math.round(k / 10));
-            calCell.innerHTML = `
-              <div class="kcal-cell-wrap">
-                <span class="badge estimate" title="AI料理具材推定による算出値">約<strong>${k}</strong> kcal*</span>
-                <div class="kcal-bar-track">
-                  <div class="kcal-bar-fill ${barClass}" style="width: ${barW}%;"></div>
-                </div>
-              </div>`;
-          }
-          if (trayBtn) {
-            trayBtn.setAttribute("data-kcal", currentModalKcal);
-          }
-        }
-      } catch (err) {
-        modalLoading.innerHTML = `<p style="color: var(--seal); padding: 1.5rem;">解析に失敗しました: ${err.message}</p>`;
-      }
+      openDishModalById(rowId);
     });
+  });
+
+  document.querySelectorAll(".menu-card-body").forEach(function(body) {
+    body.addEventListener("click", function() {
+      const rowId = this.getAttribute("data-row-id");
+      openDishModalById(rowId);
+    });
+  });
+
+  // Modal Step Navigation
+  if (modalPrevBtn) {
+    modalPrevBtn.addEventListener("click", function() {
+      if (this.dataset.targetId) openDishModalById(this.dataset.targetId);
+    });
+  }
+  if (modalNextBtn) {
+    modalNextBtn.addEventListener("click", function() {
+      if (this.dataset.targetId) openDishModalById(this.dataset.targetId);
+    });
+  }
+
+  // Arrow key navigation when modal is open
+  document.addEventListener("keydown", function(e) {
+    if (modal && modal.style.display === "flex") {
+      if (e.key === "ArrowLeft" && modalPrevBtn && !modalPrevBtn.disabled && modalPrevBtn.dataset.targetId) {
+        openDishModalById(modalPrevBtn.dataset.targetId);
+      } else if (e.key === "ArrowRight" && modalNextBtn && !modalNextBtn.disabled && modalNextBtn.dataset.targetId) {
+        openDishModalById(modalNextBtn.dataset.targetId);
+      }
+    }
   });
 
   if (modalAddTrayBtn) {
