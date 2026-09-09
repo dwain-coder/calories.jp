@@ -224,5 +224,6 @@ if [[ "${fail}" -ne 0 ]]; then
   exit 1
 fi
 printf '\n\033[32mall checks passed\033[0m\n'
-printf 'Next: CloudPanel reverse proxy to http://127.0.0.1:%s, then move the DNS.\n' "${PORT}"
+printf 'Next: Hestia web domain on the calories template (proxies to localhost:%s),\n' "${PORT}"
+printf '      then the origin cert, then move the DNS. See docs/deploy-contabo.md.\n'
 printf 'Railway keeps serving until that DNS change, so rollback is one record.\n'

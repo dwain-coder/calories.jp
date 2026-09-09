@@ -5,8 +5,8 @@ WordPress for `/column`. Nothing about the application changes — same image,
 same database, same routes.
 
 Written against the `novatise-infrastructure` conventions: everything binds
-`127.0.0.1`, public exposure is a CloudPanel reverse-proxy site, the compose
-file is source of truth in that repository, secrets never are.
+`127.0.0.1`, public exposure is a HestiaCP web domain with a proxy template,
+the compose file is source of truth in that repository, secrets never are.
 
 Two things get better by being on this box rather than Railway:
 
@@ -94,8 +94,8 @@ GEMINI_API_KEY=...
 HELM_LLM_MODEL=gemini/gemini-3.5-flash
 
 # Blog (§5)
-WP_URL=http://127.0.0.1
-WP_HOST=wp.calories.internal
+WP_URL=http://5.104.81.60
+WP_HOST=column-origin.calories.jp
 WP_WEBHOOK_SECRET=...
 BLOG_DB_PATH=/data/blog.db
 ```
@@ -131,52 +131,127 @@ way of getting there without risking it on the first attempt.
 
 ## 4. Public hostname
 
-CloudPanel → **Add Site** → *Create a Reverse Proxy*:
+The box runs **HestiaCP 1.9.7**. A site is a Hestia user plus a web domain plus
+an nginx proxy template; the template is the file that matters, because
+`v-rebuild-web-domains` regenerates the vhost from it and discards hand edits.
 
-| Field | Value |
-|---|---|
-| Domain | `calories.jp` |
-| Reverse proxy URL | `http://127.0.0.1:8001` |
+Templates live in `/usr/local/hestia/data/templates/web/nginx/php-fpm/` as a
+`.tpl` (HTTP) and `.stpl` (HTTPS) pair. Start from `pricebest`, the closest
+analogue — a proxied app on this same box — rather than writing one:
 
-Then issue the certificate (Let's Encrypt) from the site's SSL tab, and point
-Cloudflare's `calories.jp` A record at this box, **proxied**, with SSL/TLS mode
-**Full (strict)**.
+```bash
+T=/usr/local/hestia/data/templates/web/nginx/php-fpm
+sudo cp -n $T/pricebest.tpl  $T/calories.tpl
+sudo cp -n $T/pricebest.stpl $T/calories.stpl
+sudo sed -i -E 's#proxy_pass http://(localhost|127\.0\.0\.1):[0-9]+;#proxy_pass http://localhost:8001;#' \
+    $T/calories.tpl $T/calories.stpl
+```
 
-The app already sends its own security headers — HSTS, nosniff, `DENY` framing,
-a CSP — and lifts framing only for `/embed`. Do not add duplicates in the
-CloudPanel vhost; two `X-Frame-Options` headers is worse than one.
+Then strip what is pricebest's and not ours. Three things:
+
+- **`location ^~ /column`** proxies to pricebest's WordPress vhost. Delete it.
+  Here `/column` is rendered by the app itself out of `blog.db` (§5), so the
+  passthrough would hijack every post. `location /` already covers the path.
+- **The `www` redirect** names `pricebest.jp`.
+- **`location = /api/snapshot`** is pricebest's cron route, inert here.
+
+```bash
+sudo sed -i \
+  -e '/# WordPress blog\./,/^[[:space:]]*}$/d' \
+  -e '/# The snapshot job is expensive/,/^[[:space:]]*}$/d' \
+  -e 's/pricebest\.jp/calories.jp/g' \
+  $T/calories.tpl $T/calories.stpl
+grep -n "add_header\|proxy_pass\|location" $T/calories.tpl $T/calories.stpl
+```
+
+That grep is the check that matters. Expect **no `add_header` at all**: the app
+sends its own HSTS, nosniff, `DENY` framing and CSP, and lifts framing only for
+`/embed`. A template-level `X-Frame-Options` would double up and break the
+analyzer embed on every blog it is dropped into. pricebest's only `add_header`
+lines were inside the `/column` block that was just deleted.
+
+Then the user and the domain — additive, nothing public moves yet:
+
+```bash
+PASS=$(openssl rand -base64 18); echo "calories password: $PASS"
+sudo /usr/local/hestia/bin/v-add-user calories "$PASS" you@example.com default calories.jp
+sudo /usr/local/hestia/bin/v-add-web-domain calories calories.jp
+sudo /usr/local/hestia/bin/v-change-web-domain-tpl calories calories.jp calories
+sudo /usr/local/hestia/bin/v-add-web-domain-ssl-force calories calories.jp
+```
+
+Use full `/usr/local/hestia/bin/` paths. `sudo` does not inherit an exported
+PATH, and the bare command names will not resolve.
+
+`v-change-web-domain-tpl` reloads nginx and fails there if the template is
+malformed, leaving the previous config running — so the other sites on the box
+are not at risk from a bad template.
+
+**Certificate.** Not Let's Encrypt: a Cloudflare Origin certificate, issued and
+installed by the infrastructure repo's own script, which also writes the `.ca`
+file Hestia refuses the cert without.
+
+```bash
+cd /home/admin/novatise-infrastructure
+sudo ./scripts/cloudflare-origin-cert.sh issue calories calories.jp            # dry run
+sudo ./scripts/cloudflare-origin-cert.sh issue calories calories.jp --apply
+```
+
+It sets the zone's SSL mode to `full`. Finish in the dashboard on **Full
+(strict)** — Cloudflare trusts its own Origin CA, so strict works both before
+and after the DNS move.
+
+**Test before the DNS move.** `--resolve` sends one request to the box while
+public DNS still points at Railway, so the live site is never in play:
+
+```bash
+for p in / /menu /nutrients /cooking-yield /api /embed /column /foods /analyzer /sitemap.xml; do
+  printf '%-16s %s\n' "$p" "$(curl -s -o /dev/null -w '%{http_code}' \
+      -k --resolve calories.jp:443:5.104.81.60 https://calories.jp$p)"
+done
+```
+
+`5.104.81.60`, not `127.0.0.1` — nginx on this box binds the public IP only.
+`-k` because the origin cert is signed by Cloudflare's Origin CA, which curl
+does not trust; that is the design.
+
+Ten 200s, then move Cloudflare's `calories.jp` record to an **A** record at the
+box, proxied. Keep the `_railway-verify` TXT record: it is what lets you point
+back without re-verifying.
+
+**Finally, a Cache Rule.** Cloudflare does not cache HTML without one, so every
+page reaches the container however good the `Cache-Control` is. Rules → Caching
+Rules → *URI Path does not start with `/internal`* → **Eligible for cache**,
+edge and browser TTL both **use cache-control header from origin**.
 
 ## 5. WordPress for /column
 
-CloudPanel → **Add Site** → *WordPress*:
+A second Hestia site on the same box, following the convention already in use
+(`column-origin.pricebest.jp` feeds pricebest's columns):
 
 | Field | Value |
 |---|---|
-| Domain | `wp.calories.internal` |
-| Site user | `wpcalories` |
+| Domain | `column-origin.calories.jp` |
+| Hestia user | `caloriescolumn` |
+| Template | `wordpress` |
 
-**Create no DNS record for that name.** It exists only in the box's nginx. That
-one decision removes the certificate, the basic-auth wall and the public REST
-hole that a split deployment needs — there is no route to this WordPress from
-outside the machine.
+WordPress is **headless**. It is never proxied to visitors: the app fetches
+`/wp-json/wp/v2/posts?_embed`, sanitises the HTML against an allowlist, stores
+it in `blog.db`, and renders `/column` through `base.html`. One design system,
+one sitemap, one cache policy, and a compromised WordPress cannot run code on
+calories.jp.
 
-The app reaches it by asking nginx on loopback for that vhost by name:
+The app reaches it over the public IP with an explicit `Host` header:
 
 ```ini
-WP_URL=http://127.0.0.1
-WP_HOST=wp.calories.internal
+WP_URL=http://5.104.81.60
+WP_HOST=column-origin.calories.jp
 ```
 
-Give the container a route to the host's loopback, in the compose service:
-
-```yaml
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-```
-
-and use `WP_URL=http://host.docker.internal` instead of `127.0.0.1` — inside a
-container, `127.0.0.1` is the container itself. (The CMS service already uses
-`extra_hosts` for the same reason.)
+**Not** `127.0.0.1` or `host.docker.internal`. nginx on this box binds the
+public IP only, so a loopback request is refused — pricebest's template says so
+in a comment, having learned it the hard way. `WP_HOST` exists in
+`dataset_manager/blog/sync.py` for exactly this.
 
 In `wp-config.php`, above `/* That's all, stop editing! */`:
 
