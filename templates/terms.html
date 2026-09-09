@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% set meta_description = t('terms_meta') %}
+{% block title %}{{ t('terms_title') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('terms_title') }}</h1>
+<p class="guide-lead">{{ t('terms_lead') }}</p>
+
+<section class="card">
+  <h2>{{ t('terms_figures') }}</h2>
+  <p>{{ t('terms_figures_body') }}</p>
+  <ul class="about-list">
+    <li>{{ t('terms_figures_measured') }}</li>
+    <li>{{ t('terms_figures_estimated') }}</li>
+    <li>{{ t('terms_figures_ai') }}</li>
+  </ul>
+  <p class="calc-note">{{ t('terms_figures_note') }}</p>
+</section>
+
+<section class="card">
+  <h2>{{ t('terms_marks') }}</h2>
+  <p>{{ t('terms_marks_body') }}</p>
+  <p>{{ t('terms_marks_nominative') }}</p>
+  <p>{{ t('terms_marks_menus') }}</p>
+  <p class="calc-note">{{ t('terms_marks_takedown') }}
+    {% if contact_email %}<a href="mailto:{{ contact_email }}">{{ contact_email }}</a>{% endif %}
+  </p>
+</section>
+
+<section class="card">
+  <h2>{{ t('terms_photos') }}</h2>
+  <p>{{ t('terms_photos_body') }}</p>
+  <p>{{ t('terms_photos_representative') }}</p>
+</section>
+
+<section class="card">
+  <h2>{{ t('terms_health') }}</h2>
+  <p>{{ t('terms_health_body') }}</p>
+</section>
+
+<section class="card">
+  <h2>{{ t('terms_reuse') }}</h2>
+  <p>{{ t('terms_reuse_body') }}</p>
+  <p>{{ t('terms_reuse_api') }} <a href="/api">{{ t('api_title') }}</a></p>
+</section>
+
+<section class="card">
+  <h2>{{ t('terms_liability') }}</h2>
+  <p>{{ t('terms_liability_body') }}</p>
+  <p class="calc-note">{{ t('privacy_updated', date=updated) }}</p>
+</section>
+{% endblock %}

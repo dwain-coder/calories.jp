@@ -759,6 +759,19 @@ def privacy_page(request: Request):
     })
 
 
+@router.get("/terms", response_class=HTMLResponse)
+def terms_page(request: Request):
+    """What the figures are, and whose the names and marks are.
+
+    A site that lists other companies' menus uses their names to say whose menu
+    it is. That is what this page states plainly, along with the standing offer
+    to remove a mark on request — which costs nothing and is the difference
+    between a dispute and an email.
+    """
+    lang = SITE_LANG
+    return _standing_page(request, lang, "terms", {"updated": POLICY_UPDATED})
+
+
 @router.get("/contact", response_class=HTMLResponse)
 def contact_page(request: Request):
     lang = SITE_LANG

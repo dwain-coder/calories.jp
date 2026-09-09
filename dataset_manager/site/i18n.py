@@ -258,6 +258,37 @@ STRINGS = {
         "about_disclaimer_body": "This site provides nutritional data and calculators. It does not offer medical or dietary advice, does not diagnose or treat any condition, and makes no claims about the effects of any food on health. For advice about your own diet, consult a doctor or a registered dietitian.",
         "operator_unset": "Not yet published",
 
+        "terms_title": "Terms and disclaimers",
+        "terms_meta": "What the figures are, whose the names and marks are, where the photographs come from, and how the data may be reused.",
+        "terms_lead": "What this site carries, and what it is not.",
+
+        "terms_figures": "The figures",
+        "terms_figures_body": "Composition values come from public databases. Every page states the source and how the value was arrived at.",
+        "terms_figures_measured": "Measured — analytical values published in MEXT's Standard Tables of Food Composition.",
+        "terms_figures_estimated": "Estimated — values the tables give in parentheses, and values this site derives from them. Always labelled as estimates.",
+        "terms_figures_ai": "AI estimates — inferred from a dish name or a photograph, never measured. Always labelled as such.",
+        "terms_figures_note": "For chain menus, figures published by the company itself take precedence and the source is cited on the page. What is actually served varies by branch, season and preparation. Where an exact figure matters, check the company's own information.",
+
+        "terms_marks": "Names, logos and trade marks",
+        "terms_marks_body": "Shop names, brand names, logos and other marks shown on this site belong to their respective owners. This site claims no rights in them.",
+        "terms_marks_nominative": "They are used solely to identify whose menu is being shown. There is no affiliation, sponsorship, endorsement or other relationship between this site and any of these companies, and none of them has reviewed or approved this site's contents.",
+        "terms_marks_menus": "Dish names and companies' own published nutrition figures are cited as public information. Nothing reproduces the layout, photographs or descriptive copy of their websites or menus.",
+        "terms_marks_takedown": "Rights holders who would prefer a mark not appear here: write to us and it will be removed promptly. No explanation is needed. Contact:",
+
+        "terms_photos": "Photographs",
+        "terms_photos_body": "Dish photographs are either freely licensed (Wikimedia Commons and similar) or used with permission. Source and licence are noted with each photograph.",
+        "terms_photos_representative": "A photograph marked 「※イメージ」 is not that dish. It shows the same kind of dish, and differs from what is actually served in plating, portion and specification.",
+
+        "terms_health": "Not health or medical information",
+        "terms_health_body": "This site publishes food composition values. It is not intended to prevent, treat or improve any condition, and it does not provide medical or nutritional advice. If you are under treatment, on a restricted diet, or pregnant, consult a doctor or a registered dietitian.",
+
+        "terms_reuse": "Reusing the data",
+        "terms_reuse_body": "Licences differ by source. MEXT and MAFF data are subject to their own terms of use; every page cites its source.",
+        "terms_reuse_api": "Values fetched from the API carry their source and licence with them. Details:",
+
+        "terms_liability": "Liability",
+        "terms_liability_body": "The contents are compiled with care but are not guaranteed to be complete or current. This site accepts no liability for loss arising from use of the information, and the contents may change without notice.",
+
         "privacy_title": "Privacy policy",
         "privacy_meta": "What calories.jp collects, what it does not, and how meal photographs are handled.",
         "privacy_lead": "Short version: there are no accounts, no tracking of individuals, and nothing to sign up for.",
@@ -613,6 +644,37 @@ STRINGS = {
         "api_sources_title": "データの出典",
         "api_sources_body": "成分値は文部科学省『日本食品標準成分表2023年版（八訂）』ほか公的データに基づきます。ライセンスの都合により、一部の外部データベースは配信対象に含まれません。",
         "highest": "最も多い食品",
+
+        "terms_title": "利用規約・免責事項",
+        "terms_meta": "掲載している数値の性質、店名・ロゴの扱い、写真の出典、データの再利用について。",
+        "terms_lead": "このサイトが何を載せていて、それが何ではないかを、先に書いておきます。",
+
+        "terms_figures": "掲載している数値について",
+        "terms_figures_body": "成分値は公的データベースに基づきます。出所と、その値がどう求められたかは、各ページに明示しています。",
+        "terms_figures_measured": "実測値——文部科学省『日本食品標準成分表』に収載された分析値です。",
+        "terms_figures_estimated": "推計値——成分表が括弧付きで示す値、および当サイトが成分表の数値から算出した値です。「推計値」と明記しています。",
+        "terms_figures_ai": "AIによる推定値——料理名や写真から推定したもので、実測ではありません。必ずその旨を表示しています。",
+        "terms_figures_note": "チェーン店のメニューについては、各社が公表している数値を優先し、出所を各ページに記載しています。実際に提供される料理は、店舗・時期・調理によって数値が異なる場合があります。正確な値が必要な場合は、各社の公式情報をご確認ください。",
+
+        "terms_marks": "店名・ロゴ・商標について",
+        "terms_marks_body": "このサイトに掲載している店名、ブランド名、ロゴその他の標章は、それぞれの権利者に帰属します。当サイトはこれらの権利を主張するものではありません。",
+        "terms_marks_nominative": "これらは、どの店舗のメニューを掲載しているかを読者に示す目的でのみ使用しています。当サイトと各社との間に、提携・出資・後援・推薦その他いかなる関係もありません。各社が当サイトの内容を確認・承認した事実もありません。",
+        "terms_marks_menus": "メニュー名および各社が公表している栄養成分値は、公開情報として引用しています。各社のウェブサイトやメニュー表の体裁、写真、説明文を複製したものではありません。",
+        "terms_marks_takedown": "権利者の方で、標章の掲載停止をご希望の場合は、ご連絡をいただければ速やかに削除します。理由の説明は不要です。連絡先：",
+
+        "terms_photos": "写真について",
+        "terms_photos_body": "料理写真は、自由なライセンスで提供されているもの（Wikimedia Commons等）、および当サイトが使用許諾を得たものを掲載しています。出典とライセンスは各写真に付記しています。",
+        "terms_photos_representative": "「※イメージ」と表示している写真は、その料理そのものを撮影したものではなく、同じ種類の料理の参考写真です。実際に提供される料理とは、盛りつけ・分量・仕様が異なります。",
+
+        "terms_health": "健康・医療に関する情報ではありません",
+        "terms_health_body": "このサイトは食品の成分値を掲載するものであり、特定の疾病の予防・治療・改善を目的としたものではありません。医学的・栄養学的な助言を行うものでもありません。治療中の方、食事制限のある方、妊娠中の方などは、医師または管理栄養士にご相談ください。",
+
+        "terms_reuse": "データの再利用について",
+        "terms_reuse_body": "元データのライセンスは出所ごとに異なります。文部科学省および農林水産省のデータは、それぞれの利用規約に従ってご利用ください。各ページに出典を明記しています。",
+        "terms_reuse_api": "APIから取得した値には、出所とライセンスが含まれます。詳細はこちら：",
+
+        "terms_liability": "免責",
+        "terms_liability_body": "掲載内容の正確性には努めていますが、完全性・最新性を保証するものではありません。本サイトの情報を利用したことにより生じた損害について、当サイトは責任を負いかねます。内容は予告なく変更されることがあります。",
 
         "privacy_title": "プライバシーポリシー",
         "privacy_meta": "calories.jpが取得する情報、取得しない情報、および食事写真の取り扱いについて。",

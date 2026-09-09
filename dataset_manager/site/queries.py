@@ -1114,7 +1114,7 @@ def cooking_yield_search(q, lang="ja", limit=20):
 SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "nutrients", "column", "pages")
 STATIC_PAGES = ("", "foods", "menu", "nutrients", "cooking-yield", "meal-calculator",
                 "analyzer", "goals", "sources", "api", "column", "embed",
-                "guides/cooking-and-calories", "about", "privacy", "contact")
+                "guides/cooking-and-calories", "about", "privacy", "terms", "contact")
 
 # Routes that serve HTML and are deliberately kept out of the sitemap. Named
 # here rather than merely absent, so the test below can tell "excluded on
