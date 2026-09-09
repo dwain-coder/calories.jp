@@ -19,6 +19,32 @@ Two things get better by being on this box rather than Railway:
 
 ---
 
+## 0. Preflight
+
+Every step below is also driven by one script, dry-run by default like the other
+fleet scripts. Run this first — it reads and reports, and changes nothing:
+
+```bash
+./tools/contabo-deploy.sh
+```
+
+It checks disk and RAM against this box's own floors, that port 8001 is free,
+that the compose service exists and binds loopback, that nothing mounts over
+`/app/data`, and that `.env` is 0600 with the keys that matter. It exits
+non-zero and touches nothing if any of that is wrong.
+
+```bash
+sudo ./tools/contabo-deploy.sh --apply    # fetch, build, start, verify
+./tools/contabo-deploy.sh --verify        # read-only, any time after
+```
+
+`--apply` builds the image **before** it touches the running container, so a
+broken build cannot replace a working site, and it will not report success
+unless the container answers on all ten routes.
+
+The sections below are what the script does, for when you would rather do it by
+hand or need to understand a failure.
+
 ## 1. Fetch the application
 
 ```bash
