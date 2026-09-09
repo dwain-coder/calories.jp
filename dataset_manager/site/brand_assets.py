@@ -1,6 +1,8 @@
 """Brand assets: authentic restaurant chain logo badges and culinary dish thumbnails."""
 import re
 import hashlib
+import sqlite3
+from functools import lru_cache
 
 CHAIN_BRANDS = [
     ("スシロー", {"bg": "#E60012", "fg": "#FFFFFF", "mark": "ス", "sub": "SUSHIRO"}),
@@ -67,18 +69,54 @@ DETERMINISTIC_PALETTES = [
 ]
 
 
+@lru_cache(maxsize=1)
+def _logos():
+    """{chain name: /static path} for chains with a real, free-licensed logo.
+
+    Fetched by tools/fetch_chain_logos.py from Wikidata P154, which is an
+    editor's assertion that a file IS that company's logo. Every one that came
+    back was public domain or CC0 — a wordmark in a plain typeface is below the
+    threshold of originality — so republishing is a copyright question already
+    answered. The trade mark is still theirs, which /terms says, along with an
+    unconditional offer to take any of them down.
+
+    Read once. It is 27 rows and it does not change between deploys.
+    """
+    from .queries import get_connection
+    try:
+        conn = get_connection()
+    except Exception:
+        return {}
+    try:
+        return {r["chain"]: r["file"] for r in conn.execute(
+            "SELECT chain, file FROM chain_logos")}
+    except sqlite3.Error:
+        # The table does not exist in an older extract. A missing logo is a
+        # coloured tile, not a 500.
+        return {}
+    finally:
+        conn.close()
+
+
 def get_chain_brand_badge(name: str) -> dict:
-    """Return authentic brand styling (background color, text color, mark, subtitle)."""
+    """Brand styling for a chain: its own logo where one exists, else a tile.
+
+    The tile is a fallback and says so — two initials on a brand colour. What it
+    must never be is a drawing that approximates the real mark: that is neither
+    the logo nor honestly not-the-logo, and it is the one version a trade mark
+    owner has cause to object to.
+    """
     clean_name = (name or "").strip()
+    logo = _logos().get(clean_name)
     for prefix, data in CHAIN_BRANDS:
         if prefix in clean_name:
-            return data
+            return {**data, "logo_file": logo} if logo else data
 
     # Deterministic fallback
     h = int(hashlib.md5(clean_name.encode("utf-8")).hexdigest(), 16)
     bg, fg = DETERMINISTIC_PALETTES[h % len(DETERMINISTIC_PALETTES)]
     mark = clean_name[:2] if len(clean_name) >= 2 else clean_name
-    return {"bg": bg, "fg": fg, "mark": mark, "sub": "SHOP"}
+    return {"bg": bg, "fg": fg, "mark": mark, "sub": "SHOP", "logo_file": logo}
 
 
 DISH_CATEGORIES = [

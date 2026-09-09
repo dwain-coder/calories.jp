@@ -10,8 +10,9 @@
   <div class="menu-header-brand-row">
     {% if d.shop.brand_logo %}
       <div class="chain-header-badge" style="background: {{ d.shop.brand_logo.bg }}; color: {{ d.shop.brand_logo.fg }};" title="{{ name }}">
-        {% if d.shop.brand_logo.logo_svg %}
-          {{ d.shop.brand_logo.logo_svg|safe }}
+        {% if d.shop.brand_logo.logo_file %}
+          <img src="{{ asset(d.shop.brand_logo.logo_file) }}" alt="{{ name }}"
+               class="chain-brand-logo" width="38" height="38" decoding="async">
         {% else %}
           <span class="chain-brand-mark">{{ d.shop.brand_logo.mark }}</span>
         {% endif %}

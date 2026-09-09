@@ -1538,6 +1538,12 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   align-items: center;
   gap: 1.1rem;
 }
+/* A real logo is a wordmark on its own white ground; the brand-coloured tile
+   behind it is for the two-initial fallback and would fight it. contain, never
+   cover — a cropped logo is a defaced logo. */
+.chain-header-badge:has(.chain-brand-logo) { background: #fff !important; padding: 4px; }
+.chain-brand-logo { width: 100%; height: 100%; object-fit: contain; display: block; }
+
 .chain-header-badge {
   display: flex;
   align-items: center;
