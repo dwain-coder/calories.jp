@@ -44,7 +44,11 @@
       <span class="per">{{ t('whole_recipe', g=d.computed.grams|round(0)|int) }}</span>
       {% if d.jdi8 is not none %}<span class="jdi8-badge">{{ t('jdi8') }} <b>{{ d.jdi8 }}/8</b></span>{% endif %}
     </p>
-    {% if d.pfc %}
+    {# A ratio drawn from an incomplete ingredient set is a picture of what
+       resolved, not of the dish. 「あいその甘露煮」 rendered as 96% carbohydrate
+       and 0% fat because the fish did not match — the same figures the table
+       now shows as ≥ and —, so the bar would contradict it. #}
+    {% if d.pfc and d.computed.n_resolved >= d.computed.n_total %}
     <div class="pfc" role="img" aria-label="{{ t('pfc_label') }}: {{ t('protein') }} {{ d.pfc.p }}%, {{ t('fat') }} {{ d.pfc.f }}%, {{ t('carbs') }} {{ d.pfc.c }}%">
       <div class="pfc-bar">
         <span class="pfc-p" style="width: {{ d.pfc.p }}%"></span><span class="pfc-f" style="width: {{ d.pfc.f }}%"></span><span class="pfc-c" style="width: {{ d.pfc.c }}%"></span>
@@ -61,23 +65,35 @@
        answers "what did I just cook", and per 100 g is the only column that
        compares one dish to another. #}
     <table class="nutrition-table">
+{% macro amount(value, unit, partial) -%}
+  {#- A total computed from SOME of the ingredients is a lower bound, not
+      a value. Printing 0.0 g of fat for a simmered fish asserts the dish
+      has none, when what happened is that the fish did not resolve: 37
+      pages said exactly that. A zero under partial coverage is an absence
+      and reads as one; anything else carries ≥. -#}
+  {%- if partial and not value -%}—
+  {%- elif partial -%}≥{{ value }} {{ unit }}
+  {%- else -%}{{ value }} {{ unit }}{%- endif -%}
+{%- endmacro %}
+
+{% set partial = d.computed.n_resolved < d.computed.n_total %}
       <thead><tr><th></th>
         <th>{{ t('whole_recipe_col') }}</th>
         {% if d.computed.per_100g %}<th>{{ t('per_100g') }}</th>{% endif %}
       </tr></thead>
       <tbody>
         <tr><td>{{ t('energy') }}</td>
-            <td>{{ d.computed.totals.get('energy_kcal', 0)|round(0)|int }} {{ t('kcal') }}</td>
-            {% if d.computed.per_100g %}<td>{{ d.computed.per_100g.get('energy_kcal', 0)|round(0)|int }} {{ t('kcal') }}</td>{% endif %}</tr>
+            <td>{{ amount(d.computed.totals.get('energy_kcal', 0)|round(0)|int, t('kcal'), partial) }}</td>
+            {% if d.computed.per_100g %}<td>{{ amount(d.computed.per_100g.get('energy_kcal', 0)|round(0)|int, t('kcal'), partial) }}</td>{% endif %}</tr>
         <tr><td>{{ t('protein') }}</td>
-            <td>{{ d.computed.totals.get('protein_g', 0)|round(1) }} g</td>
-            {% if d.computed.per_100g %}<td>{{ d.computed.per_100g.get('protein_g', 0)|round(1) }} g</td>{% endif %}</tr>
+            <td>{{ amount(d.computed.totals.get('protein_g', 0)|round(1), 'g', partial) }}</td>
+            {% if d.computed.per_100g %}<td>{{ amount(d.computed.per_100g.get('protein_g', 0)|round(1), 'g', partial) }}</td>{% endif %}</tr>
         <tr><td>{{ t('fat') }}</td>
-            <td>{{ d.computed.totals.get('fat_g', 0)|round(1) }} g</td>
-            {% if d.computed.per_100g %}<td>{{ d.computed.per_100g.get('fat_g', 0)|round(1) }} g</td>{% endif %}</tr>
+            <td>{{ amount(d.computed.totals.get('fat_g', 0)|round(1), 'g', partial) }}</td>
+            {% if d.computed.per_100g %}<td>{{ amount(d.computed.per_100g.get('fat_g', 0)|round(1), 'g', partial) }}</td>{% endif %}</tr>
         <tr><td>{{ t('carbs') }}</td>
-            <td>{{ d.computed.totals.get('carbohydrate_g', 0)|round(1) }} g</td>
-            {% if d.computed.per_100g %}<td>{{ d.computed.per_100g.get('carbohydrate_g', 0)|round(1) }} g</td>{% endif %}</tr>
+            <td>{{ amount(d.computed.totals.get('carbohydrate_g', 0)|round(1), 'g', partial) }}</td>
+            {% if d.computed.per_100g %}<td>{{ amount(d.computed.per_100g.get('carbohydrate_g', 0)|round(1), 'g', partial) }}</td>{% endif %}</tr>
       </tbody>
     </table>
     </div>
