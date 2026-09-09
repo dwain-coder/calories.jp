@@ -9,6 +9,7 @@ from ..calc.nutrition import dish_nutrition
 from . import claims, servings
 from . import menuterms
 from .brand_assets import get_chain_brand_badge, classify_dish_visual
+from .food_images import get_dish_image
 from .i18n import MICRO_DV
 
 
@@ -1213,12 +1214,14 @@ def get_shop_page_data(page):
                       min.energy_kcal AS min_kcal, min.protein_g AS min_p,
                       min.fat_g AS min_f, min.carbohydrate_g AS min_c, min.salt_g AS min_salt,
                       min.provenance AS min_provenance,
-                      sp.slug AS food_slug, sp.page_type AS food_page_type
+                      sp.slug AS food_slug, sp.page_type AS food_page_type,
+                      ii.url AS db_image_url
                FROM shop_menu_items smi
                LEFT JOIN chain_nutrition cn ON cn.id = smi.chain_nutrition_id
                LEFT JOIN nutrition n ON n.item_id = smi.item_id
                LEFT JOIN menu_item_nutrition min ON min.shop_menu_item_id = smi.id
                LEFT JOIN site_pages sp ON sp.item_id = smi.item_id AND sp.lang = ?
+               LEFT JOIN item_images ii ON ii.item_id = smi.item_id
                WHERE smi.shop_id = ?
                -- Dishes with verified figures first
                ORDER BY (cn.energy_kcal IS NULL AND min.energy_kcal IS NULL AND n.energy_kcal IS NULL),
@@ -1234,6 +1237,12 @@ def get_shop_page_data(page):
             visual = classify_dish_visual(r["name"])
             if menuterms.is_extra(r["name"]) or menuterms.is_drink(r["name"], visual["category"]):
                 continue
+            food_img = get_dish_image(r["name"], visual["category"])
+            image_url = r["db_image_url"] or food_img["thumb_url"]
+            image_card_url = r["db_image_url"] or food_img.get("card_url", image_url)
+            image_full_url = r["db_image_url"] or food_img["url"]
+            image_fallback = food_img["local_fallback"]
+            representational_note = "※写真はイメージです（料理ジャンル・具材構成に基づく参考写真）"
             kcal = source = protein_g = fat_g = carbs_g = salt_g = None
             if r["chain_kcal"] is not None and r["source_page"]:
                 # The chain's own published numbers, with the page it came from.
@@ -1261,6 +1270,11 @@ def get_shop_page_data(page):
                 carbs_g = r["min_c"]
                 salt_g = r["min_salt"]
 
+            # A row carrying neither a price nor a calorie is a name and two
+            # dashes. This page exists to put those two side by side.
+            if menuterms.says_nothing(r["price_yen"], kcal):
+                continue
+
             if kcal is not None:
                 with_figure += 1
             menu.append({
@@ -1280,6 +1294,11 @@ def get_shop_page_data(page):
                 "food_slug": r["food_slug"],
                 "food_page_type": r["food_page_type"],
                 "visual": visual,
+                "image_url": image_url,
+                "image_card_url": image_card_url,
+                "image_full_url": image_full_url,
+                "image_fallback": image_fallback,
+                "representational_note": representational_note,
             })
         shop_dict = dict(shop) if shop else {}
         shop_dict["brand_logo"] = get_chain_brand_badge(shop_dict.get("name") or page.get("slug") or "")

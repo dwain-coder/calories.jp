@@ -122,6 +122,13 @@ _EXTRA_PREFIX = re.compile(
     r"^(?:トッピング|追加|増量|大盛(?:り)?|替(?:え)?玉|おかわり|お代わり|セット割|"
     r"ライス大盛|麺大盛)[\s　:：]*")
 
+# Sold on a menu, but not food: a gift voucher, a cover charge, a container.
+# 「各種」 is deliberately absent: 「各種盛り合わせ定食」 is a real set meal, and
+# 「各種ジュース」 is already caught as a drink.
+_NOT_FOOD = re.compile(
+    r"回数券|お食事券|ギフト券|商品券|チケット|席料|お通し代|"
+    r"サービス料|容器代?$|持ち帰り用容器|レジ袋|紙袋$|のし$")
+
 # The whole name is a seasoning or a table condiment.
 _CONDIMENT_ONLY = re.compile(
     r"^(?:ソース|各種ソース|ドレッシング|マヨネーズ|ケチャップ|マスタード|わさび|ワサビ|"
@@ -158,7 +165,20 @@ def is_extra(name):
     n = (name or "").strip()
     if not n:
         return False
-    return bool(_EXTRA_PREFIX.match(n) or _CONDIMENT_ONLY.match(n))
+    return bool(_EXTRA_PREFIX.match(n) or _CONDIMENT_ONLY.match(n)
+                or _NOT_FOOD.search(n))
+
+
+def says_nothing(price_yen, energy_kcal):
+    """A row with neither a price nor a calorie.
+
+    A menu page here exists to put the two side by side. A line carrying
+    neither is a name and two dashes — 「GUEST WHISKY」, or the eight wing sauces
+    one chain lists individually. Ninety-one of them were being rendered.
+
+    A row missing only ONE of the two still says something and is kept.
+    """
+    return price_yen is None and energy_kcal is None
 
 
 def is_drink(name, category=None):

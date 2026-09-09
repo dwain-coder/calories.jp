@@ -225,3 +225,45 @@ class TestDishNameIsRead(unittest.TestCase):
         burger's alone. precompute_nutrition refuses to store that."""
         _, res = self._kcal("殻付き海老グリル＆大俵ハンバーグ")
         self.assertTrue(res.get("unmatched"))
+
+
+class TestEmptyRows(unittest.TestCase):
+    """This page exists to put a price next to a calorie. A row carrying
+    neither is a name and two dashes."""
+
+    def test_a_row_with_neither_is_dropped(self):
+        from dataset_manager.site import menuterms
+        self.assertTrue(menuterms.says_nothing(None, None))
+
+    def test_a_row_missing_only_one_is_kept(self):
+        """A dish with a calorie but no price still says something, and so does
+        a priced dish we cannot cost."""
+        from dataset_manager.site import menuterms
+        self.assertFalse(menuterms.says_nothing(500, None))
+        self.assertFalse(menuterms.says_nothing(None, 300))
+        self.assertFalse(menuterms.says_nothing(0, None))
+
+    def test_things_sold_on_a_menu_that_are_not_food(self):
+        from dataset_manager.site import menuterms
+        for name in ("お食事券", "回数券", "席料", "サービス料", "レジ袋",
+                     "持ち帰り用容器"):
+            self.assertTrue(menuterms.is_extra(name), name)
+
+    def test_real_dishes_are_not_caught_by_it(self):
+        """「各種盛り合わせ定食」 is a set meal, which is why 「各種」 is not a
+        not-food marker."""
+        from dataset_manager.site import menuterms
+        for name in ("ハンバーグ", "豚骨醤油ラーメン", "各種盛り合わせ定食",
+                     "石焼ビビンバ", "牛タン定食"):
+            self.assertFalse(menuterms.is_extra(name), name)
+
+    def test_the_page_and_its_count_agree(self):
+        """The 品数 on the index and the rows on the page are filtered by the
+        same rules, so one cannot drift from the other."""
+        from dataset_manager.site import queries
+        for slug in ("くら寿司", "はま寿司"):
+            page = queries.get_shop_page("ja", slug)
+            if not page:
+                continue
+            data = queries.get_shop_page_data(page)
+            self.assertEqual(data["shop"]["item_count"], len(data["menu"]), slug)

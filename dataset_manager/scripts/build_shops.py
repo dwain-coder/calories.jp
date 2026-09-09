@@ -177,7 +177,8 @@ def _shop_stats(conn, shop_id, with_nutrition):
     # and print a 品数 that disagrees with the rows under it.
     items = [i for i in items if not (
         menuterms.is_extra(i["name"])
-        or menuterms.is_drink(i["name"], classify_dish_visual(i["name"])["category"]))]
+        or menuterms.is_drink(i["name"], classify_dish_visual(i["name"])["category"])
+        or menuterms.says_nothing(i["price_yen"], i["shown_kcal"] or i["chain_kcal"]))]
 
     def sourced(i):
         """The chain's own figure, or a composition-table row for this dish."""
