@@ -377,6 +377,87 @@ def _photos():
 # ソース」 is fries, and 「本日のメイン、サイドサラダ、本日のスープ付き」 is not a soup.
 _HEAD_ENDS = re.compile(r"[、。，,（(【\[「｜|/／〜~\s]")
 
+# A Latin-script name does not put a space between the modifier and the dish:
+# "Cobb salad with bacon" truncated at the first space is "Cobb". English names
+# hang their extras off a preposition instead, so those are the delimiters, and
+# the head is everything before them — 「salad」 in this case, which is right.
+_HEAD_ENDS_LATIN = re.compile(
+    r"[,(（\[]|\s+(?:with|and|w/|in|on|topped|served|plus)\s+|\s*[&/｜|]\s*|\s+[-–—]\s+",
+    re.IGNORECASE)
+_HAS_JA = re.compile(r"[぀-ヿ一-鿿]")
+
+# English names for the same dishes. 1,010 menu rows carry no Japanese at all —
+# whole cafe menus written in English — and every one of them fell to the
+# generic photograph because every pattern above is Japanese.
+#
+# Merged into the patterns rather than added as new rules, so ordering, tie
+# breaking and the key mapping stay in one place.
+ENGLISH_ALIASES = {
+    "burger_cheese": r"cheeseburger|cheese burger",
+    "burger_classic": r"burger|hamburger|whopper",
+    "burger_chicken": r"chicken burger|chicken sandwich",
+    "hotdog": r"hot ?dog",
+    "sandwich": r"sandwich|clubhouse|panini|blt|bagel sandwich|wrap",
+    "toast_breakfast": r"toast|croissant|bagel|muffin|scone|brioche|bread basket",
+    "pancakes": r"pancake|waffle|crepe|french toast",
+    "salad_green": r"salad|caesar|cobb|coleslaw|slaw",
+    "french_fries": r"fries|tater tots|hash brown|potato wedges",
+    "onion_rings": r"onion ring",
+    "steak_plate": r"steak|ribeye|rib eye|sirloin|tenderloin",
+    "roast_beef": r"roast beef",
+    "karaage_chicken": r"fried chicken|karaage|nugget|chicken wing|buffalo wing",
+    "tonkatsu_pork": r"pork cutlet|tonkatsu|schnitzel",
+    "pasta": r"pasta|spaghetti|carbonara|penne|linguine|bolognese|arrabbiata",
+    "gratin": r"lasagna|lasagne|gratin|mac and cheese|macaroni cheese",
+    "pizza": r"pizza|margherita",
+    "curry_rice": r"curry",
+    "gyoza": r"dumpling|gyoza|potsticker",
+    "shumai": r"shumai|siu mai",
+    "ramen_shoyu": r"ramen|noodle soup",
+    "soba": r"soba|buckwheat noodle",
+    "udon": r"udon",
+    "sushi_platter": r"sushi|nigiri",
+    "sashimi": r"sashimi",
+    "tempura": r"tempura",
+    "yakitori": r"yakitori|skewer|grilled chicken skewer",
+    "edamame": r"edamame",
+    "omurice": r"omelette|omelet|omurice",
+    "chahan": r"fried rice",
+    "donburi_rice": r"rice bowl|donburi",
+    "soup_miso": r"miso soup|soup",
+    "soup_corn": r"chowder|potage|bisque",
+    "tacos": r"taco|burrito|quesadilla|nachos",
+    "kebab": r"kebab|kebap|shawarma",
+    "pho": r"pho\b",
+    "bibimbap": r"bibimbap",
+    "icecream_parfait": r"ice cream|sundae|gelato|parfait|affogato",
+    "cake_dessert": r"cake|cheesecake|tart|pudding|brownie|tiramisu",
+    "shortcake": r"shortcake",
+    "donut": r"donut|doughnut|churro",
+    "coffee": r"coffee|latte|espresso|cappuccino|americano|mocha|macchiato|au lait",
+    "tea_matcha": r"\btea\b|chai|earl grey|matcha|oolong",
+    "juice_beverage": r"juice|lemonade|soda|cola|ginger ale|tonic$",
+    "smoothie": r"smoothie|milkshake|shake|frappe|frappuccino",
+    "beer_alcohol": r"beer|\bale\b|lager|\bipa\b|stout|pilsner|draft|draught",
+    "wine_drink": r"wine|chardonnay|merlot|cabernet|sauvignon|prosecco",
+    "cocktail": r"cocktail|mojito|margarita|martini|spritz|highball|sour$",
+    "sake_drink": r"sake\b|junmai|daiginjo",
+    "shochu": r"shochu",
+    "teishoku": r"set meal|combo|lunch set|plate$",
+}
+
+
+def _with_english(rules):
+    """Fold the English alternatives into the patterns they belong to."""
+    merged = []
+    for pattern, key in rules:
+        extra = ENGLISH_ALIASES.get(key)
+        merged.append((f"{pattern}|{extra}" if extra else pattern, key))
+    return merged
+
+
+CLASSIFICATION_RULES = _with_english(CLASSIFICATION_RULES)
+
 
 def classify_key(name: str) -> str:
     """Which photo this dish name asks for.
@@ -394,7 +475,9 @@ def classify_key(name: str) -> str:
     Only the head segment is read. Past a comma or a space the name is listing
     what comes alongside, and matching there picks the side dish over the dish.
     """
-    head = _HEAD_ENDS.split(name or "", 1)[0]
+    text = name or ""
+    splitter = _HEAD_ENDS if _HAS_JA.search(text) else _HEAD_ENDS_LATIN
+    head = splitter.split(text, 1)[0]
     # Menus prefix names with markers — 「V ゴボウとキノコの豆乳腸活スープ」, 「新
     # からあげ」 — and truncating at the space leaves a head of one letter. When
     # the head names nothing, read the whole string rather than give up.

@@ -58,5 +58,34 @@ class TestTheHeadNamesTheDish(unittest.TestCase):
                 self.assertTrue(classify_key(name))
 
 
+class TestEnglishMenus(unittest.TestCase):
+    """Whole cafe menus are written in English — 1,010 rows carry no Japanese
+    at all, and every rule in the catalogue was Japanese, so every one of them
+    landed on the generic photograph. crisscross showed one picture 67 times."""
+
+    def test_an_english_dish_name_is_recognised(self):
+        for name, key in (("Clubhouse sandwich", "sandwich"),
+                          ("Buttermilk pancakes with whipped butter", "pancakes"),
+                          ("Cobb salad with bacon, eggs, blue cheese", "salad_green"),
+                          ("Café au Lait (Hot / Iced)", "coffee"),
+                          ("Apple Juice from Nagano", "juice_beverage"),
+                          ("Chili cheese tater tots with sour cream", "french_fries")):
+            with self.subTest(name=name):
+                self.assertEqual(classify_key(name), key)
+
+    def test_a_latin_name_is_not_cut_at_the_first_space(self):
+        """Japanese hangs its extras after a space, English after a preposition.
+        Splitting "Cobb salad with bacon" on the space leaves "Cobb"."""
+        self.assertEqual(classify_key("Cobb salad"), "salad_green")
+        self.assertEqual(classify_key("Grilled chicken salad"), "salad_green")
+
+    def test_english_support_did_not_disturb_japanese(self):
+        for name, key in (("ポテトサラダ", "salad_green"),
+                          ("牛丼", "gyudon_beef"),
+                          ("アイスコーヒー", "coffee")):
+            with self.subTest(name=name):
+                self.assertEqual(classify_key(name), key)
+
+
 if __name__ == "__main__":
     unittest.main()
