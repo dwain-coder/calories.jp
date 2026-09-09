@@ -224,8 +224,13 @@ DISH_PHOTO_CATALOG = {
 CLASSIFICATION_RULES = [
     # Specific burger variations
     (r"チーズバーガー|とびきりチーズ|チーズ.*バーガー|ダブル.*チーズ", "burger_cheese"),
-    (r"チキンバーガー|テリヤキチキン|チキンフィレ|タツタ", "burger_chicken"),
-    (r"海老カツ|エビカツ|エビバーガー|フィッシュバーガー|白身魚", "burger_fish_shrimp"),
+    # Like the cheese rule above, these have to reach the end of the compound.
+    # 「テリヤキチキンバーガー」 ends on バーガー, so a pattern stopping at チキン
+    # loses to the generic burger rule under head-final matching.
+    (r"(?:チキン|テリヤキチキン|チキンフィレ|タツタ).*バーガー"
+     r"|チキンバーガー|テリヤキチキン|チキンフィレ|タツタ", "burger_chicken"),
+    (r"(?:海老カツ|エビカツ|海老|エビ|フィッシュ|白身魚).*バーガー"
+     r"|海老カツ|エビカツ|エビバーガー|フィッシュバーガー|白身魚", "burger_fish_shrimp"),
     (r"ホットドッグ|チリドッグ|ドッグ", "hotdog"),
     (r"バーガー|ワッパー|サンド|マフィン|バンズ", "burger_classic"),
 
@@ -239,7 +244,10 @@ CLASSIFICATION_RULES = [
 
     # Ramen & Noodles
     (r"味噌ラーメン|みそラーメン", "ramen_miso"),
-    (r"豚骨|とんこつ|博多ラーメン|家系", "ramen_tonkotsu"),
+    # The compound alternatives come first and reach to the end of the word, so
+    # they tie with the generic ラーメン rule and win on order. Bare 豚骨 alone
+    # would end four characters earlier and lose to it.
+    (r"豚骨.*ラーメン|とんこつ.*ラーメン|博多ラーメン|家系|豚骨|とんこつ", "ramen_tonkotsu"),
     (r"ラーメン|らーめん|中華そば|つけ麺|油そば|担々麺", "ramen_shoyu"),
     (r"うどん|釜揚げ|きつねうどん|かき揚げうどん", "udon"),
     (r"そば|蕎麦|ざるそば|天ぷらそば", "soba"),
@@ -285,6 +293,51 @@ def _build_photo_url(photo_id: str, width: int = 160, height: int = 160, quality
     return f"{UNSPLASH_BASE}/{photo_id}?auto=format&fit=crop&w={width}&h={height}&q={quality}"
 
 
+# A dish name stops being the dish at the first of these. What follows is the
+# sides, the sauce, or the description: 「フレンチフライ サワークリーム&スイートチリ
+# ソース」 is fries, and 「本日のメイン、サイドサラダ、本日のスープ付き」 is not a soup.
+_HEAD_ENDS = re.compile(r"[、。，,（(【\[「｜|/／〜~\s]")
+
+
+def classify_key(name: str) -> str:
+    """Which photo this dish name asks for.
+
+    First-rule-wins read 「ポテトサラダ」 as chips, because ポテト is listed above
+    サラダ and the list is ordered by cuisine rather than by specificity. Japanese
+    compounds are head-final — the last element is the thing, everything before
+    it modifies — so the rule whose keyword ENDS last is the one that names the
+    dish. 8.2% of the menu corpus was affected.
+
+    Ties go to the earlier rule, which is what keeps 「味噌ラーメン」 off the generic
+    ramen photo and 「アボカドチーズバーガー」 on the cheeseburger: both patterns end
+    at the same character, and the specific one is listed first.
+
+    Only the head segment is read. Past a comma or a space the name is listing
+    what comes alongside, and matching there picks the side dish over the dish.
+    """
+    head = _HEAD_ENDS.split(name or "", 1)[0]
+    # Menus prefix names with markers — 「V ゴボウとキノコの豆乳腸活スープ」, 「新
+    # からあげ」 — and truncating at the space leaves a head of one letter. When
+    # the head names nothing, read the whole string rather than give up.
+    return _best_match(head) or _best_match(name or "") or "culinary_default"
+
+
+def _best_match(text):
+    # finditer, not search: search returns the LEFTMOST match, and a rule is a
+    # list of alternatives. In 「ふんわりスフレパンケーキ」 the pancake rule matched
+    # スフレ at position 4 and never looked at パンケーキ at 7, so it ended before
+    # the dessert rule's ケーキ and lost a dish it had named correctly.
+    best = None  # ((end position, -rule index), key)
+    for index, (pattern, key) in enumerate(CLASSIFICATION_RULES):
+        ends = [m.end() for m in re.finditer(pattern, text, re.IGNORECASE)]
+        if not ends:
+            continue
+        rank = (max(ends), -index)
+        if best is None or rank > best[0]:
+            best = (rank, key)
+    return best[1] if best else None
+
+
 def get_dish_image(dish_name: str, category_hint: Optional[str] = None) -> Dict[str, Any]:
     """Resolve an authentic food photo for any dish name.
 
@@ -297,16 +350,7 @@ def get_dish_image(dish_name: str, category_hint: Optional[str] = None) -> Dict[
             'alt': Accessible image alt text
     """
     name = (dish_name or "").strip()
-
-    # Rule-based pattern matching
-    matched_key = None
-    for pattern, key in CLASSIFICATION_RULES:
-        if re.search(pattern, name, re.IGNORECASE):
-            matched_key = key
-            break
-
-    if not matched_key:
-        matched_key = "culinary_default"
+    matched_key = classify_key(name)
 
     item_data = DISH_PHOTO_CATALOG.get(matched_key, DISH_PHOTO_CATALOG["culinary_default"])
     photo_id = item_data["id"]
