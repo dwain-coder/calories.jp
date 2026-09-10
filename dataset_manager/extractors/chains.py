@@ -184,6 +184,118 @@ def parse_mosburger(blob):
     return rows, updated
 
 
+
+# The columns a chain's 栄養成分 table can carry, in the order they are printed.
+# Only エネルギー is required; a chain that prints energy alone is still worth
+# having, and one that prints all five is worth more.
+NUTRITION_HEADERS = {
+    "energy_kcal": ("エネルギー", "熱量", "カロリー"),
+    "salt_g": ("食塩相当量", "ナトリウム"),
+    "protein_g": ("たんぱく質", "蛋白質", "タンパク質"),
+    "fat_g": ("脂質",),
+    "carbohydrate_g": ("炭水化物", "糖質"),
+}
+
+
+def _header_columns(table):
+    """{field: column index} read from the table's own header rows.
+
+    Pinned by reading the header rather than by counting from the right. A
+    chain adds an allergen the year the law changes — くるみ became a 特定原材料
+    in 2025 — and every column after it shifts. A parser that counted would
+    then read salt as protein and never say so.
+    """
+    found = {}
+    for row in table[:4]:
+        for index, cell in enumerate(row):
+            text = re.sub(r"\s+", "", str(cell or ""))
+            if not text:
+                continue
+            for field, names in NUTRITION_HEADERS.items():
+                if field in found:
+                    continue
+                if any(text.startswith(n) for n in names):
+                    found[field] = index
+    return found
+
+
+def _number(cell):
+    """A figure from a table cell, or None. Chains print 「-」 for not-applicable."""
+    text = re.sub(r"[,\s]", "", str(cell or ""))
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)", text)
+    return float(match.group(1)) if match else None
+
+
+
+# Allergen columns are printed with these, and a merged cell can spill one into
+# the name column: リンガーハット produced rows called 「)●」 and 「り●」. A dish name
+# is mostly not symbols.
+_SYMBOLS = re.compile(r"[●▲△○◎■□★☆\-ー―\s()（）]")
+
+
+def _is_dish_name(name):
+    """Whether this cell is a dish name rather than table furniture."""
+    if len(name) < 2:
+        return False
+    letters = _SYMBOLS.sub("", name)
+    return len(letters) >= 2
+
+def nutrition_table_parser(name_column=None):
+    """A parser for a chain that prints its 栄養成分表 as a real PDF table.
+
+    Text extraction runs the columns together — リンガーハット's first row comes
+    out as 「5926.421.124.777.5」, which is 592 kcal, 6.4 g salt, 21.1, 24.7 and
+    77.5 — so the table structure has to be read, not the text.
+
+    `name_column` pins the dish-name column when the layout has several text
+    columns before it. Left None, the widest text column that is not a
+    nutrition column is used.
+    """
+    def parse(blob):
+        import pdfplumber
+
+        rows, updated = [], None
+        with pdfplumber.open(io.BytesIO(blob)) as pdf:
+            for page in pdf.pages:
+                if updated is None:
+                    updated = _find_date(page.extract_text() or "")
+                for table in page.extract_tables():
+                    if not table or len(table) < 2:
+                        continue
+                    columns = _header_columns(table)
+                    if "energy_kcal" not in columns:
+                        continue          # an allergen-only table; not ours
+                    name_at = name_column
+                    if name_at is None:
+                        widths = {}
+                        for row in table:
+                            for i, cell in enumerate(row):
+                                if i in columns.values():
+                                    continue
+                                text = str(cell or "").strip()
+                                if len(text) > 3 and not _number(text):
+                                    widths[i] = widths.get(i, 0) + len(text)
+                        name_at = max(widths, key=widths.get) if widths else 0
+                    for row in table:
+                        if name_at >= len(row):
+                            continue
+                        name = re.sub(r"\s+", " ", str(row[name_at] or "")).strip()
+                        values = {f: _number(row[i]) for f, i in columns.items()
+                                  if i < len(row)}
+                        kcal = values.get("energy_kcal")
+                        if kcal is None or not _is_dish_name(name):
+                            continue
+                        if not (_KCAL_MIN <= kcal <= _KCAL_MAX):
+                            continue
+                        rows.append({"name": name,
+                                     **{k: v for k, v in values.items() if v is not None}})
+        return rows, updated
+
+    return parse
+
+
+parse_ringerhut = nutrition_table_parser(name_column=2)
+
 CHAINS = {
     "hamazushi": Chain(
         key="hamazushi",
@@ -199,6 +311,14 @@ CHAINS = {
         url="https://www.kurasushi.co.jp/common/pdf/kura_allergen.pdf",
         source_page="https://www.kurasushi.co.jp/app/app_allergen.html",
         parser=parse_kurasushi,
+    ),
+    "ringerhut": Chain(
+        key="ringerhut",
+        shop_name="リンガーハット",
+        url="https://www.ringerhut.jp/quality/allergy-nutrition_value/pdf/"
+            "allergy-nutrition_value_24.pdf",
+        source_page="https://www.ringerhut.jp/quality/allergy-nutrition_value/",
+        parser=parse_ringerhut,
     ),
     "mosburger": Chain(
         key="mosburger",
