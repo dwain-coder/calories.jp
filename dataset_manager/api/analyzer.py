@@ -230,7 +230,10 @@ def _match_food(name_ja, name_en, lang, cooked=False):
         tried.extend(foodterms.search_terms(q, cooked=cooked) if q == name_ja else [q])
     asked = name_ja or name_en or ""
     for q in tried:
-        foods = [h for h in queries.search(q, lang, limit=5) if h["page_type"] == "food"]
+        # Twelve, not five: the reranking below can only choose among the rows
+        # the search returned, and 「うし 乳用肥育牛肉 かた 脂身つき 焼き」 sits well
+        # below 「かた 赤肉 焼き」 for the query 「牛肉 焼き」.
+        foods = [h for h in queries.search(q, lang, limit=12) if h["page_type"] == "food"]
         # Serving beef for pork is worse than serving nothing: the figures look
         # authoritative and are about a different animal.
         foods = [h for h in foods if not foodterms.conflicts(asked, h["name"])]
@@ -243,8 +246,13 @@ def _match_food(name_ja, name_en, lang, cooked=False):
         # A recipe's 「ひじき 20g」 is 20 g of rehydrated hijiki, but the table's
         # canonical row is the dried one it is sold as — 186 kcal/100 g against
         # 13 for ゆで. Unless the name itself says dried, the prepared row wins.
-        ranked = foodterms.prefer_rehydrated(
-            asked, mext or foods, name_of=lambda h: h.get("name") or h.get("title") or "")
+        name_of = lambda h: h.get("name") or h.get("title") or ""   # noqa: E731
+        ranked = foodterms.prefer_rehydrated(asked, mext or foods, name_of=name_of)
+        # Last word goes to the state and the cut the asker actually named. The
+        # model says 脂身つき and 炒め; the tables publish exactly those rows, and
+        # the index was handing back the plainest one — 175 kcal of 赤肉 for a
+        # 322 kcal 脂身つき cut, 23 kcal of raw cabbage for 78 kcal of 油いため.
+        ranked = foodterms.prefer_state(asked, ranked, name_of=name_of)
         return ranked[0]
     return None
 
@@ -386,6 +394,14 @@ def calculate_nutrition_for_dishes(dishes_in, lang="ja"):
         "micros_from": n_micro,
         "insights": insights,
         "totals_note": t(lang, "analyzer_totals_note"),
+        # An ingredient the tables do not carry contributes NOTHING to the sum
+        # above, so the sum is a lower bound rather than the meal — a 150 g
+        # steak that matched nothing took a plate from 290 kcal to 34. Say so
+        # in the response, so every caller shows it the same way instead of
+        # each one deciding for itself.
+        "totals_partial": bool(unmatched),
+        "unmatched_grams": round(
+            sum(u.get("estimated_grams") or 0 for u in unmatched), 1) or None,
         "missing_fields": missing,
         "cached": False,
     }

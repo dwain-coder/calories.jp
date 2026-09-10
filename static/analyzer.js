@@ -140,8 +140,17 @@
 
     // Totals + macro bars vs daily values.
     if (d.totals && d.totals.energy_kcal != null) {
-      html += '<p class="kcal-hero"><strong>' + Math.round(d.totals.energy_kcal) +
+      // A total that omits the ingredients we could not look up is a lower
+      // bound, not the meal. It reads as the meal unless it says otherwise —
+      // a 150 g steak that matched nothing took a plate from 290 to 34 kcal.
+      var partial = !!d.totals_partial;
+      html += '<p class="kcal-hero">' + (partial ? '<span class="atleast">≥</span>' : '') +
+        '<strong>' + Math.round(d.totals.energy_kcal) +
         '</strong> <span class="unit">' + esc(I.kcal) + '</span></p>';
+      if (partial) {
+        html += '<p class="calc-note partial-note">' +
+          esc(I.partialTotal.replace('{n}', (d.unmatched || []).length)) + '</p>';
+      }
       var dv = d.macro_dv || {};
       html += '<div class="dv-bars">';
       html += bar(I.kcal, d.totals.energy_kcal, I.kcal, dv.energy_kcal);

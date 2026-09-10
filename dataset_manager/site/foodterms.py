@@ -50,6 +50,41 @@ NOISE = (
 # and ご飯 is cooked at ~156. Treating them as one word would put a rice dish
 # out by more than double.
 ALIASES = {
+    # --- cuts a model names and the tables spell differently. Every one of
+    # these came back UNMATCHED from a real photograph while the food itself
+    # was in the corpus under its kana headword: 牛→うし, 豚→ぶた, 明太子→めんたいこ.
+    "牛かた肉": ["うし 乳用肥育牛肉 かた 脂身つき 生"],
+    "牛かたロース": ["うし 乳用肥育牛肉 かたロース 脂身つき 生"],
+    "牛ばら肉": ["うし 乳用肥育牛肉 ばら 脂身つき 生"],
+    "牛ヒレ肉": ["うし 乳用肥育牛肉 ヒレ 赤肉 生"],
+    "牛もも肉": ["うし 乳用肥育牛肉 もも 脂身つき 生"],
+    "豚かた肉": ["ぶた 大型種肉 かた 脂身つき 生"],
+    "豚ヒレ肉": ["ぶた 大型種肉 ヒレ 赤肉 生"],
+    "豚ばら肉": ["ぶた 大型種肉 ばら 脂身つき 生"],
+    "豚もも肉": ["ぶた 大型種肉 もも 脂身つき 生"],
+    "合挽き肉": ["うし ひき肉 生"], "牛豚合挽き肉": ["うし ひき肉 生"],
+    "合いびき": ["うし ひき肉 生"],
+    "チャーシュー": ["ぶた その他 焼き豚"], "焼き豚": ["ぶた その他 焼き豚"],
+    "焼豚": ["ぶた その他 焼き豚"],
+    # --- everyday names for things the tables file under a parent food
+    "明太子": ["すけとうだら からしめんたいこ"],
+    "辛子明太子": ["すけとうだら からしめんたいこ"],
+    "からし明太子": ["すけとうだら からしめんたいこ"],
+    "たらこ": ["すけとうだら たらこ 生"],
+    "卵焼き": ["鶏卵 たまご焼 厚焼きたまご"],
+    "玉子焼き": ["鶏卵 たまご焼 厚焼きたまご"],
+    "厚焼き卵": ["鶏卵 たまご焼 厚焼きたまご"],
+    "だし巻き卵": ["鶏卵 たまご焼 だし巻きたまご"],
+    "酢飯": ["こめ 水稲めし 精白米 うるち米"],
+    "すし飯": ["こめ 水稲めし 精白米 うるち米"],
+    "シャリ": ["こめ 水稲めし 精白米 うるち米"],
+    "焼き麩": ["こむぎ 焼きふ 釜焼きふ"], "焼きふ": ["こむぎ 焼きふ 釜焼きふ"],
+    "お麩": ["こむぎ 焼きふ 釜焼きふ"],
+    "メンマ": ["たけのこ めんま 塩蔵 塩抜き"], "めんま": ["たけのこ めんま 塩蔵 塩抜き"],
+    "いちごジャム": ["いちご ジャム 高糖度"],
+    "オレンジジュース": ["オレンジ バレンシア 果実飲料 ストレートジュース"],
+    "黒みつ": ["黒砂糖"], "黒蜜": ["黒砂糖"],
+    "ねりからし": ["からし 練り"], "練りからし": ["からし 練り"],
     # --- seasonings and liquids
     "醤油": ["こいくちしょうゆ"], "しょうゆ": ["こいくちしょうゆ"],
     "濃口醤油": ["こいくちしょうゆ"], "薄口醤油": ["うすくちしょうゆ"],
@@ -229,8 +264,13 @@ ALIASES = {
 # 「大豆（水煮または蒸し）」 means the boiled tin at ~163 kcal/100g, not the dried
 # bean at 372 — dropping the parenthesis doubled the dish. Distinct from NOISE,
 # which the tables do not record at all.
-STATES = ("水煮", "ゆで", "茹で", "蒸し", "焼き", "生", "乾", "油いため", "素揚げ",
-          "揚げ", "煮", "冷凍", "缶詰", "塩漬", "干し", "皮なし", "皮つき")
+# Longest first: 「から揚げ」 must not be read as 「揚げ」, and 「油いため」 not as
+# 「いため」. A cook's word (炒め, フライ) sits here beside the table's own (油いため,
+# とんかつ) because the model writes the first and the search needs the second —
+# STATE_SYNONYMS below is the bridge.
+STATES = ("水煮", "から揚げ", "唐揚げ", "素揚げ", "天ぷら", "油いため", "とんかつ",
+          "ソテー", "フライ", "炒め", "いため", "ゆで", "茹で", "蒸し", "焼き",
+          "揚げ", "生", "乾", "煮", "冷凍", "缶詰", "塩漬", "干し", "皮なし", "皮つき")
 
 # Raw analysis -> the cooked one, for callers looking at a plate of food.
 #
@@ -331,21 +371,46 @@ def search_terms(name, cooked=False):
     # from the original line
     state = state_of(unicodedata.normalize("NFKC", str(name)))
     if state and state not in compact:
+        # The model writes 炒め and the table writes 油いため, so ask for the
+        # table's word as well as the one we were given. Without this the query
+        # was the bare noun and the search answered with the raw row.
+        for target in STATE_SYNONYMS.get(state, ()):
+            add(f"{compact} {target}")
         add(f"{compact} {state}")
 
     # Curated targets come first, deliberately. The raw word often matches
     # something technically containing it and wrong in practice: 砂糖 hits
     # パインアップル 砂糖漬, 米 hits そば米. The alias is the considered answer.
+    def add_alias(target):
+        """The curated row, and the same row in the state we were told about.
+
+        A cut alias points at one row and that row names a state — 「ぶた 大型種肉
+        ヒレ 赤肉 生」. Asked for a fried pork fillet, adding the bare target
+        answers with the raw one, and 「豚ヒレ肉 とんかつ」 matches nothing because
+        the tables write ぶた. Swapping the state on the ALIAS is what reaches
+        「ぶた 大型種肉 ヒレ 赤肉 とんかつ」, which is 379 kcal against 118.
+        """
+        if state:
+            stem = target
+            for st in STATES:
+                if stem.endswith(" " + st):
+                    stem = stem[: -(len(st) + 1)]
+                    break
+            if stem != target or state not in target:
+                for word in STATE_SYNONYMS.get(state, (state,)):
+                    add(f"{stem} {word}")
+        add(target)
+
     for key in (base, stripped, compact):
         for target in ALIASES.get(key, ()):
-            add(target)
+            add_alias(target)
     # then an alias for any word inside the name — 「牛ひき肉 500g」 and
     # 「合いびき肉（牛豚）」 both have to reach うし ひき肉. Longest word wins,
     # so 牛ひき肉 is not resolved as 牛肉.
     for word in sorted(ALIASES, key=len, reverse=True):
         if len(word) >= 2 and word in compact:
             for target in ALIASES[word]:
-                add(target)
+                add_alias(target)
             break
     add(base)
     add(stripped)
@@ -355,6 +420,74 @@ def search_terms(name, cooked=False):
         if len(part) >= 2:
             add(part)
     return terms
+
+
+
+# ------------------------------------------------------- preparation and cut
+
+# A vision model names the state it can see — 「牛肉（薄切り、脂身つき、焼き）」,
+# 「キャベツ（炒め）」 — and the tables publish exactly those rows: かた 脂身つき 焼き
+# is 322 kcal against 175 for かた 赤肉 焼き, キャベツ 油いため is 78 against 23 for
+# 生. The search returned whichever row the index liked, which was the plainest
+# one, and a plate of stir-fried beef came out at half its published calories.
+#
+# Left is what a cook or a model writes, right is how the tables spell it.
+STATE_SYNONYMS = {
+    "炒め": ("油いため",), "いため": ("油いため",), "ソテー": ("油いため", "ソテー"),
+    "焼き": ("焼き",), "グリル": ("焼き",),
+    "ゆで": ("ゆで",), "茹で": ("ゆで",), "煮": ("水煮", "煮"),
+    "蒸し": ("蒸し",), "生": ("生",),
+    "揚げ": ("素揚げ", "揚げ"), "素揚げ": ("素揚げ",),
+    "から揚げ": ("から揚げ",), "唐揚げ": ("から揚げ",),
+    "フライ": ("フライ", "とんかつ"), "とんかつ": ("とんかつ",),
+    "天ぷら": ("天ぷら",),
+}
+
+# Two ways of cutting the same animal, and the tables carry both. Naming one
+# and being served the other is a factor-of-two error on the fattiest part of
+# the plate, so a candidate from the wrong side is pushed DOWN rather than
+# merely not promoted.
+FAT_WORDS = (("脂身つき", "皮つき"), ("赤肉", "皮なし", "脂身なし"))
+
+
+def _fat_side(text):
+    for side, words in enumerate(FAT_WORDS):
+        if any(w in text for w in words):
+            return side
+    return None
+
+
+def state_score(asked, candidate):
+    """How well a table row answers the state and cut the asker named."""
+    # NFKC only: normalise() drops the parenthesis, and the parenthesis is
+    # where the model puts the state — 「牛肉（薄切り、脂身つき、焼き）」.
+    a = unicodedata.normalize("NFKC", str(asked or "")).replace(" ", "")
+    b = unicodedata.normalize("NFKC", str(candidate or "")).replace(" ", "")
+    score = 0
+    for word, targets in STATE_SYNONYMS.items():
+        if word in a and any(t in b for t in targets):
+            score += 2
+    side = _fat_side(a)
+    if side is not None:
+        other = _fat_side(b)
+        if other == side:
+            score += 2
+        elif other is not None:
+            score -= 2
+    return score
+
+
+def prefer_state(asked, candidates, name_of=lambda c: c):
+    """Reorder candidates so the ones matching the named state come first.
+
+    Stable: rows that score the same keep the order the search gave them, so
+    this only ever moves a better-qualified row up past a worse-qualified one.
+    """
+    if not asked or len(candidates) < 2:
+        return candidates
+    scored = [(state_score(asked, name_of(c)), -i, c) for i, c in enumerate(candidates)]
+    scored.sort(key=lambda t: (-t[0], -t[1]))
+    return [c for _s, _i, c in scored]
 
 
 # Foods that must never be substituted for one another. The tables write meat
@@ -375,10 +508,11 @@ KINDS = {
 def kind_of(name):
     """Which animal this name is about, or None when it does not say."""
     n = normalise(name).replace(" ", "")
-    for kind, words in KINDS.items():
-        if any(w in n for w in words):
-            return kind
-    return None
+    found = [kind for kind, words in KINDS.items() if any(w in n for w in words)]
+    # 「牛豚合挽き肉」 names two animals, so it is about neither of them on its
+    # own — reading it as pork made every beef row a conflict and left 100 g of
+    # mince out of a hamburger plate entirely. A name that says two says none.
+    return found[0] if len(found) == 1 else None
 
 
 def conflicts(query, candidate):

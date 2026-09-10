@@ -1866,6 +1866,12 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   #nutrient-rank-table tbody td:nth-child(5) { grid-column: 4; grid-row: 2; }
 }
 
+.kcal-hero .atleast {
+  font-family: var(--font-data); font-size: .62em; color: var(--estimate);
+  margin-right: .12em; vertical-align: .18em;
+}
+.partial-note { color: var(--estimate); }
+
 /* --------------------------------------------- Home: what the analyzer does */
 /* One rhythm down the page: every band is separated by the same interval, and
    the only thing that changes between them is whether it sits on paper or on
