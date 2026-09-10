@@ -1512,10 +1512,33 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   box-shadow: 0 2px 6px rgba(43, 33, 24, 0.14);
   flex-shrink: 0;
   letter-spacing: -0.02em;
+  overflow: hidden;
+  padding: 2px;
 }
 .chain-brand-mark {
   display: block;
+  /* Nothing leaves the tile. The size classes below are the fit; this is the
+     guarantee, for a mark nobody sized and a font that renders wider than it
+     was measured. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
 }
+/* Set from the mark's rendered width in brand_assets._mark_size — a Japanese
+   character counts double, so 「きんぐ」 is as wide as six latin ones and needs
+   the same treatment as Denny's. */
+.chain-brand-mark.mark-xl { font-size: 1.15rem; }
+.chain-brand-mark.mark-lg { font-size: 0.86rem; }
+.chain-brand-mark.mark-md { font-size: 0.62rem; letter-spacing: -0.02em; }
+.chain-brand-mark.mark-sm { font-size: 0.46rem; letter-spacing: -0.04em; }
+.chain-brand-mark.mark-xs { font-size: 0.38rem; letter-spacing: -0.05em; }
+/* The page header shows the same tile at 64px rather than 36. */
+.chain-header-badge .chain-brand-mark.mark-xl { font-size: 2rem; }
+.chain-header-badge .chain-brand-mark.mark-lg { font-size: 1.5rem; }
+.chain-header-badge .chain-brand-mark.mark-md { font-size: 1.15rem; }
+.chain-header-badge .chain-brand-mark.mark-sm { font-size: 0.84rem; }
+.chain-header-badge .chain-brand-mark.mark-xs { font-size: 0.68rem; }
 .chain-name-text {
   display: flex;
   flex-direction: column;
@@ -1541,7 +1564,8 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 /* A real logo is a wordmark on its own white ground; the brand-coloured tile
    behind it is for the two-initial fallback and would fight it. contain, never
    cover — a cropped logo is a defaced logo. */
-.chain-header-badge:has(.chain-brand-logo) { background: #fff !important; padding: 4px; }
+.chain-header-badge:has(.chain-brand-logo),
+.chain-brand-badge:has(.chain-brand-logo) { background: #fff !important; padding: 3px; }
 .chain-brand-logo { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 .chain-header-badge {
@@ -1842,6 +1866,104 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   #nutrient-rank-table tbody td:nth-child(5) { grid-column: 4; grid-row: 2; }
 }
 
+/* --------------------------------------------- Home: what the analyzer does */
+/* One rhythm down the page: every band is separated by the same interval, and
+   the only thing that changes between them is whether it sits on paper or on
+   the page ground. */
+.count-band {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 1rem 1.6rem;
+  border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);
+  padding: 1.3rem 0; margin: 2.4rem 0;
+}
+.count-band div { display: flex; flex-direction: column; gap: 0.15rem; }
+.count-band strong {
+  font-family: var(--font-data); font-size: 1.55rem; line-height: 1.1;
+  font-weight: 600; letter-spacing: -0.01em;
+}
+.count-band span { font-size: 0.8rem; color: var(--ink-soft, #555); line-height: 1.4; }
+
+.home-cta {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 1.2rem 2rem; margin: 3rem 0 0;
+  padding: 1.6rem 1.8rem; border-radius: var(--radius);
+  background: var(--accent-soft, #fdece2);
+}
+.home-cta h2 { margin: 0 0 0.35rem; }
+.home-cta p { margin: 0; max-width: 40rem; font-size: 0.9rem; line-height: 1.75; color: var(--ink-soft, #555); }
+
+/* The confidence the model reported for one ingredient. Quiet by default: it
+   qualifies the row it sits in, it is not a second column. */
+.worked-table .conf {
+  display: inline-block;
+  font-size: 0.72rem; line-height: 1.5; padding: 0.12rem 0.62rem; border-radius: 999px;
+  background: var(--accent-soft); color: var(--ink-soft);
+  white-space: nowrap; margin-left: 0.3rem;
+}
+.worked-table .conf-low { background: var(--estimate-bg); color: var(--estimate); }
+
+.how-strip { margin: 2.6rem 0 2rem; }
+.how-steps {
+  list-style: none; padding: 0; margin: 1rem 0 0;
+  display: grid; gap: 1.2rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  counter-reset: none;
+}
+.how-steps li { position: relative; padding-left: 2.6rem; }
+.how-steps h3 { margin: 0 0 0.3rem; font-size: 1rem; }
+.how-steps p { margin: 0; font-size: 0.9rem; line-height: 1.7; color: var(--ink-soft, #555); }
+.how-num {
+  position: absolute; left: 0; top: 0;
+  width: 1.9rem; height: 1.9rem; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--font-data); font-size: 0.9rem;
+  background: var(--accent-soft, #fdece2); color: var(--accent, #d4571f);
+}
+
+.worked { margin: 2.6rem 0; }
+.worked-case { padding: 1.1rem 1.2rem 0.9rem; margin: 1.1rem 0; }
+.worked-head { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: flex-start; }
+.worked-shot { margin: 0; flex: 1 1 18rem; max-width: 26rem; }
+.worked-shot img { width: 100%; height: auto; border-radius: 6px; display: block; }
+.worked-shot figcaption {
+  margin-top: 0.4rem; font-size: 0.8rem; line-height: 1.6; color: var(--ink-faint, #777);
+}
+.worked-summary { flex: 1 1 16rem; }
+.worked-counts { margin: 0 0 0.6rem; font-size: 0.95rem; line-height: 1.7; }
+.worked-dishes { list-style: none; padding: 0; margin: 0; }
+.worked-dishes li {
+  display: flex; justify-content: space-between; gap: 0.8rem;
+  padding: 0.28rem 0; border-bottom: 1px solid var(--hairline); font-size: 0.9rem;
+}
+.worked-dishes li:last-child { border-bottom: 0; }
+.worked-dish-meta { font-family: var(--font-data); color: var(--ink-faint, #777); }
+.worked-detail { margin-top: 0.9rem; }
+.worked-detail > summary {
+  cursor: pointer; font-size: 0.88rem; padding: 0.4rem 0;
+  color: var(--ink-soft, #555);
+}
+.worked-table { font-size: 0.86rem; }
+.worked-table td:nth-child(2), .worked-table td:nth-child(4) { font-family: var(--font-data); }
+.worked-unmatched-title { margin: 0.9rem 0 0.3rem; font-size: 0.9rem; }
+.worked-unmatched {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-wrap: wrap; gap: 0.4rem 0.6rem; font-size: 0.85rem;
+}
+.worked-unmatched li {
+  line-height: 1.6; padding: 0.22rem 0.7rem; border-radius: 999px;
+  background: var(--peach); color: var(--ink-soft);
+}
+.worked-cta { margin: 1.2rem 0 0; }
+.home-trust { margin: 2.8rem 0; }
+.home-trust .feature-strip { margin: 1rem 0 0; max-width: 100%; }
+.home-more { margin: 2.8rem 0; }
+.home-more .home-tools { margin-top: 1rem; }
+
+@media (max-width: 640px) {
+  .worked-shot { max-width: none; }
+  .how-steps { gap: 1rem; }
+}
+
 /* ------------------------------------------------------- Cooking yield tool */
 .yield-calc-row {
   display: flex; flex-wrap: wrap; gap: 0.9rem 1.4rem; align-items: flex-end;
@@ -1858,7 +1980,7 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 .standing-list { list-style: none; padding: 0; margin: 0.4rem 0 0.6rem; }
 .standing-list li {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 0.7rem;
-  padding: 0.35rem 0; border-bottom: 1px solid var(--rule, #eee);
+  padding: 0.35rem 0; border-bottom: 1px solid var(--hairline);
 }
 .standing-list li:last-child { border-bottom: 0; }
 .standing-term { min-width: 8rem; }

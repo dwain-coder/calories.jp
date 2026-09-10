@@ -24,6 +24,12 @@ data/*
 !data/metadata/
 data/metadata/*
 !data/metadata/site.db
+# The analyzer responses the home page's worked examples are built from. Kept so
+# the figures on that page can be checked against what the API actually returned
+# rather than taken on trust. Twelve small files.
+!data/raw/
+data/raw/*
+!data/raw/analyzer_examples/
 *.db-shm
 *.db-wal
 

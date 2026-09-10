@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% set meta_description = t('atlas_sub', n=data.atlas_count) | striptags %}
+{% block title %}{{ t('atlas_title') }} | {{ site_name }}{% endblock %}
+{% block content %}
+<h1>{{ t('atlas_title') }}</h1>
+<p class="alt-name">{{ t('atlas_page_lede') }}</p>
+
+<section class="atlas-section" id="atlas" data-lang="{{ lang }}" data-untranslated="{{ t('atlas_untranslated') }}">
+  <div class="atlas-head">
+    <p class="atlas-sub">{{ t('atlas_sub', n='<span class="atlas-count">…</span>') | safe }}</p>
+  </div>
+  <div class="atlas-stage">
+    <canvas aria-label="{{ t('atlas_title') }}" role="img"></canvas>
+    <span class="atlas-axis atlas-axis-p">{{ t('protein') }}</span>
+    <span class="atlas-axis atlas-axis-f">{{ t('fat') }}</span>
+    <span class="atlas-axis atlas-axis-c">{{ t('carbs') }}</span>
+    <div class="atlas-tip" hidden>
+      <span class="atlas-tip-name"></span>
+      <span class="atlas-tip-meta"></span>
+    </div>
+    <p class="atlas-fallback">{{ t('atlas_fallback') }}</p>
+  </div>
+  <div class="atlas-legend" role="group" aria-label="{{ t('browse_categories') }}"></div>
+  <p class="calc-note">{{ t('atlas_note') }}</p>
+</section>
+
+<p class="license"><a href="/foods">{{ t('food_database') }} →</a></p>
+<script src="{{ asset('/static/atlas.js') }}" defer></script>
+{% endblock %}

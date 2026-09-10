@@ -4,6 +4,27 @@
 <h1>{{ t('food_database') }}</h1>
 <p class="alt-name">{{ t('showing', a=((d.page - 1) * d.size + 1), b=([d.page * d.size, d.total]|min), n=d.total) }}</p>
 
+{% if hub and hub.categories %}
+{# Moved off the home page: this is the page a reader lands on when they want
+   to find a food, so the ways into the corpus belong here rather than there. #}
+<section class="browse-hub">
+  <h2>{{ t('browse_categories') }}</h2>
+  <ul class="chip-row">
+    {% for c in hub.categories %}
+    {% set cslug = cat_slug(lang, c.category) %}
+    {% if cslug %}
+    <li><a href="/category/{{ cslug | urlencode }}" style="--c: {{ group_color(c.category) }}">
+      <span class="chip-glyph" aria-hidden="true">{{ group_emoji(c.category) }}</span>
+      {{ mext_groups_en.get(c.category, c.category) if lang == 'en' else c.category }}<span class="count">{{ c.c }}</span></a></li>
+    {% endif %}
+    {% endfor %}
+  </ul>
+  {% if hub.atlas_count and hub.atlas_count >= 200 %}
+  <p class="calc-note"><a href="/atlas">{{ t('atlas_title') }} →</a></p>
+  {% endif %}
+</section>
+{% endif %}
+
 <form class="browse-controls" method="get" action="/foods">
   <label>{{ t('sort_by') }}
     <select name="sort" onchange="this.form.submit()">
@@ -34,6 +55,28 @@
 </table>
 </div>
 </div>
+
+{% if hub and hub.foods %}
+<section>
+  <h2>{{ t('popular_foods') }}</h2>
+  <ul class="tile-list">
+    {% for f in hub.foods %}
+    <li><a href="/food/{{ f.slug }}"><span>{{ f.name }}</span>{% if f.energy_kcal is not none %}<span class="kcal">{{ f.energy_kcal|round(0)|int }} kcal</span>{% endif %}</a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if hub and hub.dishes %}
+<section>
+  <h2>{{ t('regional_dishes') }}</h2>
+  <ul class="tile-list">
+    {% for f in hub.dishes %}
+    <li><a href="/dish/{{ f.slug }}"><span>{{ f.name }}</span></a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
 
 <nav class="pager" aria-label="pagination">
   {% if prev_url %}<a rel="prev" href="{{ prev_url }}">← {{ t('prev') }}</a>{% endif %}

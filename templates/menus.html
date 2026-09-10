@@ -67,8 +67,17 @@
           <td>
             <a href="/menu/{{ s.slug }}" class="chain-link">
               {% if s.brand_logo %}
+                {# Same rule as the menu page header: the chain's own mark where we
+                   hold it, the two-character tile only where we do not. This list
+                   showed the tile even for chains whose logo was already on disk,
+                   so かっぱ寿司 had two different marks on two pages. #}
                 <span class="chain-brand-badge" style="background: {{ s.brand_logo.bg }}; color: {{ s.brand_logo.fg }};">
-                  <span class="chain-brand-mark">{{ s.brand_logo.mark }}</span>
+                  {% if s.brand_logo.logo_file %}
+                    <img src="{{ asset(s.brand_logo.logo_file) }}" alt="{{ s.name }}"
+                         class="chain-brand-logo" width="34" height="34" loading="lazy" decoding="async">
+                  {% else %}
+                    <span class="chain-brand-mark mark-{{ s.brand_logo.mark_size or 'md' }}">{{ s.brand_logo.mark }}</span>
+                  {% endif %}
                 </span>
               {% endif %}
               <span class="chain-name-text">

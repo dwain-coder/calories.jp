@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set meta_description = t('tagline') %}
+{% set meta_description = t('analyzer_intro') %}
 {% block title %}{{ site_name }} — {{ t('tagline') }}{% endblock %}
 {% block content %}
 {% set media_slot = "home-hero" %}
@@ -7,7 +7,12 @@
    database — it asks nothing of a reader who does not yet know what the food is
    called — so it is the first thing on the page rather than a section below the
    fold. The name search sits under it, because searching by name is the other
-   thing people arrive wanting to do, not a lesser one. #}
+   thing people arrive wanting to do, not a lesser one.
+
+   Everything BELOW the hero is now about that one tool. The atlas moved to
+   /atlas, the category chips and the food and dish tiles moved to /foods: they
+   are ways of getting around a database you have already decided to use, and
+   they were answering a question nobody had asked yet. #}
 <div class="hero-split hero-analyzer-split">
   <section class="hero">
     <h1>{{ t('tagline_a') }} <span class="hl">{{ t('tagline_b') }}</span></h1>
@@ -28,7 +33,113 @@
   {% include "partials/hero_media.html" %}
 </div>
 
-<section class="feature-strip">
+{% if numbers %}
+{# Four counts, queried rather than written down. A home page is where a claim
+   about size is least checkable, so each one is the number behind a page the
+   reader can open. #}
+<section class="count-band" aria-label="{{ t('home_trust_title') }}">
+  <div><strong>{{ '{:,}'.format(numbers.foods) }}</strong><span>{{ t('home_n_foods') }}</span></div>
+  <div><strong>{{ '{:,}'.format(numbers.components) }}</strong><span>{{ t('home_n_components') }}</span></div>
+  <div><strong>{{ '{:,}'.format(numbers.chains) }}</strong><span>{{ t('home_n_chains') }}</span></div>
+  <div><strong>{{ '{:,}'.format(numbers.published) }}</strong><span>{{ t('home_n_published') }}</span></div>
+</section>
+{% endif %}
+
+<section class="how-strip">
+  <h2>{{ t('home_how_title') }}</h2>
+  <ol class="how-steps">
+    <li>
+      <span class="how-num" aria-hidden="true">1</span>
+      <h3>{{ t('home_step1_t') }}</h3>
+      <p>{{ t('home_step1_b') }}</p>
+    </li>
+    <li>
+      <span class="how-num" aria-hidden="true">2</span>
+      <h3>{{ t('home_step2_t') }}</h3>
+      <p>{{ t('home_step2_b') }}</p>
+    </li>
+    <li>
+      <span class="how-num" aria-hidden="true">3</span>
+      <h3>{{ t('home_step3_t') }}</h3>
+      <p>{{ t('home_step3_b') }}</p>
+    </li>
+  </ol>
+</section>
+
+{% if examples %}
+<section class="worked">
+  <h2>{{ t('home_examples_title') }}</h2>
+  <p class="alt-name">{{ t('home_examples_lede') }}</p>
+
+  {% for ex in examples %}
+  {# Figures come from site/analyzer_examples.py, generated from the saved API
+     responses in data/raw/analyzer_examples/. Nothing here is typed by hand. #}
+  <article class="worked-case card">
+    <div class="worked-head">
+      <figure class="worked-shot">
+        <img src="{{ ex.photo }}" alt="{{ ex.menu_name }}" loading="lazy" decoding="async" width="720" height="405">
+        <figcaption>{{ ex.menu_name }}<br><small>{{ t('home_photo_credit', chain=ex.chain) }}</small></figcaption>
+      </figure>
+      <div class="worked-summary">
+        <p class="worked-counts">{{ t('home_example_counts', n=ex.dishes|length, m=ex.n_identified, k=ex.n_matched) }}</p>
+        <ul class="worked-dishes">
+          {% for d in ex.dishes %}
+          <li><span class="worked-dish-name">{{ d.name }}</span>
+            <span class="worked-dish-meta">{{ d.matched }}/{{ d.of }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <details class="worked-detail"{% if loop.first %} open{% endif %}>
+      <summary>{{ t('home_col_ingredient') }} — {{ ex.n_matched }}</summary>
+      <div class="table-scroll">
+      <table class="nutrition-table stack-table worked-table">
+        <thead><tr>
+          <th>{{ t('home_col_ingredient') }}</th>
+          <th>{{ t('home_col_grams') }}</th>
+          <th>{{ t('home_col_matched') }}</th>
+          <th>{{ t('home_col_per100') }}</th>
+        </tr></thead>
+        <tbody>
+        {% for c in ex.components %}
+          <tr>
+            <td>{{ c.name }}
+              {%- if c.confidence %} <span class="conf conf-{{ c.confidence }}">{{ t('conf_' ~ c.confidence) }}</span>{% endif -%}
+            </td>
+            <td data-label="{{ t('home_col_grams') }}">{% if c.grams %}≈{{ c.grams|round(0)|int }} g{% else %}—{% endif %}</td>
+            <td data-label="{{ t('home_col_matched') }}">
+              {%- if c.url %}<a href="{{ c.url }}">{{ c.match }}</a>{% else %}{{ c.match or '—' }}{% endif -%}
+            </td>
+            <td data-label="{{ t('home_col_per100') }}">{% if c.per_100g_kcal is not none %}{{ c.per_100g_kcal|round(0)|int }} kcal{% else %}—{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% if ex.unmatched %}
+      <h4 class="worked-unmatched-title">{{ t('home_unmatched_title') }}</h4>
+      <ul class="worked-unmatched">
+        {% for u in ex.unmatched %}
+        <li>{{ u.name }}{% if u.grams %} <small>≈{{ u.grams|round(0)|int }} g</small>{% endif %}</li>
+        {% endfor %}
+      </ul>
+      <p class="calc-note">{{ t('home_unmatched_note') }}</p>
+      {% endif %}
+    </details>
+  </article>
+  {% endfor %}
+
+  <p class="calc-note">{{ t('home_grams_note') }}</p>
+  <p class="worked-cta"><a class="button" href="/analyzer">{{ t('home_open_analyzer') }} →</a></p>
+</section>
+{% endif %}
+
+<section class="home-trust">
+  <h2>{{ t('home_trust_title') }}</h2>
+  {# The strip was built to ride up over the hero, so it carries a negative top
+     margin and a narrowed width. Under a heading of its own it needs neither. #}
+  <div class="feature-strip">
   <div class="feature">
     <span class="feature-mark" aria-hidden="true">実測</span>
     <div><h3>{{ t('feat_measured') }}</h3><p>{{ t('feat_measured_body') }}</p></div>
@@ -41,78 +152,44 @@
     <span class="feature-mark" aria-hidden="true">無料</span>
     <div><h3>{{ t('feat_free') }}</h3><p>{{ t('feat_free_body') }}</p></div>
   </div>
-</section>
-
-{% if data.atlas_count >= 200 %}
-<section class="atlas-section" id="atlas" data-lang="{{ lang }}" data-untranslated="{{ t('atlas_untranslated') }}">
-  <div class="atlas-head">
-    <h2>{{ t('atlas_title') }}</h2>
-    <p class="atlas-sub">{{ t('atlas_sub', n='<span class="atlas-count">…</span>') | safe }}</p>
   </div>
-  <div class="atlas-stage">
-    <canvas aria-label="{{ t('atlas_title') }}" role="img"></canvas>
-    <span class="atlas-axis atlas-axis-p">{{ t('protein') }}</span>
-    <span class="atlas-axis atlas-axis-f">{{ t('fat') }}</span>
-    <span class="atlas-axis atlas-axis-c">{{ t('carbs') }}</span>
-    <div class="atlas-tip" hidden>
-      <span class="atlas-tip-name"></span>
-      <span class="atlas-tip-meta"></span>
-    </div>
-    <p class="atlas-fallback">{{ t('atlas_fallback') }}</p>
+</section>
+
+<section class="home-cta">
+  <div>
+    <h2>{{ t('home_cta_title') }}</h2>
+    <p>{{ t('home_cta_body') }}</p>
   </div>
-  <div class="atlas-legend" role="group" aria-label="{{ t('browse_categories') }}"></div>
-  <p class="calc-note">{{ t('atlas_note') }}</p>
-</section>
-{% endif %}
-
-{% if data.categories %}
-<section>
-  <h2>{{ t('browse_categories') }}</h2>
-  <ul class="chip-row">
-    {% for c in data.categories %}
-    {% set cslug = cat_slug(lang, c.category) %}
-    {% if cslug %}
-    <li><a href="/category/{{ cslug | urlencode }}" style="--c: {{ group_color(c.category) }}">
-      <span class="chip-glyph" aria-hidden="true">{{ group_emoji(c.category) }}</span>
-      {{ mext_groups_en.get(c.category, c.category) if lang == 'en' else c.category }}<span class="count">{{ c.c }}</span></a></li>
-    {% endif %}
-    {% endfor %}
-  </ul>
-</section>
-{% endif %}
-
-
-<section class="home-tools">
-  <a class="tool-card card" href="/meal-calculator">
-    <h2>{{ t('meal_calculator') }}</h2>
-    <p>{{ t('meal_calc_intro') }}</p>
-  </a>
-  <a class="tool-card card" href="/goals">
-    <h2>{{ t('goals') }}</h2>
-    <p>{{ t('goals_intro') }}</p>
-  </a>
+  <a class="button" href="/analyzer">{{ t('home_open_analyzer') }} →</a>
 </section>
 
-{% if data.foods %}
-<section>
-  <h2>{{ t('popular_foods') }}</h2>
-  <ul class="tile-list">
-    {% for f in data.foods %}
-    <li><a href="/food/{{ f.slug }}"><span>{{ f.name }}</span>{% if f.energy_kcal is not none %}<span class="kcal">{{ f.energy_kcal|round(0)|int }} kcal</span>{% endif %}</a></li>
-    {% endfor %}
-  </ul>
+<section class="home-more">
+  <h2>{{ t('home_more_title') }}</h2>
+  <div class="home-tools">
+    <a class="tool-card card" href="/foods">
+      <h3>{{ t('food_database') }}</h3>
+      <p>{{ t('home_more_foods') }}</p>
+    </a>
+    <a class="tool-card card" href="/menu">
+      <h3>{{ t('menu') }}</h3>
+      <p>{{ t('home_more_menu') }}</p>
+    </a>
+    <a class="tool-card card" href="/atlas">
+      <h3>{{ t('atlas_title') }}</h3>
+      <p>{{ t('home_more_atlas') }}</p>
+    </a>
+    <a class="tool-card card" href="/nutrients">
+      <h3>{{ t('nutrients_index') }}</h3>
+      <p>{{ t('home_more_nutrients') }}</p>
+    </a>
+    <a class="tool-card card" href="/meal-calculator">
+      <h3>{{ t('meal_calculator') }}</h3>
+      <p>{{ t('meal_calc_intro') }}</p>
+    </a>
+    <a class="tool-card card" href="/cooking-yield">
+      <h3>{{ t('yield_title') }}</h3>
+      <p>{{ t('yield_lede') }}</p>
+    </a>
+  </div>
 </section>
-{% endif %}
-
-{% if data.dishes %}
-<section>
-  <h2>{{ t('regional_dishes') }}</h2>
-  <ul class="tile-list">
-    {% for f in data.dishes %}
-    <li><a href="/dish/{{ f.slug }}"><span>{{ f.name }}</span></a></li>
-    {% endfor %}
-  </ul>
-</section>
-{% endif %}
-<script src="{{ asset('/static/atlas.js') }}" defer></script>
 {% endblock %}

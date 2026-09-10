@@ -14,7 +14,7 @@
           <img src="{{ asset(d.shop.brand_logo.logo_file) }}" alt="{{ name }}"
                class="chain-brand-logo" width="38" height="38" decoding="async">
         {% else %}
-          <span class="chain-brand-mark">{{ d.shop.brand_logo.mark }}</span>
+          <span class="chain-brand-mark mark-{{ d.shop.brand_logo.mark_size or 'md' }}">{{ d.shop.brand_logo.mark }}</span>
         {% endif %}
       </div>
     {% endif %}

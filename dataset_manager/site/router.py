@@ -148,8 +148,9 @@ def home(request: Request):
             "料理ページ": counts.get("dish"),
         }),
     ]
+    from .analyzer_examples import EXAMPLES
     return _render(request, "home.html", lang, {
-        "data": data,
+        "data": data, "examples": EXAMPLES, "numbers": queries.home_numbers(lang),
         "canonical": seo.base_url(lang) + "/",
         "alternates": {l: seo.base_url(l) + "/" for l in LANGS},
         "jsonld": [seo.jsonld_script(j) for j in jsonld],
@@ -303,6 +304,26 @@ def favicon():
 
 
 
+@router.get("/atlas", response_class=HTMLResponse)
+def atlas_page(request: Request):
+    """The composition table plotted in protein/fat/carbohydrate space.
+
+    It was the second thing on the home page, which is the wrong place for it:
+    it is a thing you go and look at, not a thing that explains the site to
+    someone who has just arrived.
+    """
+    lang = SITE_LANG
+    data = queries.home_data(lang)
+    url = seo.base_url(lang) + "/atlas"
+    crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"), (t(lang, "atlas_title"), None)]
+    return _render(request, "atlas.html", lang, {
+        "data": data,
+        "canonical": url,
+        "crumbs": crumbs,
+        "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
+    })
+
+
 @router.get("/foods", response_class=HTMLResponse)
 def browse_page(request: Request, page: int = 1, sort: str = "name",
                 category: str = ""):
@@ -311,8 +332,11 @@ def browse_page(request: Request, page: int = 1, sort: str = "name",
     data = queries.browse_foods(lang, page=page, sort=sort, category=category or None)
     base = seo.base_url(lang) + "/foods"
     qs = (f"?sort={sort}" if sort != "name" else "")
+    # The category chips, the curated foods and the regional dishes used to sit
+    # on the home page. This is where someone looking for a food actually is.
+    hub = queries.home_data(lang) if page == 1 and not category else {}
     return _render(request, "browse.html", lang, {
-        "d": data, "sort": sort,
+        "d": data, "sort": sort, "hub": hub,
         "canonical": base + (f"?page={page}" if page > 1 else "") ,
         "prev_url": (base + f"?page={page - 1}{qs.replace('?', '&')}") if page > 1 else None,
         "next_url": (base + f"?page={page + 1}{qs.replace('?', '&')}") if page < data["pages"] else None,

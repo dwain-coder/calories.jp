@@ -98,6 +98,28 @@ def _logos():
         conn.close()
 
 
+def _mark_size(mark: str) -> str:
+    """Which size class a fallback mark needs so it fits its 36px tile.
+
+    Set from the mark's WIDTH, not its length: 「きんぐ」 is three characters and
+    as wide as six of Denny's, and at one fixed size it hung out of the tile on
+    both sides. A Japanese character counts double, as it renders.
+    """
+    # 1.3, not 1: the tile is set in a 900-weight display face where six latin
+    # letters are wider than three kana, so DOUTOR spilled out of a box that
+    # 「きんぐ」 fitted. Measured against the rendered page, not assumed.
+    units = sum(2 if ord(ch) > 0x2E7F else 1.3 for ch in mark or "")
+    if units <= 2:
+        return "xl"
+    if units <= 4:
+        return "lg"
+    if units <= 6:
+        return "md"
+    if units <= 8:
+        return "sm"
+    return "xs"
+
+
 def get_chain_brand_badge(name: str) -> dict:
     """Brand styling for a chain: its own logo where one exists, else a tile.
 
@@ -110,13 +132,16 @@ def get_chain_brand_badge(name: str) -> dict:
     logo = _logos().get(clean_name)
     for prefix, data in CHAIN_BRANDS:
         if prefix in clean_name:
-            return {**data, "logo_file": logo} if logo else data
+            badge = {**data, "logo_file": logo} if logo else dict(data)
+            badge["mark_size"] = _mark_size(badge.get("mark", ""))
+            return badge
 
     # Deterministic fallback
     h = int(hashlib.md5(clean_name.encode("utf-8")).hexdigest(), 16)
     bg, fg = DETERMINISTIC_PALETTES[h % len(DETERMINISTIC_PALETTES)]
     mark = clean_name[:2] if len(clean_name) >= 2 else clean_name
-    return {"bg": bg, "fg": fg, "mark": mark, "sub": "SHOP", "logo_file": logo}
+    return {"bg": bg, "fg": fg, "mark": mark, "sub": "SHOP", "logo_file": logo,
+            "mark_size": _mark_size(mark)}
 
 
 DISH_CATEGORIES = [

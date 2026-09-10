@@ -2155,7 +2155,7 @@ def cooking_yield_search(q, lang="ja", limit=20):
 # ---------------------------------------------------------------- sitemaps
 
 SITEMAP_SECTIONS = ("foods", "dishes", "shops", "categories", "nutrients", "column", "pages")
-STATIC_PAGES = ("", "foods", "menu", "nutrients", "cooking-yield", "meal-calculator",
+STATIC_PAGES = ("", "foods", "atlas", "menu", "nutrients", "cooking-yield", "meal-calculator",
                 "analyzer", "goals", "sources", "api", "column", "embed",
                 "guides/cooking-and-calories", "about", "privacy", "terms", "contact")
 
@@ -2594,3 +2594,30 @@ def nutrient_category_leaders(lang, code, limit=20):
         out.append(row)
     out.sort(key=lambda r: -(r["amount"] or 0))
     return out[:limit]
+
+
+# ------------------------------------------------------------- home page counts
+
+# Four numbers, each a COUNT of something the site actually holds. A home page
+# is where a claim about size is most tempting and least checkable, so these are
+# queried rather than written down, and every one of them is the number behind a
+# page a reader can open and look at.
+def home_numbers(lang):
+    conn = get_connection()
+    try:
+        def one(sql, *args):
+            try:
+                return conn.execute(sql, args).fetchone()[0] or 0
+            except sqlite3.Error:
+                return 0
+
+        return {
+            "foods": one("SELECT COUNT(*) FROM site_pages WHERE lang = ? "
+                         "AND page_type = 'food'", lang),
+            "components": one("SELECT COUNT(*) FROM nutrients WHERE amount IS NOT NULL"),
+            "chains": one("SELECT COUNT(*) FROM shop_pages WHERE lang = ?", lang),
+            "published": one(
+                "SELECT COUNT(*) FROM shop_menu_items WHERE chain_nutrition_id IS NOT NULL"),
+        }
+    finally:
+        conn.close()
