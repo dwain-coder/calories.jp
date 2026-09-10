@@ -132,11 +132,25 @@ class TestAgainstWhatTheChainsPublish(unittest.TestCase):
         self.assertGreater(median, -20, f"back to under-reading: median {median:+.0f}%")
         self.assertLess(median, 25, f"now over-reading: median {median:+.0f}%")
 
+    # Composite broths. MEXT publishes the ingredients of a 中華スープ and not the
+    # soup, so there is nothing to match these to and nothing to fix. Named here
+    # rather than allowed by a loosened threshold, so a NEW miss still fails.
+    NO_SUCH_ROW = ("担々スープ", "中華スープ")
+
     def test_almost_nothing_is_left_unmatched(self):
-        """Sixteen ingredients matched nothing, 690 g of food. Anything that
-        reappears here is a name the tables carry under another spelling."""
-        heavy = [(n, g) for n, g in self.misses if g and g >= 5]
+        """Sixteen ingredients matched nothing across eleven photographs, 690 g
+        of food. Anything that reappears here is a name the tables carry under
+        another spelling — a 150 g sirloin and a 200 g steak both did."""
+        heavy = [(n, g) for n, g in self.misses
+                 if g and g >= 5 and n not in self.NO_SUCH_ROW]
         self.assertFalse(heavy, f"unmatched again: {heavy}")
+
+    def test_the_set_is_wide_enough_to_tune_against(self):
+        """Eleven photographs read +18% and twenty-three read -4%: the first
+        number was noise. Chains and calorie bands both have to be spread, or a
+        set of side dishes says nothing about a 1,342 kcal ramen set."""
+        self.assertGreaterEqual(len(self.rows), 20)
+        self.assertGreaterEqual(len({p for p, _pub, _got in self.rows}), 20)
 
 
 class TestTheTotalSaysWhenItIsPartial(unittest.TestCase):
