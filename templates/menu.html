@@ -56,7 +56,7 @@
 <!-- Representational Image Notice Banner -->
 <div class="menu-image-disclaimer-banner">
   <span class="disclaimer-icon">📷</span>
-  <span class="disclaimer-text"><strong>【写真表示について】</strong>メニュー写真は各料理のジャンル・具材構成に基づくイメージ参考写真です（※実物の店舗提供品とは盛り付け・仕様が異なる場合があります）。</span>
+  <span class="disclaimer-text"><strong>【写真表示について】</strong>「※イメージ」と表示のある写真は、料理のジャンル・具材構成に基づく参考写真です（実物とは盛り付け・仕様が異なります）。表示のない写真は、チェーン公式サイトが同名メニューに掲載している写真です。</span>
 </div>
 
 <!-- Quick Filter and Action Bar -->
@@ -132,7 +132,7 @@
           </div>
           <div class="menu-card-media">
             {% if it.image_card_url or it.image_url %}
-            <img src="{{ it.image_card_url or it.image_url }}" alt="{{ it.name }}（※イメージ）" class="menu-card-img" loading="lazy" decoding="async"
+            <img src="{{ it.image_card_url or it.image_url }}" alt="{{ it.name }}{% if it.representational_note %}（※イメージ）{% endif %}" class="menu-card-img" loading="lazy" decoding="async"
                  onerror="if(!this.dataset.fallbackApplied && '{{ it.image_fallback or "" }}'){ this.dataset.fallbackApplied='1'; this.src='{{ it.image_fallback or "" }}'; } else { this.style.display='none'; var fb = this.nextElementSibling; if (fb) fb.style.display='flex'; }">
             {% endif %}
             <div class="menu-card-fallback" style="{% if it.image_card_url or it.image_url %}display: none;{% else %}display: flex;{% endif %} {% if it.visual %}background: {{ it.visual.gradient }};{% endif %}">
@@ -160,7 +160,7 @@
       <thead>
         <tr>
           <th style="width: 44px; text-align: center;">選択</th>
-          <th class="sortable-th" id="th-name" style="cursor: pointer;" title="料理名で並べ替え" aria-sort="none">{{ t('name_col') }} <small style="font-weight: normal; opacity: 0.75; font-size: 0.78rem;">（※写真はイメージです）</small> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable-th" id="th-name" style="cursor: pointer;" title="料理名で並べ替え" aria-sort="none">{{ t('name_col') }} <small style="font-weight: normal; opacity: 0.75; font-size: 0.78rem;">（※印は参考写真）</small> <span class="sort-arrow">⇅</span></th>
           <th class="sortable-th" id="th-price" style="cursor: pointer;" title="価格順で並べ替え" aria-sort="none">{{ t('price') }} <span class="sort-arrow">⇅</span></th>
           <th class="sortable-th" id="th-kcal" style="cursor: pointer;" title="カロリー順で並べ替え" aria-sort="none">{{ t('calories') }} <span class="sort-arrow">⇅</span></th>
           <th style="text-align: right;">解析・推定</th>
@@ -191,7 +191,7 @@
             <div class="dish-name-cell">
               <div class="dish-thumb-avatar" title="{{ it.name }}">
                 {% if it.image_url %}
-                  <img src="{{ it.image_url }}" alt="{{ it.name }}（※イメージ）" class="dish-thumb-img" loading="lazy" decoding="async"
+                  <img src="{{ it.image_url }}" alt="{{ it.name }}{% if it.representational_note %}（※イメージ）{% endif %}" class="dish-thumb-img" loading="lazy" decoding="async"
                        onerror="if(!this.dataset.fallbackApplied && '{{ it.image_fallback or "" }}'){ this.dataset.fallbackApplied='1'; this.src='{{ it.image_fallback or "" }}'; } else { this.style.display='none'; var fb = this.nextElementSibling; if (fb) fb.style.display='flex'; }">
                 {% endif %}
                 <div class="dish-thumb-fallback" style="{% if it.image_url %}display: none;{% else %}display: flex;{% endif %} {% if it.visual %}background: {{ it.visual.gradient }};{% endif %}">
@@ -280,7 +280,7 @@
         </div>
       </div>
       <div class="modal-rep-note">
-        <span>📷 ※写真はイメージです（料理ジャンル・具材構成に基づく参考写真）</span>
+        <span>📷 ※イメージと表示のある写真のみ参考写真です（料理ジャンル・具材構成に基づく）</span>
       </div>
     </div>
 
@@ -1076,6 +1076,16 @@ document.addEventListener("DOMContentLoaded", function() {
       salt: parseFloat(attr("data-salt")) || 0,
     };
     const hasStoredMacros = storedMacros.p || storedMacros.f || storedMacros.c;
+    // A row whose figure came from a source states its own macros or states
+    // none. はま寿司 and the すかいらーく brands publish energy and salt per dish
+    // and nothing else; filling the protein line from the analyzer would print
+    // a guess under 店舗公式公表値, which is the bug this whole block exists to
+    // prevent. Missing shows as —.
+    const useStored = Boolean(published) && Boolean(kcalSource);
+    // The analyzer's reading of the dish name is worth showing when it is the
+    // only breakdown available. Beside macros the source published, it is a
+    // contradiction rather than a second opinion, so then it is hidden.
+    const showBreakdown = !(useStored && hasStoredMacros);
     // Only the chain publishes an official value. mext_calc is this site's own
     // estimate from a composition table, and calling it 公式公表 was wrong on
     // 6,252 of 9,594 rows.
@@ -1093,9 +1103,10 @@ document.addEventListener("DOMContentLoaded", function() {
     const modalPriceEl = document.getElementById("modal-dish-price");
     if (modalPriceEl) modalPriceEl.textContent = price > 0 ? `¥${price.toLocaleString()}` : "—";
     if (modalBadge) {
+      const detail = showBreakdown ? " ＋ 具材詳細" : "";
       modalBadge.textContent = kcalSource === "chain"
-        ? "公式公表 ＋ 具材詳細"
-        : (published ? provLabel + " ＋ 具材詳細" : "AI料理具材推定");
+        ? "公式公表" + detail
+        : (published ? provLabel + detail : "AI料理具材推定");
     }
 
     // Setup hero photo
@@ -1149,9 +1160,8 @@ document.addEventListener("DOMContentLoaded", function() {
     // the dish NAME can miss the main ingredient (a roast beef steak came back
     // as two sauces and a scoop of mash) and would sit under a total it
     // contradicts. It is also a model call per modal open, for nothing.
-    const useStored = Boolean(published) && Boolean(hasStoredMacros);
     const ingredientsBlock = document.getElementById("modal-ingredients-block");
-    if (useStored) {
+    if (!showBreakdown) {
       currentModalKcal = parseInt(published, 10);
       modalTotalKcal.textContent = currentModalKcal;
       modalKcalNote.textContent = provLabel;
@@ -1166,6 +1176,14 @@ document.addEventListener("DOMContentLoaded", function() {
       return;
     }
     if (ingredientsBlock) ingredientsBlock.style.display = "";
+    // Set from the row now, so a source's own figures are on screen even if the
+    // analyzer call below fails or is slow.
+    if (useStored) {
+      modalMacroP.textContent = (storedMacros.p ? storedMacros.p.toFixed(1) : "—") + "g";
+      modalMacroF.textContent = (storedMacros.f ? storedMacros.f.toFixed(1) : "—") + "g";
+      modalMacroC.textContent = (storedMacros.c ? storedMacros.c.toFixed(1) : "—") + "g";
+      modalMacroSalt.textContent = (storedMacros.salt ? storedMacros.salt.toFixed(1) : "—") + "g";
+    }
 
     try {
       const res = await fetch(`/api/analyze-dish?dish=${encodeURIComponent(name)}&shop=${encodeURIComponent(shopName)}`);

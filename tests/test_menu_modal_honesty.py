@@ -53,7 +53,24 @@ class TestFiguresComeFromOneSource(unittest.TestCase):
         a contradiction — so the block is hidden rather than captioned.
         """
         self.assertIn("modal-ingredients-block", MENU)
-        self.assertRegex(MENU, r"if \(useStored\)")
+        self.assertRegex(MENU, r"if \(!showBreakdown\)")
+
+    def test_a_published_row_without_macros_shows_none_not_a_guess(self):
+        """すかいらーく publishes energy and salt per dish and no macros at all.
+
+        The gate used to be `published && hasStoredMacros`, so those 1,548 rows
+        fell through to the analyzer and printed its protein under a
+        店舗公式公表値 headline. Whether the row carries macros decides whether the
+        breakdown is shown, never where the macro figures come from.
+        """
+        self.assertRegex(
+            MENU, r"const useStored = Boolean\(published\) && Boolean\(kcalSource\)")
+        self.assertNotRegex(
+            MENU, r"const useStored = Boolean\(published\) && Boolean\(hasStoredMacros\)")
+        self.assertIn("const showBreakdown = !(useStored && hasStoredMacros);", MENU)
+
+    def test_the_badge_does_not_promise_a_breakdown_it_hides(self):
+        self.assertIn('showBreakdown ? " ＋ 具材詳細" : ""', MENU)
 
 
 class TestTheDataItselfIsConsistent(unittest.TestCase):

@@ -18,6 +18,7 @@ is a small parser plus a `Chain` record. One is implemented; the registry is how
 the next twenty arrive without a framework being invented first.
 """
 import datetime
+import email.utils
 import io
 import re
 import urllib.request
@@ -36,6 +37,7 @@ class Chain:
         self.urls = [url] if isinstance(url, str) else list(url)
         self.source_page = source_page  # the human page that links it, for attribution
         self.parser = parser
+        self.last_modified = None       # from the HTTP header, if the file states no date
 
     @property
     def url(self):
@@ -52,7 +54,24 @@ class Chain:
             request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(request, timeout=60) as response:
                 blobs.append(response.read())
+                self._note_last_modified(response.headers.get("Last-Modified"))
         return blobs
+
+    def _note_last_modified(self, header):
+        """Keep the OLDEST Last-Modified seen, for a source that prints no date.
+
+        Weaker than a date the publisher printed on the table, so it is only
+        ever a fallback — but it is a fact about the file we actually read, and
+        it beats leaving a row undated.
+        """
+        if not header:
+            return
+        try:
+            stamp = email.utils.parsedate_to_datetime(header).date().isoformat()
+        except (TypeError, ValueError):
+            return
+        if self.last_modified is None or stamp < self.last_modified:
+            self.last_modified = stamp
 
     def rows(self, blobs):
         """Merged rows from every source, plus the OLDEST update date seen.
@@ -71,7 +90,7 @@ class Chain:
                     continue
                 seen.add(row["name"])
                 merged.append(row)
-        return merged, min(dates) if dates else None
+        return merged, min(dates) if dates else self.last_modified
 
 
 # ------------------------------------------------------- published kcal tables
@@ -296,6 +315,117 @@ def nutrition_table_parser(name_column=None):
 
 parse_ringerhut = nutrition_table_parser(name_column=2)
 
+# ---------------------------------------------------------------- ビッグボーイ
+
+# The only chain here that prints its 栄養成分表 with the header set vertically,
+# one character per line. pdfplumber finds the ruling lines but no text inside
+# the cells, so `nutrition_table_parser` reads an empty table — this one is read
+# line by line instead.
+#
+# A row is: menu name, sauce column, five figures, the allergen marks, and then
+# the menu name AGAIN in a right-hand column. The repeated name is the one taken:
+# the left-hand cell runs into the sauce column (「…手ごねハンバーグ ポン酢」) and
+# there is no reliable place to cut it.
+
+# 1,365.8 — the thousands separator is not optional to handle. Without it the
+# leftmost match starts after the comma and a 1,365 kcal hamburg reads as 365.
+_BB_NUM = r"(\d[\d,]*(?:\.\d+)?)"
+_BB_FIGURES = re.compile(r"\s+".join([_BB_NUM] * 5) + r"(?:\s|$)")
+_BB_MARKS = re.compile(r"[●※△○\s]")
+
+
+def parse_bigboy(blob):
+    import pdfplumber
+
+    rows, updated = [], None
+    with pdfplumber.open(io.BytesIO(blob)) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text() or ""
+            if updated is None:
+                updated = _find_date(text)
+            for line in text.split("\n"):
+                match = _BB_FIGURES.search(line)
+                if not match:
+                    continue
+                kcal, protein, fat, carbs, salt = (
+                    float(g.replace(",", "")) for g in match.groups())
+                name = _BB_MARKS.sub("", line[match.end():]).strip()
+                if not _is_dish_name(name) or not (_KCAL_MIN <= kcal <= _KCAL_MAX):
+                    continue
+                rows.append({"name": name, "energy_kcal": kcal, "protein_g": protein,
+                             "fat_g": fat, "carbohydrate_g": carbs, "salt_g": salt})
+    return rows, updated
+
+
+# ---------------------------------------------------------------- すかいらーく
+
+# Skylark's allergen site (allergy.skylark.co.jp) is behind a JS agreement gate,
+# which is why this looked unimportable. But every brand's menu pages are
+# themselves rendered from a JSON file the site fetches — the same file the dish
+# page reads to print 「カロリー 748 kcal / 塩分 2.7 g」 under each item. That file
+# is the disclosure: brand-published, per dish, and updated with the menu.
+#
+# Energy and salt only. Skylark does not publish protein, fat or carbohydrate
+# per dish, so those stay missing rather than being estimated from the name.
+
+_SKYLARK_JSON = "https://www.skylark.co.jp/{slug}/menu/json/menu_detail.json"
+_SKYLARK_PAGE = "https://www.skylark.co.jp/{slug}/menu/"
+
+
+def parse_skylark(blob):
+    """Rows from one brand's menu_detail.json.
+
+    A dish carries a `valiation` list — in practice one entry, occasionally a
+    second that is a price variant with no figures (「ドリンクバーのみをご注文の
+    お客さま」).
+
+    A name can also appear in two categories with two different figures:
+    バーミヤン sells 「ホイコーロウ定食」 at 1,087 kcal on the grand menu and 848 at
+    lunch, and ステーキガスト prints two sizes of チーズINハンバーグ under one name.
+    Our menu rows carry the bare name, so there is nothing to join on that would
+    tell those apart — and the merge upstream keeps whichever row it read first.
+    So a name that states two figures states neither: it is dropped, and the
+    dish falls back to being unpublished rather than being published wrongly.
+    """
+    import json
+    from collections import defaultdict
+
+    items = json.loads(blob.decode("utf-8")).get("list") or []
+    stated = defaultdict(set)
+    for item in items:
+        name = re.sub(r"<[^>]+>", "", str(item.get("menu_name") or "")).strip()
+        if not _is_dish_name(name):
+            continue
+        for variant in (item.get("valiation") or []):
+            kcal = _number(variant.get("calorie"))
+            if kcal is not None and _KCAL_MIN <= kcal <= _KCAL_MAX:
+                stated[name].add((kcal, _number(variant.get("salt"))))
+
+    rows = []
+    for name, figures in stated.items():
+        if len(figures) != 1:
+            continue
+        kcal, salt = figures.pop()
+        row = {"name": name, "energy_kcal": kcal}
+        if salt is not None:
+            row["salt_g"] = salt
+        rows.append(row)
+    return rows, None          # the file states no date; Last-Modified stands in
+
+
+# Brands whose JSON carries figures. 藍屋, 魚屋路 and しゃぶ葉 publish the same
+# file with every calorie field blank, so they are absent on purpose.
+SKYLARK_BRANDS = {
+    "gusto": "ガスト",
+    "jonathan": "ジョナサン",
+    "yumean": "夢庵",
+    "bamiyan": "バーミヤン",
+    "steak_gusto": "ステーキガスト",
+    "karayoshi": "から好し",
+    "chawan": "chawan",
+}
+
+
 CHAINS = {
     "hamazushi": Chain(
         key="hamazushi",
@@ -320,6 +450,13 @@ CHAINS = {
         source_page="https://www.ringerhut.jp/quality/allergy-nutrition_value/",
         parser=parse_ringerhut,
     ),
+    "bigboy": Chain(
+        key="bigboy",
+        shop_name="ビッグボーイ",
+        url="https://www.bigboyjapan.co.jp/allergen/menu/BBD_allergen.pdf",
+        source_page="https://www.bigboyjapan.co.jp/allergen/menu/",
+        parser=parse_bigboy,
+    ),
     "mosburger": Chain(
         key="mosburger",
         shop_name="モスバーガー",
@@ -328,6 +465,17 @@ CHAINS = {
         parser=parse_mosburger,
     ),
 }
+
+# One brand is one Chain: they share a CMS, not a document, and each publishes
+# and links its own file.
+for _slug, _shop in SKYLARK_BRANDS.items():
+    CHAINS["skylark_" + _slug] = Chain(
+        key="skylark_" + _slug,
+        shop_name=_shop,
+        url=_SKYLARK_JSON.format(slug=_slug),
+        source_page=_SKYLARK_PAGE.format(slug=_slug),
+        parser=parse_skylark,
+    )
 
 
 # ---------------------------------------------------------------- joining

@@ -17,30 +17,49 @@ So the first item is not a tool.
 
 ## 0. Import more chains' published nutrition — the precondition
 
-**Why first.** Three chains have published figures in the corpus, and only one
-of them has macros:
+**Why first.** Twelve chains now have published figures in the corpus, covering
+1,567 menu rows — but only 146 of those rows carry macros:
 
-| chain | rows | with macros |
+| chain | menu rows joined | with macros |
 |---|---|---|
-| はま寿司 | 656 | 0 (energy only) |
-| くら寿司 | 323 | 0 (energy only) |
-| モスバーガー | 362 | **362** |
+| ジョナサン | 259 | 0 (energy + salt) |
+| ガスト | 256 | 0 (energy + salt) |
+| 夢庵 | 210 | 0 (energy + salt) |
+| はま寿司 | 207 | 0 (energy only) |
+| くら寿司 | 136 | 0 (energy only) |
+| モスバーガー | 110 | **110** |
+| から好し | 105 | 0 (energy + salt) |
+| バーミヤン | 93 | 0 (energy + salt) |
+| chawan | 88 | 0 (energy + salt) |
+| ステーキガスト | 67 | 0 (energy + salt) |
+| ビッグボーイ | 19 | **19** |
+| リンガーハット | 17 | **17** |
 
-Every major Japanese chain publishes a nutrition PDF — it is how 食品表示法
-compliance is demonstrated. `chain_nutrition.source_url` already points at three
-of them. Each additional chain converts a few hundred rows from "estimated by
-us" to "published by them", and that single change is what makes items 1, 2 and
-parts of 6 possible at all.
+**How the すかいらーく brands arrived.** Their allergen site is behind a JS
+agreement gate, which is why they looked unimportable. But each brand's menu
+pages are rendered client-side from
+`https://www.skylark.co.jp/<brand>/menu/json/menu_detail.json`, and that file is
+the disclosure: dish name, energy, 食塩相当量 and the brand's own photograph, per
+dish. Seven brands, 1,078 menu rows, one parser. 藍屋, 魚屋路 and しゃぶ葉 publish
+the same file with every calorie field blank.
+
+Where a name appears twice with two different figures — バーミヤン prints
+ホイコーロウ定食 at 1,087 kcal on the grand menu and 848 at lunch — the dish is
+dropped. Our menu rows carry the bare name and there is nothing to join on that
+would tell them apart, so a name that states two figures states neither.
 
 **Build.** A per-chain importer, one chain at a time, in the shape of
-`extractors/chains.py`. PDF table extraction is the work; the join is on dish
-name, which already matches for the three that exist. Budget a day per chain
-for the first three, then hours.
+`extractors/chains.py`. There are now three shapes to copy: a line-based text
+parser (`parse_mosburger`, `parse_bigboy`), a real PDF table
+(`nutrition_table_parser`), and a JSON menu feed (`parse_skylark`). Budget hours
+per chain, not days.
 
-**Order by menu size** (`docs/chain-domains.csv`): ジョナサン 343, ガスト 312,
-ココス 283, スシロー 203, デニーズ 184. The Skylark brands share a disclosure
-document, so ガスト, ジョナサン, バーミヤン, 夢庵, 藍屋 and ステーキガスト are
-plausibly one import covering 1,400 rows.
+**Still needed, ranked by menu rows** — see `docs/chain-nutrition-urls.csv`:
+ココス 283, かっぱ寿司 270, スターバックス 231, 磯丸水産 216, 元気寿司 203,
+コメダ珈琲店 203, スシロー 203, すし松 200, ジョイフル 198. 33 chains, 5,612 rows.
+
+Dead ends confirmed: 幸楽苑, スシロー, なか卯 and すき家 publish allergens with no
+energy at all.
 
 **Risk.** Low. It is public data, already cited, and it strictly improves
 provenance. The tier-3 estimate is discarded wherever a published figure lands.

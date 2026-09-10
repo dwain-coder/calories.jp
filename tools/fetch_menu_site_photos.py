@@ -57,6 +57,17 @@ SOURCES = {
     "幸楽苑": ["https://www.kourakuen.co.jp/menu/"],
 }
 
+# すかいらーく brands render their menu pages from a JSON file rather than
+# serving <img alt> markup, so the caption and the photograph are fields in it.
+# 藍屋, 魚屋路 and しゃぶ葉 are here even though they publish no calories: a
+# photograph is useful on its own.
+for _slug, _shop in {
+        "gusto": "ガスト", "jonathan": "ジョナサン", "yumean": "夢庵",
+        "bamiyan": "バーミヤン", "steak_gusto": "ステーキガスト",
+        "karayoshi": "から好し", "chawan": "chawan", "aiya": "藍屋",
+        "totoyamichi": "魚屋路", "syabuyo": "しゃぶ葉"}.items():
+    SOURCES[_shop] = [f"https://www.skylark.co.jp/{_slug}/menu/json/menu_detail.json"]
+
 DDL = """CREATE TABLE IF NOT EXISTS product_photos (
     shop_menu_item_id INTEGER PRIMARY KEY,
     chain TEXT NOT NULL,
@@ -90,6 +101,8 @@ def captioned_images(url, client):
     """[(alt text, absolute image url)] from one page."""
     r = client.get(url, timeout=30, follow_redirects=True)
     r.raise_for_status()
+    if url.endswith(".json"):
+        return _json_menu_images(r)
     out = []
     for tag in IMG.findall(r.text):
         src, alt = SRC.search(tag), ALT.search(tag)
@@ -98,11 +111,75 @@ def captioned_images(url, client):
     return out
 
 
+def _json_menu_images(response):
+    """The same pairs, from a menu feed that states the caption as a field."""
+    seen, out = set(), []
+    for item in response.json().get("list") or []:
+        name = re.sub(r"<[^>]+>", "", str(item.get("menu_name") or "")).strip()
+        src = item.get("menu_image") or (item.get("meta") or {}).get("image")
+        if name and src and name not in seen:
+            seen.add(name)
+            out.append((name, urljoin(str(response.url), src)))
+    return out
+
+
+def prune_shared_images(conn, apply=True):
+    """Drop any photograph a chain uses for more than one dish.
+
+    藍屋 answers a request for a missing photograph with a 「NO IMAGE」 placeholder
+    under the dish's own URL, so 14 unrelated dishes came back byte-identical.
+    Where two dishes share an image at most one of them is a photograph of that
+    dish, and nothing in the data says which — so both go, and those rows fall
+    back to the illustrated tile that does not claim to be the product.
+
+    Compared by content, not by URL: the placeholder is served under a different
+    URL for every dish that lacks a photograph.
+    """
+    import hashlib
+    from collections import defaultdict
+
+    seen = defaultdict(list)
+    for row in conn.execute("SELECT shop_menu_item_id, chain, file FROM product_photos"):
+        path = OUT / Path(row[2]).name
+        if not path.exists():
+            continue
+        seen[(row[1], hashlib.md5(path.read_bytes()).hexdigest())].append(
+            (row[0], path))
+
+    dropped = 0
+    for (chain, _digest), items in seen.items():
+        if len(items) < 2:
+            continue
+        for item_id, path in items:
+            dropped += 1
+            if not apply:
+                continue
+            conn.execute("DELETE FROM product_photos WHERE shop_menu_item_id = ?",
+                         (item_id,))
+            path.unlink(missing_ok=True)
+    if apply:
+        conn.commit()
+    return dropped
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--chain", required=True)
+    ap.add_argument("--chain")
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--prune", action="store_true",
+                    help="only drop photographs shared between dishes, fetch nothing")
     args = ap.parse_args()
+
+    if args.prune:
+        conn = sqlite3.connect(DB)
+        conn.execute(DDL)
+        dropped = prune_shared_images(conn, apply=args.apply)
+        conn.close()
+        print(f"{dropped} photographs are shared between dishes"
+              + (" and were dropped." if args.apply else ". Dry run."))
+        return
+    if not args.chain:
+        sys.exit("--chain is required unless --prune is given")
 
     pages = SOURCES.get(args.chain)
     if not pages:
@@ -166,6 +243,13 @@ def main():
     finally:
         client.close()
         conn.close()
+
+    if args.apply:
+        conn = sqlite3.connect(DB)
+        shared = prune_shared_images(conn)
+        conn.close()
+        if shared:
+            print(f"{shared} photographs were shared between dishes and were dropped")
 
     print(f"\n{matched} of {len(rows)} rows matched a photograph by exact name")
     if args.apply:

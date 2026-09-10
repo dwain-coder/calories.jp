@@ -1,0 +1,46 @@
+﻿menu_rows,chain,official_site,status,what_i_found,nutrition_url_PASTE_HERE
+343,ジョナサン,https://skylark.co.jp,DONE (energy+salt),menu_detail.json behind the menu pages,https://www.skylark.co.jp/jonathan/menu/json/menu_detail.json
+312,ガスト,https://skylark.co.jp,DONE (energy+salt),menu_detail.json behind the menu pages,https://www.skylark.co.jp/gusto/menu/json/menu_detail.json
+305,はま寿司,https://hama-sushi.co.jp,partial (energy only),,
+285,夢庵,https://skylark.co.jp,DONE (energy+salt),menu_detail.json behind the menu pages,https://www.skylark.co.jp/yumean/menu/json/menu_detail.json
+283,ココス,https://cocos-jpn.co.jp,NEEDED,no link in static HTML,
+270,かっぱ寿司,https://kappasushi.jp,NEEDED,,
+231,スターバックス コーヒー,https://starbucks.co.jp,NEEDED,,
+216,磯丸水産,https://sfpdining.jp,NEEDED,,
+210,くら寿司,https://kurasushi.co.jp,partial (energy only),,
+205,幸楽苑,https://kourakuen.co.jp,NEEDED,"allergen PDF only, no kcal",
+205,ビッグボーイ,https://bigboyjapan.co.jp,"DONE (full macros, only 19 rows join)","BBD_allergen.pdf carries 熱量/たんぱく質/脂質/炭水化物/食塩相当量 but is dated 2024-12-27, so most dishes have rotated off the menu",https://www.bigboyjapan.co.jp/allergen/menu/BBD_allergen.pdf
+203,藍屋,https://skylark.co.jp,no figures published,Skylark JSON exists but every calorie field is blank; photos taken from it,
+203,元気寿司,https://genkisushi.co.jp,NEEDED,,
+203,スシロー,https://akindo-sushiro.co.jp,NEEDED,"allergen PDF only, no kcal",
+203,コメダ珈琲店,https://komeda.co.jp,NEEDED,,
+200,すし松,https://matsuyafoods.co.jp,NEEDED,,
+198,ジョイフル,https://joyfull.co.jp,NEEDED,,
+185,ロイヤルホスト,https://royalhost.jp,NEEDED,,
+184,デニーズ,https://dennys.jp,NEEDED,no link in static HTML,
+179,びっくりドンキー,https://bikkuri-donkey.com,NEEDED,,
+175,焼肉きんぐ,https://yakiniku-king.jp,NEEDED,,
+172,バーミヤン,https://skylark.co.jp,DONE (energy+salt),menu_detail.json behind the menu pages,https://www.skylark.co.jp/bamiyan/menu/json/menu_detail.json
+171,IVY PLACE,,NEEDED,,
+154,牛角,https://gyukaku.ne.jp,NEEDED,,
+154,ピザーラ,https://pizza-la.co.jp,NEEDED,,
+153,串カツ田中,https://kushi-tanaka.com,NEEDED,,
+153,ムーチョ モダン メキシカーノ,,NEEDED,,
+151,ほっともっと,https://hottomotto.com,NEEDED,,
+150,82 ALE HOUSE GRAND,,NEEDED,,
+149,魚屋路,https://skylark.co.jp,no figures published,Skylark JSON exists but every calorie field is blank; photos taken from it,
+146,FRIDAYS,https://tgifridays.co.jp,NEEDED,,
+143,SMOKEHOUSE,,NEEDED,,
+142,ステーキガスト,https://skylark.co.jp,DONE (energy+salt),menu_detail.json behind the menu pages,https://www.skylark.co.jp/steak_gusto/menu/json/menu_detail.json
+141,カレーハウスCoCo壱番屋,https://ichibanya.co.jp,NEEDED,no link in static HTML,
+138,プロント,https://pronto.co.jp,NEEDED,,
+134,サイゼリヤ,https://saizeriya.co.jp,NEEDED,allergy.saizeriya.co.jp - separate app,
+133,Burger Mania,,NEEDED,,
+131,なか卯,https://nakau.co.jp,NEEDED,Zensho allergen PDF exists and carries NO energy: images.zensho.co.jp/materials/nakau/allergen/allergen.pdf,
+130,鳥貴族,https://torikizoku.co.jp,NEEDED,,
+130,大戸屋,https://ootoya.com,NEEDED,no link in static HTML,
+130,フォルクス,,NEEDED,,
+122,から好し,https://skylark.co.jp,DONE (energy+salt),menu_detail.json behind the menu pages,https://www.skylark.co.jp/karayoshi/menu/json/menu_detail.json
+119,レインボーカフェ • 東京アメリカンクラブ,,NEEDED,,
+118,chawan,,DONE (energy+salt),menu_detail.json behind the menu pages,https://www.skylark.co.jp/chawan/menu/json/menu_detail.json
+116,ゆで太郎,https://yudetarou.jp,NEEDED,,

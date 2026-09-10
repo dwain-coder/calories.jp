@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import unittest
 
@@ -8,6 +9,8 @@ from dataset_manager.extractors.chains import (
     import_chain,
     kcal_table_parser,
     name_key,
+    parse_skylark,
+    _BB_FIGURES,
 )
 from dataset_manager.extractors.menus import import_menus
 from dataset_manager.scripts.build_shops import MIN_ITEMS, MIN_RESOLVED_SHARE, gate
@@ -221,6 +224,56 @@ class TestGate(unittest.TestCase):
     def test_no_price_is_refused(self):
         ok, _ = gate({"items": 100, "resolved": 100, "priced": 0})
         self.assertFalse(ok)
+
+class TestSkylarkJson(unittest.TestCase):
+    """The すかいらーく brands render their menu from JSON; that file is the source."""
+
+    def feed(self, *items):
+        return json.dumps({"list": list(items)}).encode("utf-8")
+
+    def dish(self, name, *variants):
+        return {"menu_name": name,
+                "valiation": [{"name": "", "calorie": c, "salt": s} for c, s in variants]}
+
+    def test_energy_and_salt_are_read_and_nothing_else_is_invented(self):
+        rows, _ = parse_skylark(self.feed(self.dish("ハンバーグプレート", ("748", "2.7"))))
+        self.assertEqual(rows, [{"name": "ハンバーグプレート", "energy_kcal": 748.0,
+                                 "salt_g": 2.7}])
+
+    def test_a_dish_with_no_figure_is_left_unpublished(self):
+        rows, _ = parse_skylark(self.feed(self.dish("ドリンクバー", ("", ""))))
+        self.assertEqual(rows, [])
+
+    def test_a_price_variant_with_no_figures_does_not_hide_the_dish(self):
+        rows, _ = parse_skylark(self.feed(
+            self.dish("セットドリンクバー", ("31", "0"), ("", ""))))
+        self.assertEqual([r["name"] for r in rows], ["セットドリンクバー"])
+
+    def test_one_name_with_two_figures_states_neither(self):
+        """バーミヤン sells ホイコーロウ定食 at 1,087 kcal and, at lunch, at 848.
+
+        Our menu row is the bare name, so there is nothing to join on that would
+        say which. Keeping whichever was read first would publish a coin toss.
+        """
+        rows, _ = parse_skylark(self.feed(
+            self.dish("ホイコーロウ定食", ("1087", "4")),
+            self.dish("ホイコーロウ定食", ("848", "3.2"))))
+        self.assertEqual(rows, [])
+
+    def test_the_same_figure_printed_twice_is_not_a_conflict(self):
+        rows, _ = parse_skylark(self.feed(
+            self.dish("冷麺", ("486", "5.9")),
+            self.dish("冷麺", ("486", "5.9"))))
+        self.assertEqual(len(rows), 1)
+
+
+class TestBigBoyLines(unittest.TestCase):
+
+    def test_a_thousands_separator_is_not_a_second_number(self):
+        """1,365.8 read from after the comma made a 1,365 kcal hamburg 365."""
+        line = "ダブル大俵ハンバーグ400g 下記より2種ソースチョイス 1,365.8 69.8 108.1 15.9 5.6 ● ● ダブル大俵ハンバーグ400g"
+        match = _BB_FIGURES.search(line)
+        self.assertEqual(match.group(1), "1,365.8")
 
 
 if __name__ == "__main__":
