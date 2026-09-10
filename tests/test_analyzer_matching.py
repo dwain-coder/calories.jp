@@ -138,9 +138,29 @@ class TestAgainstWhatTheChainsPublish(unittest.TestCase):
     # A composite soup, a dipping sauce, a sprinkle: MEXT publishes what goes
     # into these and not the thing itself. 「中華スープ（チキンブイヨンベース）」 is
     # the same absence wearing a longer name.
+    #
+    # The sauces are here on purpose and used not to be. 「ソース」 alone means
+    # Worcestershire, and as a SUBSTRING alias it answered チーズソース,
+    # ホワイトソース, タルタルソース and おろしポン酢ソース with Worcestershire too —
+    # 117 kcal of thin brown sauce standing in for a cheese sauce, carrying a
+    # source line. The named sauces the tables DO carry are aliased; the rest
+    # now miss, which is the honest answer and costs eight more 未照合 chips.
     NO_SUCH_ROW = ("担々スープ", "中華スープ", "チキンスープ",
                    "中華スープ（チキンブイヨンベース）", "天つゆ", "黒酢あん（甘酢あん）",
-                   "野菜の漬物", "スプラウト", "しそふりかけ", "赤しそふりかけ")
+                   "野菜の漬物", "スプラウト", "しそふりかけ", "赤しそふりかけ",
+                   "あんかけソース", "ピザソース", "ステーキソース", "レモンソース",
+                   "タルタル風ドレッシング", "コブドレッシング", "麩 (水戻し)")
+
+    def test_a_sauce_is_not_answered_with_worcestershire(self):
+        """Every X-ソース resolved to ウスターソース through a substring alias."""
+        from dataset_manager.api.analyzer import _match_food
+        for name in ("チーズソース", "タルタルソース", "ホワイトソース"):
+            with self.subTest(name):
+                hit = _match_food(name, None, "ja")
+                got = (hit.get("name") or hit.get("title")) if hit else None
+                self.assertNotEqual(got, "ウスターソース")
+        plain = _match_food("ソース", None, "ja")
+        self.assertEqual(plain.get("name") or plain.get("title"), "ウスターソース")
 
     def test_almost_nothing_is_left_unmatched(self):
         """Sixteen ingredients matched nothing across eleven photographs, 690 g

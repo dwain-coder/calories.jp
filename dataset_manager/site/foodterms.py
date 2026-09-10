@@ -129,6 +129,16 @@ ALIASES = {
     "ピザクラスト": ["こむぎ その他 ピザ生地"], "ピザ生地": ["こむぎ その他 ピザ生地"],
     "たくあん漬け": ["だいこん 漬物 たくあん漬 干しだいこん漬"],
     "フライドガーリック": ["にんにく りん茎 油いため"],
+    # Named sauces the tables DO carry. Without these the substring rule below
+    # answered every one of them with Worcestershire.
+    "ホワイトソース": ["ホワイトソース"], "デミグラスソース": ["デミグラスソース"],
+    "トマトソース": ["トマトソース"], "ミートソース": ["ミートソース"],
+    "オイスターソース": ["オイスターソース"], "チリソース": ["チリソース"],
+    "お好みソース": ["お好み焼きソース"], "中濃ソース": ["中濃ソース"],
+    "タルタルソース": ["半固体状ドレッシング マヨネーズ 全卵型"],
+    "マヨネーズ": ["半固体状ドレッシング マヨネーズ 全卵型"],
+    "ポン酢": ["こいくちしょうゆ"], "ぽん酢": ["こいくちしょうゆ"],
+    "カレーソース": ["洋風料理 ビーフカレー"], "カレールウ": ["カレールウ"],
     "温泉卵": ["鶏卵 全卵 生"], "半熟卵": ["鶏卵 全卵 ゆで"],
     "かきたま": ["鶏卵 全卵 生"], "溶き卵": ["鶏卵 全卵 生"],
     "鮭刺身": ["しろさけ 生"], "サーモン刺身": ["ぎんざけ 養殖 生"],
@@ -375,6 +385,11 @@ def is_ignorable(name):
     return normalise(name).replace(" ", "") in IGNORE
 
 
+# Words that are a whole ingredient on their own and a qualifier inside a longer
+# name. Matched exactly, never as a substring — see search_terms.
+EXACT_ONLY = frozenset({"ソース", "たれ", "ドレッシング", "スープ", "だし", "つゆ"})
+
+
 def _strip_noise(s):
     for word in NOISE:
         s = s.replace(word, " ")
@@ -455,11 +470,17 @@ def search_terms(name, cooked=False):
     # then an alias for any word inside the name — 「牛ひき肉 500g」 and
     # 「合いびき肉（牛豚）」 both have to reach うし ひき肉. Longest word wins,
     # so 牛ひき肉 is not resolved as 牛肉.
+    # EXACT_ONLY keys are skipped here: 「ソース」 alone means Worcestershire, but
+    # as a SUBSTRING it turned チーズソース, ホワイトソース, タルタルソース and
+    # おろしポン酢ソース into Worcestershire too — 117 kcal of thin brown sauce
+    # standing in for a cheese sauce, with a source line under it.
     # The parenthesis normalise() drops sometimes holds the food itself rather
     # than a qualifier: 「魚肉ねり製品 (なると)」 is a naruto, and the tables have
     # exactly one row called なると. Look inside it for a curated word too.
     inside = unicodedata.normalize("NFKC", str(name or "")).replace(" ", "")
     for word in sorted(ALIASES, key=len, reverse=True):
+        if word in EXACT_ONLY:
+            continue
         if len(word) >= 2 and (word in compact or word in inside):
             for target in ALIASES[word]:
                 add_alias(target)
