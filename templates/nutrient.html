@@ -43,6 +43,26 @@
 </div>
 </div>
 
+{% if leaders %}
+<div class="card">
+  <h2>{{ t('leaders_heading') }}</h2>
+  <div class="table-scroll">
+  <table class="nutrition-table stack-table">
+    <thead><tr><th>{{ t('category') }}</th><th>{{ t('name_col') }}</th><th>{{ term }}</th></tr></thead>
+    <tbody>
+    {% for l in leaders %}
+      <tr>
+        <td>{{ t('leaders_peers', category=l.category, peers=l.peers) }}</td>
+        <td><a href="/food/{{ l.slug }}">{{ l.name }}</a></td>
+        <td data-label="{{ term }}"><strong>{{ l.amount }}</strong> <small>{{ l.unit }}</small></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
 <p class="license">{{ t('nutrient_source_note') }}</p>
 
 <nav class="nutrient-siblings">

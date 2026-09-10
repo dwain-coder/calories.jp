@@ -7,7 +7,7 @@ import sqlite3
 
 from ..api.database import get_connection, get_license_info
 from ..calc.nutrition import dish_nutrition
-from . import claims, servings
+from . import claims, nutrient_pages, servings
 from . import menuterms
 from .brand_assets import get_chain_brand_badge, classify_dish_visual
 from . import food_images
@@ -1180,6 +1180,7 @@ def get_food_page_data(page):
     qualified_name = qual["name"] if qual else None
     alternates = get_alternates(conn, item_id)
     ranks = nutrient_ranks(conn, item, nutrition)
+    standing = food_nutrient_standing(conn, item_id)
     notable = notable_nutrients(conn, item_id, MICRO_DV.get(lang) or MICRO_DV["ja"])
     # Which of Japan's own labelling criteria this composition would satisfy.
     nutrient_claims = claims.claims_for(nutrients, item["category"])
@@ -1200,6 +1201,7 @@ def get_food_page_data(page):
         "jdi8": jdi8["score"] if jdi8 else None,
         "salt_g": salt_g, "macro_quality": macro_quality, "serving": serving,
         "ranks": ranks, "notable": notable, "claims": nutrient_claims,
+        "standing": standing,
         "pfc": pfc_energy_split(nutrition),
         "preps": preps, "qualified_name": qualified_name,
         "related": related, "alternates": alternates,
@@ -1213,39 +1215,40 @@ def get_food_page_data(page):
 # say. Computed per request — a handful of counting queries over 2,538 rows,
 # about 5 ms — rather than precomputed into a table that a later import could
 # leave stale.
+# (composition code, the field it is displayed as, its label)
 RANKED = (
-    ("energy_kcal", "calories"),
-    ("protein_g", "protein"),
-    ("fat_g", "fat"),
-    ("carbohydrate_g", "carbs"),
+    ("ENERC_KCAL", "energy_kcal", "calories"),
+    ("PROT-", "protein_g", "protein"),
+    ("FAT-", "fat_g", "fat"),
+    ("CHOCDF-", "carbohydrate_g", "carbs"),
 )
 MIN_PEERS = 20          # below this a percentile says more than it knows
 
 
 def nutrient_ranks(conn, item, nutrition):
-    """[{field, label_key, percentile, peers}] within the food's own group."""
-    if not nutrition or not item["category"] or item["category"] == "foundation":
-        return []
-    out = []
-    for field, label_key in RANKED:
-        value = nutrition.get(field)
-        if value is None:
-            continue
-        row = conn.execute(
-            f"""SELECT COUNT(*) AS peers,
-                       SUM(CASE WHEN n.{field} < ? THEN 1 ELSE 0 END) AS below
-                FROM nutrition n JOIN items i ON i.id = n.item_id
-                WHERE i.category = ? AND i.source = ? AND n.{field} IS NOT NULL""",
-            (value, item["category"], item["source"])).fetchone()
-        if not row or (row["peers"] or 0) < MIN_PEERS:
-            continue
-        out.append({
-            "field": field, "label_key": label_key,
-            "percentile": round((row["below"] or 0) / row["peers"] * 100),
-            "peers": row["peers"],
-        })
-    return out
+    """[{field, label_key, percentile, peers}] within the food's own group.
 
+    Read from the precomputed table, not counted here. It used to be a live
+    COUNT over `nutrition`, which ranked a food against measured AND estimated
+    values while the block below it ranked against measured only — two
+    percentiles, two populations, one heading.
+    """
+    if not item["category"] or item["category"] == "foundation":
+        return []
+    codes = {code: (field, label_key) for code, field, label_key in RANKED}
+    marks = ",".join("?" * len(codes))
+    try:
+        rows = conn.execute(
+            f"""SELECT code, percentile, peers FROM nutrient_ranks
+                WHERE item_id = ? AND code IN ({marks})""",
+            (item["id"], *codes)).fetchall()
+    except sqlite3.OperationalError:
+        return []               # database built before build-ranks ever ran
+    order = [c for c, *_ in RANKED]
+    found = {r["code"]: r for r in rows}
+    return [{"field": codes[c][0], "label_key": codes[c][1],
+             "percentile": found[c]["percentile"], "peers": found[c]["peers"]}
+            for c in order if c in found]
 
 def notable_nutrients(conn, item_id, dv_table, limit=3):
     """The components this food carries most of, as a share of the Japanese
@@ -2511,3 +2514,83 @@ def _raw_food_index(conn, lang):
         found[stem] = {"name": name, "slug": row["slug"],
                        "energy_kcal": row["energy_kcal"]}
     return {k: v for k, v in found.items() if v}
+
+
+# ------------------------------------------------------ standing in a category
+
+# A percentile is a fact about the corpus with its population named, which is
+# what makes it publishable where 「鉄分が豊富」 would not be. Precomputed by
+# scripts/build_ranks.py over MEASURED values only — see that file for why.
+STANDING_THRESHOLD = 90     # 「上位10%」 or better is worth a line; the rest is not
+STANDING_LIMIT = 6
+
+
+def food_nutrient_standing(conn, item_id, threshold=STANDING_THRESHOLD,
+                           limit=STANDING_LIMIT):
+    """[{code, slug, term, percentile, peers, category, amount, unit}] — the
+    components this food is near the top of, within its own category."""
+    ranked_as_macro = {code for code, *_ in RANKED}
+    labels = {code: (slug, term) for code, slug, term, _b in nutrient_pages.NUTRIENTS
+              if code not in ranked_as_macro}
+    if not labels:
+        return []
+    marks = ",".join("?" * len(labels))
+    try:
+        rows = conn.execute(
+            f"""SELECT r.code, r.percentile, r.peers, r.category, n.amount, n.unit
+                FROM nutrient_ranks r
+                JOIN nutrients n ON n.item_id = r.item_id AND n.code = r.code
+                WHERE r.item_id = ? AND r.percentile >= ? AND r.code IN ({marks})
+                ORDER BY r.percentile DESC, r.peers DESC
+                LIMIT ?""",
+            (item_id, threshold, *labels.keys(), limit)).fetchall()
+    except sqlite3.OperationalError:
+        return []               # database built before build-ranks ever ran
+    out = []
+    for r in rows:
+        slug, term = labels[r["code"]]
+        out.append({"code": r["code"], "slug": slug, "term": term,
+                    "percentile": r["percentile"], "peers": r["peers"],
+                    "category": r["category"], "amount": r["amount"],
+                    "unit": r["unit"],
+                    # 「上位8%」 reads from the top; the stored figure counts up.
+                    "top_pct": max(100 - r["percentile"], 1)})
+    return out
+
+
+def nutrient_category_leaders(lang, code, limit=20):
+    """The food holding the most of one component in each food category.
+
+    The ranking page answers 「一番多い食品は」 over the whole corpus, which is
+    usually a seasoning or a dried thing. This answers it per category, which is
+    the question someone planning a meal is actually asking.
+    """
+    conn = get_connection()
+    try:
+        rows = [dict(r) for r in conn.execute(
+            """SELECT r.category, r.peers, n.amount, n.unit, sp.slug,
+                      COALESCE(nm.name, sp.title) AS name
+               FROM nutrient_ranks r
+               JOIN nutrients n ON n.item_id = r.item_id AND n.code = r.code
+               JOIN site_pages sp ON sp.item_id = r.item_id
+                    AND sp.lang = ? AND sp.page_type = 'food'
+               LEFT JOIN item_names nm ON nm.item_id = r.item_id
+                    AND nm.lang = ? AND nm.is_primary = 1
+               WHERE r.code = ?
+               ORDER BY r.category, n.amount DESC""", (lang, lang, code))]
+    except sqlite3.OperationalError:
+        return []
+    finally:
+        conn.close()
+    # The first row of each category is its largest. Not `percentile = 100`:
+    # that requires being strictly above EVERY peer, so a tie at the top of a
+    # category leaves it with no leader at all — iron listed three categories
+    # out of eighteen before this.
+    seen, out = set(), []
+    for row in rows:
+        if row["category"] in seen:
+            continue
+        seen.add(row["category"])
+        out.append(row)
+    out.sort(key=lambda r: -(r["amount"] or 0))
+    return out[:limit]

@@ -594,6 +594,9 @@ def nutrient_page(request: Request, slug: str):
     if not stats or not stats.get("n"):
         raise HTTPException(status_code=404, detail="Not found")
     rows = queries.nutrient_ranking(lang, code, limit=60)
+    # The corpus-wide top is usually a seasoning or something dried. Per
+    # category answers the question a person planning a meal is asking.
+    leaders = queries.nutrient_category_leaders(lang, code)
 
     heading = nutrient_pages.title(term, lang)
     url = seo.base_url(lang) + f"/nutrient/{slug}"
@@ -607,7 +610,7 @@ def nutrient_page(request: Request, slug: str):
     ]
     return _render(request, "nutrient.html", lang, {
         "term": term, "heading": heading, "blurb": blurb,
-        "rows": rows, "stats": stats, "siblings": siblings,
+        "rows": rows, "stats": stats, "siblings": siblings, "leaders": leaders,
         "canonical": url,
         "crumbs": crumbs,
         "jsonld": [seo.jsonld_script(j) for j in jsonld],

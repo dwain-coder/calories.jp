@@ -351,6 +351,23 @@ def build_search_cmd():
     build_site.build_search()
 
 
+@app.command("build-ranks")
+def build_ranks_cmd():
+    """Precompute where each food sits among its own category, per nutrient."""
+    from . import build_site
+    from .build_ranks import MIN_PEERS, build_nutrient_ranks
+
+    conn = build_site.get_conn()
+    try:
+        stats = build_nutrient_ranks(conn)
+    finally:
+        conn.close()
+    console.print(
+        f"[green]nutrient_ranks[/green]: {stats['ranked']:,} ranks over "
+        f"{stats['groups']} category/nutrient groups ({stats['codes']} nutrients); "
+        f"{stats['skipped_thin_groups']:,} values sat in groups under {MIN_PEERS} peers")
+
+
 @app.command("build-sitemaps")
 def build_sitemaps_cmd():
     """Write sitemap-en.xml / sitemap-ja.xml under data/sitemaps/."""
@@ -506,11 +523,17 @@ def build_shops_cmd(report: bool = typer.Option(False, help="Print coverage + ga
 
 @app.command("build-site")
 def build_site_cmd():
-    """Run all site builders in order: names, pages, links, search, sitemaps."""
+    """Run all site builders in order: names, pages, links, ranks, search, sitemaps."""
     from . import build_site
+    from .build_ranks import build_nutrient_ranks
     build_site.build_names()
     build_site.build_pages()
     build_site.build_links()
+    conn = build_site.get_conn()
+    try:
+        build_nutrient_ranks(conn)
+    finally:
+        conn.close()
     build_site.build_search()
     build_site.build_sitemaps()
 

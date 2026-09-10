@@ -59,7 +59,7 @@
   {% set calc_data = (dict(d.nutrition, salt_g=d.salt_g) if d.salt_g is not none else d.nutrition) | tojson %}
   {% include "partials/calculator.html" %}
 
-  {% if d.ranks or d.notable %}
+  {% if d.ranks or d.notable or d.standing %}
   <section class="card context-card">
     <h2>{{ t('context_heading') }}</h2>
     {% if d.ranks %}
@@ -68,12 +68,35 @@
       <li>
         <span class="rank-label">{{ t(r.label_key) }}</span>
         <span class="rank-bar" aria-hidden="true"><i style="width: {{ r.percentile }}%"></i></span>
-        <span class="rank-text">{{ t('rank_line', label=t(r.label_key), category=d.item.category,
-                                    peers=r.peers, pct=100 - r.percentile) }}</span>
+        {# 「多い方から上位89%」 for a food in the bottom tenth reads as high to
+           anyone skimming. Below the midpoint the sentence counts from the
+           other end, which is the same figure said the way it lands. #}
+        <span class="rank-text">{% if r.percentile < 50
+          %}{{ t('rank_line_low', label=t(r.label_key), category=d.item.category,
+                 peers=r.peers, pct=r.percentile if r.percentile > 0 else 1) }}{%
+          else %}{{ t('rank_line', label=t(r.label_key), category=d.item.category,
+                      peers=r.peers, pct=100 - r.percentile) }}{% endif %}</span>
       </li>
       {% endfor %}
     </ul>
     {% endif %}
+    {% if d.standing %}
+    {# A percentile names its population and is computed the same way every
+       time, so it states a fact about the corpus rather than a claim about the
+       food. The population is measured values only — see scripts/build_ranks.py. #}
+    <h3 class="notable-heading">{{ t('standing_heading') }}</h3>
+    <ul class="standing-list">
+      {% for s in d.standing %}
+      <li>
+        <a class="standing-term" href="/nutrient/{{ s.slug }}">{{ s.term }}</a>
+        <strong class="standing-pct">{{ t('standing_line', pct=s.top_pct) }}</strong>
+        <span class="standing-figures">{{ s.amount }}{{ s.unit }}・{{ t('standing_peers', peers=s.peers) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="calc-note">{{ t('standing_note') }}</p>
+    {% endif %}
+
     {% if d.claims %}
     <h3 class="notable-heading">{{ t('claims_heading') }}</h3>
     <ul class="claim-list">

@@ -54,7 +54,8 @@ def main():
 
     for table in ("nutrition", "nutrients", "item_names", "site_pages",
                   "food_portions", "jdi8_scores", "shelf_life", "regional_dishes",
-                  "item_ingredients", "ai_estimations", "ai_recipes"):
+                  "item_ingredients", "ai_estimations", "ai_recipes",
+                  "nutrient_ranks"):
         try:
             n = conn.execute(
                 f"DELETE FROM {table} WHERE item_id NOT IN (SELECT id FROM items)").rowcount

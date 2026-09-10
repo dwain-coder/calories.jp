@@ -1855,6 +1855,16 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   font-family: var(--font-data); font-size: 1.05rem; margin: 0.6rem 0 0;
   min-height: 1.5em;
 }
+.standing-list { list-style: none; padding: 0; margin: 0.4rem 0 0.6rem; }
+.standing-list li {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 0.7rem;
+  padding: 0.35rem 0; border-bottom: 1px solid var(--rule, #eee);
+}
+.standing-list li:last-child { border-bottom: 0; }
+.standing-term { min-width: 8rem; }
+.standing-pct { font-family: var(--font-data); }
+.standing-figures { font-size: 0.8rem; color: var(--ink-faint, #777); }
+
 .yield-dir {
   display: flex; gap: 1.1rem; flex-wrap: wrap;
   font-size: 0.85rem; margin: 0.5rem 0 0.2rem;

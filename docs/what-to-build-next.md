@@ -118,55 +118,42 @@ reason to return rather than a session toy.
 
 ---
 
-## 3. Raw ↔ cooked converter
+## 3. Raw ↔ cooked converter — DONE
 
-**What.** Two fields and a result: 「鶏もも肉 皮つき 200g → 焼き 122g」, both
-directions, with the calories for each state.
+Shipped on `/cooking-yield`. Both directions off the same published rate, and
+the food before cooking is named where MEXT's naming settles it: the cooked
+entry's stem with 生 or 乾 in place of the 調理法. 371 of 497 resolve, and those
+rows state the energy at both ends. まいたけ publishes both 生 and 乾 and nothing
+says which one 油いため started from, so that row names no food.
 
-**Why it is defensible.** 497 rates, straight from MEXT's 重量変化率表, already
-rendered at `/cooking-yield`. Nothing is computed that is not published.
-
-**Data today.** Complete. **Nothing blocks this.**
-
-**Build.** A page reusing the existing `cooking_yields()` query, a food picker
-fed by `/api/search`, and the arithmetic. Cross-link from every food page that
-has a rate, and from the column post already published.
-
-**Effort.** Half a day. The cheapest item on this list.
-
-**Why it earns.** It answers a question people type into search boxes and get
-nothing useful back for, it feeds the column, and it makes `/cooking-yield` —
-currently a table nobody has a reason to visit — into a tool.
+The rate is a percentage of the 調理前 food in 496 of 497 rows. The exception —
+マカロニ・スパゲッティ ソテー, made from the boiled pasta — now carries its base in
+`cooking_yield.base` and prints the caveat instead of a raw-weight claim.
 
 ---
 
-## 4. Nutrient percentile within food group
+## 4. Nutrient percentile within food group — DONE
 
-**What.** 「鉄分は肉類の上位8%」 on every food page, and a "highest in X" ranking
-per nutrient per group.
+`nutrient_ranks(item_id, code, category, percentile, peers)`, built by
+`uv run python -m dataset_manager.scripts.cli build-ranks` and folded into
+`build-site`. 69,980 ranks over 784 category/nutrient groups, 44 nutrients.
 
-**Why it is defensible.** A percentile is a fact about the corpus, computed
-deterministically, not a judgement about the food. It states its population
-explicitly, so it cannot overreach.
+**Measured against measured.** 76,436 of the 257,235 values carry MEXT's own
+estimate mark. An estimated value is neither ranked nor counted as a peer, and
+the page says so. A group with fewer than 20 measured peers produces no
+percentile at all.
 
-**Data today.** Complete: 2,633 foods, 66 categories, 173 nutrient codes,
-257,235 values — each already carrying `quality`. **Nothing blocks this.**
+Two things it fixed on the way. The food page already ranked the four macros
+with a live COUNT over a population that included estimates, so a reader saw two
+percentiles built two ways under one heading — the bars now read from the same
+table. And 「多い方から上位89%」 for a food in the bottom tenth reads as high to
+anyone skimming, so below the midpoint the sentence counts from the other end.
 
-**Build.** A `build-ranks` step writing a `nutrient_ranks` table
-(item_id, code, category, percentile), precomputed rather than queried per
-request. Panels on the food page grouped by
-`site/nutrient_groups.py`. Feed the existing `/nutrient/{slug}` pages with a
-"highest in this group" list.
-
-Rank measured and estimated values separately, or say which the percentile is
-over — a rank that silently mixes them inherits the estimate's uncertainty
-without showing it.
-
-**Effort.** Two days including the precompute step and the page work.
-
-**Why it earns.** It turns 2,633 lookup pages into comparison pages, which is
-the difference between a bounce and a second click. It also gives the column an
-endless supply of factual posts.
+Shown: rank bars for the four macros, a 「上位に入る成分」 list for anything at the
+90th percentile or above within its category, and a 「食品分類ごとに最も多い食品」
+table on each `/nutrient/{slug}` page — the corpus-wide top of that ranking is
+usually a seasoning or something dried, and per category is the question a
+person planning a meal is actually asking.
 
 ---
 
@@ -241,8 +228,8 @@ marginal cost of a served request is close to zero.
 
 ## Sequencing
 
-**Now, unblocked:** 3 (half a day), then 4 (two days), then 5 (three days).
-Those need nothing that does not exist and each improves 2,633 food pages.
+**Done:** 3 and 4. **Now, unblocked:** 5 (three days) — the companion books are
+already downloaded and would roughly triple what a food page can say.
 
 **In parallel:** 0, one chain at a time. Every chain imported improves 1, 2 and
 the credibility of every menu page.
