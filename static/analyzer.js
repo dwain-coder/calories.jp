@@ -143,17 +143,35 @@
       // A total that omits the ingredients we could not look up is a lower
       // bound, not the meal. It reads as the meal unless it says otherwise —
       // a 150 g steak that matched nothing took a plate from 290 to 34 kcal.
+      // The figure is an estimate from a photograph, and measured against what
+      // the chains publish it lands a median 22% out, 53% at the ninetieth
+      // percentile. Printing it to the kilocalorie claims a precision it does
+      // not have, so the headline is rounded to the nearest 50 and the band it
+      // actually sits in is printed beside it.
       var partial = !!d.totals_partial;
-      html += '<p class="kcal-hero">' + (partial ? '<span class="atleast">≥</span>' : '') +
-        '<strong>' + Math.round(d.totals.energy_kcal) +
-        '</strong> <span class="unit">' + esc(I.kcal) + '</span></p>';
+      var band = d.totals_band;
+      var point = band ? band.point : Math.round(d.totals.energy_kcal);
+      // 「≥ 約 400」 says the same hedge twice. A partial total is a floor, so it
+      // takes the ≥ alone; a complete one is a rounded estimate and takes 約.
+      var qualifier = partial
+        ? '<span class="atleast">≥</span>'
+        : '<span class="approx">' + esc(I.about) + '</span>';
+      html += '<p class="kcal-hero">' + qualifier +
+        '<strong>' + point + '</strong> <span class="unit">' + esc(I.kcal) + '</span></p>';
+      if (band) {
+        html += '<p class="kcal-band">' +
+          esc(I.estimateBand.replace('{low}', band.low).replace('{high}', band.high)) +
+          '</p>';
+      }
       if (partial) {
         html += '<p class="calc-note partial-note">' +
           esc(I.partialTotal.replace('{n}', (d.unmatched || []).length)) + '</p>';
       }
       var dv = d.macro_dv || {};
       html += '<div class="dv-bars">';
-      html += bar(I.kcal, d.totals.energy_kcal, I.kcal, dv.energy_kcal);
+      // The same figure the headline rounds. Printing 406.6 four lines under
+      // 「≥ 400」 and a ±25% band puts the overclaim straight back.
+      html += bar(I.kcal, point, I.kcal, dv.energy_kcal);
       html += bar(I.protein, d.totals.protein_g, 'g', dv.protein_g);
       html += bar(I.fat, d.totals.fat_g, 'g', dv.fat_g);
       html += bar(I.carbs, d.totals.carbohydrate_g, 'g', dv.carbohydrate_g);

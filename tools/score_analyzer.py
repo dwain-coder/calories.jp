@@ -43,23 +43,33 @@ def published(conn, item_id):
     return row
 
 
-def rescore(response, lang="ja"):
+def rescore(response, lang="ja", dish_name=None):
     """Re-match every ingredient the model named, and re-total.
 
     Reads the model's output only — `identified` and `estimated_grams` — so the
-    figure it produces is entirely the current matcher's doing.
+    figure it produces is the current matcher's doing.
+
+    `dish_name` reproduces what production does when the menu name is known:
+    a weight the menu states beats the model's guess at it. Every photograph in
+    this set came off a menu, so passing it measures the path a menu item
+    actually takes.
     """
-    from dataset_manager.api.analyzer import _match_food
+    from dataset_manager.api.analyzer import _match_food, apply_stated_portion
     from dataset_manager.site import queries
 
     kcal = 0.0
     hits, misses = [], []
-    named = ([(c["identified"], c["ai_estimate"].get("estimated_grams"))
+    named = ([{"ident": c["identified"], "g": c["ai_estimate"].get("estimated_grams")}
               for c in response.get("components") or []]
-             + [({"name_ja": u.get("name_ja"), "name_en": u.get("name_en")},
-                 u.get("estimated_grams")) for u in response.get("unmatched") or []])
+             + [{"ident": {"name_ja": u.get("name_ja"), "name_en": u.get("name_en")},
+                 "g": u.get("estimated_grams")} for u in response.get("unmatched") or []])
+    if dish_name:
+        apply_stated_portion(dish_name, named,
+                             grams_of=lambda n: n["g"],
+                             set_grams=lambda n, g: n.__setitem__("g", g))
 
-    for ident, grams in named:
+    for entry in named:
+        ident, grams = entry["ident"], entry["g"]
         name_ja, name_en = ident.get("name_ja"), ident.get("name_en")
         match = _match_food(name_ja, name_en, lang)
         if not match:
@@ -90,7 +100,7 @@ def main():
         if not info or info[2] is None:
             continue
         chain, dish, pub = info
-        kcal, _hits, misses = rescore(response)
+        kcal, _hits, misses = rescore(response, dish_name=dish)
         was = (response.get("totals") or {}).get("energy_kcal") or 0
         all_misses += misses
         rows.append((chain, dish, pub, was, kcal, misses))

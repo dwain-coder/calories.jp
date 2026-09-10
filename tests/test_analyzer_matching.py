@@ -111,15 +111,15 @@ class TestAgainstWhatTheChainsPublish(unittest.TestCase):
             if not path.stem.isdigit():
                 continue      # a home page example, not a scored chain photograph
             row = conn.execute(
-                """SELECT cn.energy_kcal FROM product_photos pp
+                """SELECT pp.dish, cn.energy_kcal FROM product_photos pp
                    LEFT JOIN shop_menu_items smi ON smi.id = pp.shop_menu_item_id
                    LEFT JOIN chain_nutrition cn ON cn.id = smi.chain_nutrition_id
                    WHERE pp.shop_menu_item_id = ?""", (int(path.stem),)).fetchone()
-            if not row or row[0] is None:
+            if not row or row[1] is None:
                 continue
             kcal, _hits, misses = rescore(
-                json.loads(path.read_text(encoding="utf-8")))
-            cls.rows.append((path.stem, row[0], kcal))
+                json.loads(path.read_text(encoding="utf-8")), dish_name=row[0])
+            cls.rows.append((path.stem, row[1], kcal))
             cls.misses += misses
         conn.close()
 

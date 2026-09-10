@@ -165,6 +165,17 @@ def _upgrade_cached(result):
     """Give an analysis stored before the dish breakdown existed the newer
     shape, so a photo analysed yesterday still renders today. One unnamed
     dish holding everything that was found: no numbers change."""
+    # Fill in what a stored analysis predates before anything else: the cache
+    # is keyed on the image, so a photo analysed last week is served from it
+    # for ever and would keep printing an unrounded figure with no band under
+    # it. Nothing here recomputes a number — it describes the one already there.
+    if result.get("totals_band") is None:
+        result["totals_band"] = estimate_band((result.get("totals") or {}).get("energy_kcal"))
+    if result.get("totals_partial") is None:
+        unmatched_now = result.get("unmatched") or []
+        result["totals_partial"] = bool(unmatched_now)
+        result["unmatched_grams"] = round(
+            sum(u.get("estimated_grams") or 0 for u in unmatched_now), 1) or None
     if result.get("dishes") is not None:
         return result
     components = result.get("components") or []
@@ -191,6 +202,108 @@ def _upgrade_cached(result):
 MAX_COMPONENT_G = 1500.0        # one ingredient on one plate
 MAX_MEAL_G = 4000.0             # everything visible in one photograph
 SERVING_MULTIPLE = 8.0          # vs a known serving for that food
+
+
+# --------------------------------------------------- what the menu already states
+
+# A menu that says 「ラウンドステーキ(約120g)」 has told us the weight of the thing
+# the dish is named after. The model read that same steak as 180 g and the plate
+# came out 154% over. The stated figure is a fact from the seller; the model's
+# is a guess from a photograph, and where the two disagree the fact wins.
+#
+# Eight of the sixty-three benchmark dishes state a weight or a count, and they
+# are disproportionately the rows that fail worst — both steaks, both multiples.
+# Named apart from `_STATED_G` further down, which belongs to the dish-NAME
+# path and is deliberately looser — two regexes with one name in one module and
+# the later one wins everywhere.
+_MENU_G = re.compile(r"[（(]?\s*約?\s*(\d{2,4})\s*[gｇ]\s*[）)]?")
+_MENU_N = re.compile(r"[×xX]\s*([1-9１-９])|[【(（]\s*([1-9１-９])\s*個\s*[】)）]|([1-9１-９])\s*個")
+_FULLWIDTH = str.maketrans("１２３４５６７８９", "123456789")
+
+# Below this a stated weight is describing a garnish or a sauce sachet, not the
+# thing the dish is named after.
+MIN_STATED_G = 40
+
+
+def stated_portion(dish_name):
+    """{'grams': n} or {'count': n} that the menu itself declares, else None."""
+    if not dish_name:
+        return None
+    text = str(dish_name).translate(_FULLWIDTH)
+    grams = _MENU_G.search(text)
+    if grams and int(grams.group(1)) >= MIN_STATED_G:
+        return {"grams": float(grams.group(1))}
+    count = _MENU_N.search(text)
+    if count:
+        digits = next(g for g in count.groups() if g)
+        return {"count": int(digits.translate(_FULLWIDTH))}
+    return None
+
+
+def apply_stated_portion(dish_name, components, grams_of, set_grams):
+    """Correct the model's guess for the dish's main ingredient from the menu.
+
+    The main ingredient is taken to be the heaviest component, because that is
+    what a dish is named after and what a stated weight refers to: the steak on
+    a steak plate, not the onions beside it. A count multiplies it instead —
+    「超粗びきステーキバーグ×３」 is three of the patty the model saw once.
+
+    Returns the number of components corrected.
+    """
+    stated = stated_portion(dish_name)
+    if not stated or not components:
+        return 0
+    weighted = [c for c in components if (grams_of(c) or 0) > 0]
+    if not weighted:
+        return 0
+    main = max(weighted, key=grams_of)
+    before = grams_of(main)
+
+    if "grams" not in stated:
+        # A COUNT is not applied. It reads as a fact and is not one: the 3 in
+        # 「RGC定食（バーミヤンラーメン・焼餃子3個・半チャーハン）」 belongs to the gyoza,
+        # not to the ramen, and multiplying the heaviest component by it took
+        # the set from -2% to +5% for no gain in accuracy. Parsed so the caller
+        # can see it; deliberately unused.
+        return 0
+    after = stated["grams"]
+    if after <= 0 or abs(after - before) < 1:
+        return 0
+    set_grams(main, after)
+    return 1
+
+
+# ----------------------------------------------------------- how sure the total is
+
+# Measured, not guessed at. Sixty-three photographs of chain meals, replayed
+# against the calories those chains publish for the same item
+# (tools/score_analyzer.py), put the median error at 22% and the 90th percentile
+# at 53%. The median RATIO of published to ours is 1.02 — the estimate is
+# unbiased and noisy, which means there is nothing to calibrate and no honest
+# way to print a single figure to the kilocalorie.
+#
+# So it is not printed that way. The headline rounds to the nearest 50 and the
+# band beside it is ±25%, which is where roughly half the set lands. A reader
+# who wants a number gets one; a reader who wants to know how much to trust it
+# is told, in the same breath.
+BAND_SHARE = 0.25
+ROUND_TO = 50
+
+
+def _to_nearest(value, step=ROUND_TO):
+    return int(round(value / step) * step) if value else 0
+
+
+def estimate_band(kcal):
+    """{point, low, high} for an estimated meal, or None when there is nothing."""
+    if not kcal or kcal <= 0:
+        return None
+    return {
+        "point": _to_nearest(kcal),
+        "low": _to_nearest(kcal * (1 - BAND_SHARE)),
+        "high": _to_nearest(kcal * (1 + BAND_SHARE)),
+        "share_pct": int(BAND_SHARE * 100),
+    }
 
 
 def _implausible(name_ja, grams, match):
@@ -258,7 +371,10 @@ def _match_food(name_ja, name_en, lang, cooked=False):
 
 
 @router.post("/meal-analyzer")
-async def analyze_meal(request: Request, image: UploadFile = File(...), lang: str = Query("ja")):
+async def analyze_meal(request: Request, image: UploadFile = File(...),
+                       lang: str = Query("ja"),
+                       dish: str = Query(None, max_length=200,
+                                         description="the menu's own name for this dish, when known")):
     if lang not in LANGS:
         raise HTTPException(status_code=400, detail=f"lang must be one of {', '.join(LANGS)}")
     data = await image.read()
@@ -293,13 +409,28 @@ async def analyze_meal(request: Request, image: UploadFile = File(...), lang: st
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI analysis unavailable: {e}")
 
-    result = calculate_nutrition_for_dishes(dishes_in, lang=lang)
-    _cache_put(sha, lang, result)
+    result = calculate_nutrition_for_dishes(dishes_in, lang=lang, dish_name=dish)
+    # Cached on the image alone, so a later call that DOES know the dish name
+    # is not served a total computed without it.
+    if not dish:
+        _cache_put(sha, lang, result)
     return result
 
 
-def calculate_nutrition_for_dishes(dishes_in, lang="ja"):
-    """Deterministic calculation: match components to clean DB rows x estimated grams."""
+def calculate_nutrition_for_dishes(dishes_in, lang="ja", dish_name=None):
+    """Deterministic calculation: match components to clean DB rows x estimated grams.
+
+    `dish_name` is the menu's own name for what is in the photograph, when the
+    caller knows it. It is applied before anything is computed, so the whole
+    chain — components, per-dish totals, meal total, micronutrients — is
+    consistent with the corrected weight rather than patched afterwards.
+    """
+    if dish_name:
+        every = [f for d in dishes_in for f in (d.get("foods") or [])]
+        apply_stated_portion(
+            dish_name, every,
+            grams_of=lambda f: _positive(f.get("estimated_grams")),
+            set_grams=lambda f, g: f.__setitem__("estimated_grams", g))
     components, unmatched, parts, dishes = [], [], [], []
     for di, dish in enumerate(dishes_in):
         dish_parts, dish_component_ix, dish_unmatched = [], [], 0
@@ -399,6 +530,7 @@ def calculate_nutrition_for_dishes(dishes_in, lang="ja"):
         # steak that matched nothing took a plate from 290 kcal to 34. Say so
         # in the response, so every caller shows it the same way instead of
         # each one deciding for itself.
+        "totals_band": estimate_band((totals or {}).get("energy_kcal")),
         "totals_partial": bool(unmatched),
         "unmatched_grams": round(
             sum(u.get("estimated_grams") or 0 for u in unmatched), 1) or None,

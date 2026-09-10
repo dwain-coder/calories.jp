@@ -1871,6 +1871,11 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   margin-right: .12em; vertical-align: .18em;
 }
 .partial-note { color: var(--estimate); }
+.kcal-hero .approx { font-size: .42em; color: var(--ink-faint); margin-right: .18em; vertical-align: .28em; }
+.kcal-band {
+  margin: .1rem 0 0; font-size: .78rem; line-height: 1.7; color: var(--ink-soft);
+  max-width: 34em;
+}
 
 /* --------------------------------------------- Home: what the analyzer does */
 /* One rhythm down the page: every band is separated by the same interval, and
