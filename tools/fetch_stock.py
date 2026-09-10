@@ -10,7 +10,8 @@ and this site does not display credits, so none are recorded.
 Images are framed as circles, so square-ish crops survive best.
 
 Nothing here touches food, dish or nutrient pages — those never carry stock
-photography, by design.
+photography, by design. The `example-*` slots are the exception to the "not a
+depiction" rule and are documented where they are declared.
 """
 import argparse
 import io
@@ -32,6 +33,14 @@ QUERIES = {
     "goals": "healthy meal prep containers table",
     "guide-cooking": "steaming pot cooking vegetables kitchen",
     "sources": "old books library shelves",
+    # The home page's worked examples. These ARE depictions — the page shows
+    # what the analyzer made of that exact photograph — so a slot here must be
+    # a real plate of food with separable dishes on it, and re-fetching one
+    # means re-running the analyzer and regenerating
+    # dataset_manager/site/analyzer_examples.py.
+    "example-bento": "japanese bento box lunch overhead",
+    "example-ramen": "ramen gyoza sushi table japanese restaurant",
+    "example-teishoku": "japanese set meal rice miso soup grilled fish",
 }
 
 

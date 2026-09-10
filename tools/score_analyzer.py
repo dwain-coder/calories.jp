@@ -83,6 +83,8 @@ def main():
     conn = sqlite3.connect(DB)
     rows, all_misses = [], []
     for path in sorted(RAW.glob("*.json")):
+        if not path.stem.isdigit():
+            continue          # a home page example, not a scored chain photograph
         response = json.loads(path.read_text(encoding="utf-8"))
         info = published(conn, int(path.stem))
         if not info or info[2] is None:

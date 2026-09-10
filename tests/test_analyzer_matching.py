@@ -108,6 +108,8 @@ class TestAgainstWhatTheChainsPublish(unittest.TestCase):
         conn = sqlite3.connect("data/metadata/dataset_manager.db")
         cls.rows, cls.misses = [], []
         for path in sorted(RAW.glob("*.json")):
+            if not path.stem.isdigit():
+                continue      # a home page example, not a scored chain photograph
             row = conn.execute(
                 """SELECT cn.energy_kcal FROM product_photos pp
                    LEFT JOIN shop_menu_items smi ON smi.id = pp.shop_menu_item_id

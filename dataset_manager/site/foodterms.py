@@ -85,6 +85,9 @@ ALIASES = {
     "オレンジジュース": ["オレンジ バレンシア 果実飲料 ストレートジュース"],
     "黒みつ": ["黒砂糖"], "黒蜜": ["黒砂糖"],
     "ねりからし": ["からし 練り"], "練りからし": ["からし 練り"],
+    "銀だら": ["ぎんだら 生"], "銀ダラ": ["ぎんだら 生"],
+    "大葉": ["しそ 葉 生"], "青じそ": ["しそ 葉 生"],
+    "なると": ["なると"], "ナルト": ["なると"], "鳴門巻き": ["なると"],
     # --- seasonings and liquids
     "醤油": ["こいくちしょうゆ"], "しょうゆ": ["こいくちしょうゆ"],
     "濃口醤油": ["こいくちしょうゆ"], "薄口醤油": ["うすくちしょうゆ"],
@@ -407,8 +410,12 @@ def search_terms(name, cooked=False):
     # then an alias for any word inside the name — 「牛ひき肉 500g」 and
     # 「合いびき肉（牛豚）」 both have to reach うし ひき肉. Longest word wins,
     # so 牛ひき肉 is not resolved as 牛肉.
+    # The parenthesis normalise() drops sometimes holds the food itself rather
+    # than a qualifier: 「魚肉ねり製品 (なると)」 is a naruto, and the tables have
+    # exactly one row called なると. Look inside it for a curated word too.
+    inside = unicodedata.normalize("NFKC", str(name or "")).replace(" ", "")
     for word in sorted(ALIASES, key=len, reverse=True):
-        if len(word) >= 2 and word in compact:
+        if len(word) >= 2 and (word in compact or word in inside):
             for target in ALIASES[word]:
                 add_alias(target)
             break
@@ -467,6 +474,12 @@ def state_score(asked, candidate):
     for word, targets in STATE_SYNONYMS.items():
         if word in a and any(t in b for t in targets):
             score += 2
+    # Do not volunteer a processing state nobody asked for. Told 「にんじん
+    # （炒め）」 the reranker reached for 「にんじん 根 冷凍 油いため」 — it answers the
+    # 炒め and adds a freezer the photograph said nothing about.
+    for word in ("冷凍", "缶詰", "乾", "干し", "塩漬"):
+        if word in b and word not in a:
+            score -= 1
     side = _fat_side(a)
     if side is not None:
         other = _fat_side(b)

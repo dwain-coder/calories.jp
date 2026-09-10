@@ -68,7 +68,7 @@
 
 {% if examples %}
 <section class="worked">
-  <h2>{{ t('home_examples_title') }}</h2>
+  <h2>{{ t('home_examples_title', n=examples|length) }}</h2>
   <p class="alt-name">{{ t('home_examples_lede') }}</p>
 
   {% for ex in examples %}
@@ -78,7 +78,7 @@
     <div class="worked-head">
       <figure class="worked-shot">
         <img src="{{ ex.photo }}" alt="{{ ex.menu_name }}" loading="lazy" decoding="async" width="720" height="405">
-        <figcaption>{{ ex.menu_name }}<br><small>{{ t('home_photo_credit', chain=ex.chain) }}</small></figcaption>
+        <figcaption>{{ ex.menu_name }}<br><small>{{ t('home_photo_credit') }}</small></figcaption>
       </figure>
       <div class="worked-summary">
         <p class="worked-counts">{{ t('home_example_counts', n=ex.dishes|length, m=ex.n_identified, k=ex.n_matched) }}</p>

@@ -23,19 +23,32 @@ is not, and is left out until it is.
 """
 import json
 import pprint
-import sqlite3
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))          # the matches are re-run from this checkout
+
 RAW = ROOT / "data/raw/analyzer_examples"
 OUT = ROOT / "dataset_manager/site/analyzer_examples.py"
-DB = ROOT / "data/metadata/dataset_manager.db"
 
-# The photographs the page shows, in the order it shows them. Chosen for what
-# they demonstrate, not for how well they scored: a tray with many small dishes,
-# a single-plate set, a ramen set.
-SHOWN = ("9244", "5968", "7260")
+# The photographs the page shows, in the order it shows them.
+#
+# Stock, not the chains'. The chain photographs are the only ones with a
+# published calorie figure beside them, which is what makes them the benchmark
+# in `tools/score_analyzer.py` — but they are also the chains' copyright, and
+# the home page is the last place to lean on that. These are Pexels, whose
+# licence permits commercial use and asks for no attribution, so the caption is
+# a label rather than a credit.
+#
+# `fetch_stock.py` has an `example-*` slot per entry: with PEXELS_API_KEY set,
+# `uv run python tools/fetch_stock.py --slot example-teishoku` refills one.
+SHOWN = (
+    {"id": "stock-analyzer", "photo": "/static/media/analyzer.jpg",
+     "label": "幕の内弁当", "slot": "example-bento"},
+    {"id": "stock-menu", "photo": "/static/media/menu.jpg",
+     "label": "ラーメン・餃子・にぎりの一式", "slot": "example-ramen"},
+)
 
 HEADER = '''"""Worked examples of the analyzer, generated from its own responses.
 
@@ -44,9 +57,8 @@ reads the saved API responses in `data/raw/analyzer_examples/`. Every figure on
 the home page that describes what the analyzer did comes from here, so that a
 claim about the product can be traced to the run that produced it.
 
-`estimated_kcal` is the sum over MATCHED components only and is not the meal's
-calories; `published_kcal` is what the chain discloses for the same menu item.
-Neither is rendered as a total — see the generator for why.
+No total is carried across: a sum over the components that matched, with the
+ones that did not omitted, looks like the meal's calories and is not one.
 """
 
 '''
@@ -56,65 +68,75 @@ def load(stem):
     return json.loads((RAW / f"{stem}.json").read_text(encoding="utf-8"))
 
 
-def photo_for(conn, item_id):
-    row = conn.execute(
-        """SELECT pp.file, pp.chain, pp.dish, cn.energy_kcal
-           FROM product_photos pp
-           LEFT JOIN shop_menu_items smi ON smi.id = pp.shop_menu_item_id
-           LEFT JOIN chain_nutrition cn ON cn.id = smi.chain_nutrition_id
-           WHERE pp.shop_menu_item_id = ?""", (item_id,)).fetchone()
-    return row
+def example(spec):
+    """One worked example: the model's reading, matched by THIS repo's code.
 
+    The saved response carries the matches the deployed site made when the
+    photograph was analysed, which is a different thing from what the code in
+    this checkout does — the first stock response listed 卵焼き and 酢飯 as
+    unmatched, and both had been fixed in foodterms an hour earlier. The model's
+    reading is the fixed input; the lookup is re-run, so the page always shows
+    what the shipped matcher does rather than a snapshot of an older one.
+    """
+    from dataset_manager.api.analyzer import _match_food
+    from dataset_manager.site import queries
 
-def example(conn, stem):
-    data = load(stem)
-    row = photo_for(conn, int(stem))
-    if row is None:
-        sys.exit(f"no product photo for {stem} — was the photo pruned?")
-    file, chain, dish, published = row
+    data = load(spec["id"])
+    if not (ROOT / spec["photo"].lstrip("/")).is_file():
+        sys.exit(f"{spec['photo']} is not on disk — run tools/fetch_stock.py")
 
-    components = []
-    for c in data.get("components") or []:
-        match = c.get("db_match") or {}
+    named = [(c["identified"], c["ai_estimate"].get("estimated_grams"),
+              c.get("dish_index"))
+             for c in data.get("components") or []]
+    named += [({"name_ja": u.get("name_ja"), "name_en": u.get("name_en"),
+                "confidence": u.get("confidence")},
+               u.get("estimated_grams"), u.get("dish_index"))
+              for u in data.get("unmatched") or []]
+
+    components, unmatched, per_dish = [], [], {}
+    for ident, grams, dish_index in named:
+        seen = per_dish.setdefault(dish_index, [0, 0])
+        seen[1] += 1
+        hit = _match_food(ident.get("name_ja"), ident.get("name_en"), "ja")
+        if not hit:
+            unmatched.append({"name": ident.get("name_ja"), "grams": grams,
+                              "dish_index": dish_index})
+            continue
+        seen[0] += 1
+        nutrition = queries.food_nutrition_json(hit["item_id"]) or {}
         components.append({
-            "name": c["identified"]["name_ja"],
-            "confidence": c["identified"].get("confidence"),
-            "grams": c["ai_estimate"].get("estimated_grams"),
-            "match": match.get("title"),
-            "url": match.get("url"),
-            "per_100g_kcal": (match.get("per_100g") or {}).get("energy_kcal"),
-            "dish_index": c.get("dish_index"),
+            "name": ident.get("name_ja"),
+            "confidence": ident.get("confidence"),
+            "grams": grams,
+            "match": hit.get("name") or hit.get("title"),
+            "url": f"/food/{hit['slug']}",
+            "per_100g_kcal": (nutrition.get("per_100g") or {}).get("energy_kcal"),
+            "dish_index": dish_index,
         })
-    unmatched = [{"name": u["name_ja"], "grams": u.get("estimated_grams"),
-                  "dish_index": u.get("dish_index")}
-                 for u in (data.get("unmatched") or [])]
-    dishes = [{"name": d["name_ja"], "grams": d.get("grams"),
-               "matched": d.get("n_matched"), "of": d.get("n_total")}
-              for d in (data.get("dishes") or [])]
+
+    dishes = []
+    for i, d in enumerate(data.get("dishes") or []):
+        matched, total = per_dish.get(i, [0, 0])
+        dishes.append({"name": d["name_ja"], "grams": d.get("grams"),
+                       "matched": matched, "of": total})
 
     return {
-        "id": stem,
-        "photo": file,
-        "chain": chain,
-        "menu_name": dish,
+        "id": spec["id"],
+        "photo": spec["photo"],
+        "menu_name": spec["label"],
         "dishes": dishes,
         "components": components,
         "unmatched": unmatched,
         "n_identified": len(components) + len(unmatched),
         "n_matched": len(components),
-        "estimated_kcal": round((data.get("totals") or {}).get("energy_kcal") or 0, 1),
-        "published_kcal": published,
+        "unmatched_grams": round(sum(u.get("grams") or 0 for u in unmatched), 1) or None,
     }
 
 
 def main():
     if not RAW.is_dir():
         sys.exit(f"{RAW} not found")
-    conn = sqlite3.connect(DB)
-    try:
-        examples = [example(conn, stem) for stem in SHOWN]
-    finally:
-        conn.close()
+    examples = [example(spec) for spec in SHOWN]
 
     # pformat, not json.dumps: this file is imported, and JSON's null/true/false
     # are not Python. Python 3 repr leaves 鮭 as 鮭 rather than escaping it.
