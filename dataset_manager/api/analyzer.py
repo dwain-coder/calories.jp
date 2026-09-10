@@ -240,7 +240,12 @@ def _match_food(name_ja, name_en, lang, cooked=False):
         # USDA rows are a fallback for what they do not cover, so a MEXT hit
         # wins even when it ranks lower.
         mext = [h for h in foods if h["source"] == "MEXT Standard Tables"]
-        return (mext or foods)[0]
+        # A recipe's 「ひじき 20g」 is 20 g of rehydrated hijiki, but the table's
+        # canonical row is the dried one it is sold as — 186 kcal/100 g against
+        # 13 for ゆで. Unless the name itself says dried, the prepared row wins.
+        ranked = foodterms.prefer_rehydrated(
+            asked, mext or foods, name_of=lambda h: h.get("name") or h.get("title") or "")
+        return ranked[0]
     return None
 
 

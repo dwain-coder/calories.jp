@@ -171,7 +171,12 @@ ALIASES = {
     "干ししいたけ": ["しいたけ 乾しいたけ 乾"], "乾しいたけ": ["しいたけ 乾しいたけ 乾"],
     "しめじ": ["ぶなしめじ 生"], "えのき": ["えのきたけ 生"], "まいたけ": ["まいたけ 生"],
     "昆布": ["まこんぶ 素干し"], "こんぶ": ["まこんぶ 素干し"],
-    "わかめ": ["わかめ 原藻 生"], "ひじき": ["ほしひじき ステンレス釜 乾"],
+    # Hijiki is sold dried and eaten rehydrated, and no recipe means the dry
+    # weight: 「ひじきの煮物 20g」 is 20 g of the soaked food. The 乾 row is
+    # 180 kcal/100 g against 13 for ゆで, which put 87.6 g of carbohydrate into
+    # a chicken meatball. Beans and しらす keep their dried rows deliberately —
+    # those a recipe really does weigh dry.
+    "わかめ": ["わかめ 原藻 生"], "ひじき": ["ほしひじき ステンレス釜 ゆで"],
     "のり": ["あまのり 焼きのり"], "海苔": ["あまのり 焼きのり"],
     "かつお節": ["かつお節"], "煮干し": ["かたくちいわし 煮干し"],
     "花カツオ": ["かつお節"], "花かつお": ["かつお節"], "削り節": ["削り節"],
@@ -395,3 +400,46 @@ def alias_target(name):
         if len(word) >= 2 and word in compact:
             return ALIASES[word][0]
     return None
+
+
+# A composition table's canonical entry for a preservable food is the DRIED
+# one, because that is how it is sold. A recipe saying 「ひじき 20g」 means 20 g
+# of rehydrated hijiki, and MEXT's 乾 row is 186 kcal/100 g against 13 for ゆで
+# — fourteen times over. 乾しいたけ is ten times 生しいたけ. That is how a
+# chicken meatball came to carry 87.6 g of carbohydrate.
+# MEXT names a row as food, form, then preparation: 「ひじき ほしひじき 鉄釜 ゆで」.
+# The PREPARATION decides, and it is last — ほしひじき is the product even when
+# the row is the boiled one, so a plain substring test calls the boiled row
+# dried. Rehydration is checked first for that reason. There is no word boundary
+# between CJK characters either, so 乾 has to be matched bare.
+DRIED = re.compile(r"乾|干し|ほし|素干し|煮干し|粉末|パウダー|フリーズドライ")
+REHYDRATED = re.compile(r"ゆで|茹で|水煮|水戻し|もどし|戻し|生|蒸し|油いため|甘煮")
+
+
+def says_dried(name):
+    """Whether this name is the dried form.
+
+    A composition table's canonical entry for a preservable food is the dried
+    one, because that is how it is sold. 「ひじき」 resolves to 乾 at 186 kcal/100 g
+    against 13 for ゆで — fourteen times over — and 乾しいたけ is ten times
+    生しいたけ. A recipe saying 「ひじき 20g」 means 20 g of the rehydrated food,
+    and reading it as the dried one is how a chicken meatball came to carry
+    87.6 g of carbohydrate.
+    """
+    text = normalise(name or "")
+    if REHYDRATED.search(text):
+        return False
+    return bool(DRIED.search(text))
+
+
+def prefer_rehydrated(asked, candidates, name_of=lambda c: c):
+    """Reorder so a rehydrated entry outranks a dried one.
+
+    Only when the asked-for name does NOT say dried: 「乾しいたけ」 means the dried
+    mushroom and must keep it. Candidates are otherwise left in their original
+    order, so this can only move a dried row down, never invent a match.
+    """
+    if says_dried(asked):
+        return candidates
+    fresh = [c for c in candidates if not says_dried(name_of(c))]
+    return fresh + [c for c in candidates if says_dried(name_of(c))] if fresh else candidates

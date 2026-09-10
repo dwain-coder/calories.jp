@@ -44,6 +44,7 @@ def precompute_menu_nutrition(conn: sqlite3.Connection, shop_id: int = None, lim
 
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     inserts = []
+    produced = set()          # rows this run could cost
 
     for r in rows:
         item_id = r["id"]
@@ -52,6 +53,7 @@ def precompute_menu_nutrition(conn: sqlite3.Connection, shop_id: int = None, lim
 
         # Tier 1: Official chain disclosure
         if r["chain_kcal"] is not None:
+            produced.add(item_id)
             inserts.append((
                 item_id, float(r["chain_kcal"]),
                 r["chain_p"], r["chain_f"], r["chain_c"], r["chain_salt"],
@@ -62,6 +64,7 @@ def precompute_menu_nutrition(conn: sqlite3.Connection, shop_id: int = None, lim
 
         # Tier 2: Direct government composition match
         if r["table_kcal"] is not None:
+            produced.add(item_id)
             inserts.append((
                 item_id, float(r["table_kcal"]),
                 r["table_p"], r["table_f"], r["table_c"], None,
@@ -93,6 +96,7 @@ def precompute_menu_nutrition(conn: sqlite3.Connection, shop_id: int = None, lim
                 f = totals.get("fat_g")
                 c = totals.get("carbohydrate_g")
                 salt = res.get("salt_g")
+                produced.add(item_id)
                 inserts.append((
                     item_id, round(float(kcal), 1),
                     round(float(p), 1) if p is not None else None,
@@ -116,6 +120,19 @@ def precompute_menu_nutrition(conn: sqlite3.Connection, shop_id: int = None, lim
             """, inserts)
             conn.commit()
             inserts.clear()
+
+    # A row that can no longer be costed must lose its old figure. INSERT OR
+    # REPLACE alone never deletes, so tightening the ingredient matcher left
+    # eleven dishes still showing the number the looser matcher had produced —
+    # 「ひじきの煮物」 kept 270 kcal from a matcher that had since stopped
+    # believing it. Scoped to the rows this run actually looked at.
+    looked_at = [r["id"] for r in rows]
+    stale = [(i,) for i in looked_at if i not in produced]
+    if stale:
+        cur.executemany(
+            "DELETE FROM menu_item_nutrition WHERE shop_menu_item_id = ?", stale)
+        conn.commit()
+    stats["cleared"] = len(stale)
 
     if inserts:
         cur.executemany("""
