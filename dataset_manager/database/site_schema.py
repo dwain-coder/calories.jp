@@ -231,6 +231,12 @@ MIGRATIONS = (
     ("chain_nutrition", "fat_g", "REAL"),
     ("chain_nutrition", "carbohydrate_g", "REAL"),
     ("chain_nutrition", "salt_g", "REAL"),
+    # What the 重量変化率 is a percentage OF. MEXT's table is against the 調理前
+    # food — raw or dry — for 496 of its 497 rows, and against the BOILED weight
+    # for マカロニ・スパゲッティ ソテー, which is why that one reads 100%. Null means
+    # the ordinary case; a converter that assumed it for all of them would say
+    # 100 g of dry spaghetti fries down to 100 g.
+    ("cooking_yield", "base", "TEXT"),
 )
 
 

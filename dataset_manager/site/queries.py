@@ -1890,7 +1890,7 @@ def cooking_yields(lang):
     conn = get_connection()
     try:
         rows = [dict(r) for r in conn.execute(
-            """SELECT cy.rate_percent, cy.method, sp.slug, i.category,
+            """SELECT cy.rate_percent, cy.method, cy.base, sp.slug, i.category,
                       COALESCE(nm.name, sp.title) AS name, n.energy_kcal
                FROM cooking_yield cy
                JOIN site_pages sp ON sp.item_id = cy.item_id
@@ -1901,6 +1901,7 @@ def cooking_yields(lang):
                     AND nm.lang = ? AND nm.is_primary = 1
                WHERE cy.rate_percent IS NOT NULL
                ORDER BY i.category, cy.rate_percent DESC""", (lang, lang))]
+        before = _raw_food_index(conn, lang)
     finally:
         conn.close()
     for r in rows:
@@ -1908,6 +1909,9 @@ def cooking_yields(lang):
         # What 100 g of the raw food becomes, and what that weighs in calories.
         # Stated this way round because a cook measures what goes in.
         r["from_raw_100g"] = round(r["energy_kcal"] * rate / 100, 0) if r["energy_kcal"] else None
+        # One row in 497 is a percentage of the BOILED weight rather than the
+        # raw food, and it is not this table's job to hide that.
+        r["before"] = None if r.get("base") else before.get(_yield_stem(r["name"]))
     return rows
 
 
@@ -2463,3 +2467,47 @@ def shops_index(lang):
         return out
     finally:
         conn.close()
+
+
+# ------------------------------------------------------- the food before cooking
+
+# MEXT's 重量変化率 is a percentage of the 調理前 food, and names only the cooked
+# one. The raw entry is its sibling in the same 食品番号 group: the same name with
+# the 調理法 replaced by 生 or 乾 — 「にわとり 若どり もも 皮つき 焼き」 against
+# 「にわとり 若どり もも 皮つき 生」.
+#
+# Named ONLY where exactly one sibling exists. まいたけ publishes both 生 and 乾
+# and nothing in the name says which one 油いため started from, so that row keeps
+# MEXT's own wording, 調理前の食品, and names no food at all. 372 of 497 resolve;
+# guessing at the other 125 would put a specific claim where there is none.
+RAW_FORMS = ("生", "乾")
+
+
+def _yield_stem(name):
+    parts = (name or "").split()
+    return " ".join(parts[:-1]) if len(parts) > 1 else ""
+
+
+def _raw_food_index(conn, lang):
+    """{stem: {name, slug, energy_kcal}} for every stem with ONE raw entry."""
+    found = {}
+    for row in conn.execute(
+            """SELECT COALESCE(nm.name, sp.title) AS name, sp.slug, n.energy_kcal
+               FROM site_pages sp
+               JOIN items i ON i.id = sp.item_id
+               LEFT JOIN nutrition n ON n.item_id = sp.item_id
+               LEFT JOIN item_names nm ON nm.item_id = sp.item_id
+                    AND nm.lang = ? AND nm.is_primary = 1
+               WHERE sp.lang = ? AND sp.page_type = 'food'
+                 AND i.source_url LIKE 'mext_%'""", (lang, lang)):
+        name = row["name"] or ""
+        parts = name.split()
+        if len(parts) < 2 or parts[-1] not in RAW_FORMS:
+            continue
+        stem = " ".join(parts[:-1])
+        if stem in found:
+            found[stem] = None          # two raw forms: which one is not stated
+            continue
+        found[stem] = {"name": name, "slug": row["slug"],
+                       "energy_kcal": row["energy_kcal"]}
+    return {k: v for k, v in found.items() if v}

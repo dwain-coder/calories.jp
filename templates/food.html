@@ -130,6 +130,11 @@
     </table>
     </div>
     <p class="calc-note">{{ t('prep_note') }}</p>
+    {%- if d.preps | selectattr('from_raw_100g') | list %}
+    {# The rate is on this page as one column of one row. The tool over all 497
+       of them is where someone with 200 g in their hand actually ends up. #}
+    <p class="calc-note"><a href="/cooking-yield">{{ t('yield_calc_title') }} →</a></p>
+    {%- endif %}
   </section>
   {% endif %}
 

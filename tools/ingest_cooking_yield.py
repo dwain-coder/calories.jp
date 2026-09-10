@@ -32,6 +32,14 @@ PLAUSIBLE = (5, 900)          # % — outside this it is not a weight-change rat
 KNOWN = {"01039": 180, "01128": 190, "01130": 260}   # checked against the book
 
 
+# MEXT's rate is against the 調理前 food, which for all but one row means the
+# raw or dried entry. マカロニ・スパゲッティ ソテー is made from the BOILED pasta and
+# its rate is stated against that weight — the row says so, in a cell the PDF
+# clips to 「植物油5 %（ゆで質」. Without this the converter would offer 100 g of
+# dry spaghetti becoming 100 g of sautéed spaghetti.
+BOILED_BASE = re.compile(r"ゆで質|ゆで重|ゆでた")
+
+
 def extract():
     out = {}
     with pdfplumber.open(PDF) as pdf:
@@ -45,7 +53,9 @@ def extract():
                     continue
                 code, desc, rate = m.group(1), m.group(2), int(m.group(3))
                 if PLAUSIBLE[0] <= rate <= PLAUSIBLE[1]:
-                    out.setdefault(code, (rate, desc.split()[0] if desc else None))
+                    base = "ゆで" if BOILED_BASE.search(line) else None
+                    out.setdefault(
+                        code, (rate, desc.split()[0] if desc else None, base))
     return out
 
 
@@ -58,6 +68,8 @@ def main():
 
     rates = extract()
     print(f"parsed {len(rates)} rates from {PDF.name}")
+    based = sum(1 for v in rates.values() if v[2])
+    print(f"{based} of them are stated against a cooked weight, not the raw food")
     wrong = {c: rates.get(c, (None,))[0] for c, want in KNOWN.items()
              if rates.get(c, (None,))[0] != want}
     if wrong:
@@ -66,17 +78,18 @@ def main():
     conn = sqlite3.connect(DB_PATH, timeout=60)
     create_site_tables(conn)
     rows = []
-    for code, (rate, method) in rates.items():
+    for code, (rate, method, base) in rates.items():
         item = conn.execute(
             "SELECT id FROM items WHERE source='MEXT Standard Tables' AND source_url = ?",
             (f"mext_{code}",)).fetchone()
         if item:
-            rows.append((item[0], float(rate), method))
+            rows.append((item[0], float(rate), method, base))
     print(f"matched {len(rows)} to foods in the corpus")
     if not args.dry_run:
         conn.execute("DELETE FROM cooking_yield")
         conn.executemany(
-            "INSERT INTO cooking_yield (item_id, rate_percent, method) VALUES (?, ?, ?)", rows)
+            "INSERT INTO cooking_yield (item_id, rate_percent, method, base) "
+            "VALUES (?, ?, ?, ?)", rows)
         conn.commit()
     conn.close()
     print("would store" if args.dry_run else "stored", len(rows), "rates")

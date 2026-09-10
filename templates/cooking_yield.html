@@ -7,8 +7,12 @@
 <div class="card yield-calc">
   <h2>{{ t('yield_calc_title') }}</h2>
   <p class="license">{{ t('yield_calc_note') }}</p>
+  <div class="yield-dir" role="group">
+    <label><input type="radio" name="yield-dir" value="forward" checked> {{ t('yield_dir_forward') }}</label>
+    <label><input type="radio" name="yield-dir" value="back"> {{ t('yield_dir_back') }}</label>
+  </div>
   <div class="yield-calc-row">
-    <label>{{ t('yield_raw_input') }}
+    <label><span id="yield-grams-label">{{ t('yield_raw_input') }}</span>
       <input type="number" id="yield-grams" value="100" min="1" max="10000" step="10" inputmode="numeric">
       <span class="unit">g</span>
     </label>
@@ -16,12 +20,16 @@
       <select id="yield-food">
         {% for r in rows %}
           <option value="{{ r.rate_percent }}" data-kcal="{{ r.energy_kcal or '' }}"
-                  data-slug="{{ r.slug }}">{{ r.name }}{% if r.method %}（{{ r.method }}）{% endif %}</option>
+                  data-slug="{{ r.slug }}"
+                  data-before="{{ r.before.name if r.before else '' }}"
+                  data-before-kcal="{{ r.before.energy_kcal if r.before and r.before.energy_kcal else '' }}"
+                  data-base="{{ r.base or '' }}">{{ r.name }}{% if r.method %}（{{ r.method }}）{% endif %}</option>
         {% endfor %}
       </select>
     </label>
   </div>
   <p class="yield-result" id="yield-result" aria-live="polite"></p>
+  <p class="license" id="yield-pair"></p>
 </div>
 
 <div class="card">
@@ -32,6 +40,7 @@
 <table class="nutrition-table stack-table" id="yield-table">
   <thead>
     <tr>
+      <th>{{ t('yield_before_col') }}</th>
       <th>{{ t('name_col') }}</th>
       <th>{{ t('yield_rate') }}</th>
       <th>{{ t('yield_100g_becomes') }}</th>
@@ -41,9 +50,15 @@
   </thead>
   <tbody>
   {% for r in rows %}
-    <tr class="yield-row" data-name="{{ r.name }}{{ r.method }}{{ r.category }}">
+    <tr class="yield-row" data-name="{{ r.name }}{{ r.method }}{{ r.category }}{{ r.before.name if r.before else '' }}">
+      <td data-label="{{ t('yield_before_col') }}">
+        {%- if r.before %}<a href="/food/{{ r.before.slug }}">{{ r.before.name }}</a>
+        {%- elif r.base %}<span class="alt-name">{{ r.base }}</span>
+        {%- else %}<span class="alt-name">{{ t('yield_before_label') }}</span>{% endif -%}
+      </td>
       <td><a href="/food/{{ r.slug }}">{{ r.name }}</a>
-        {% if r.category %}<span class="dish-category-tag">{{ r.category }}</span>{% endif %}</td>
+        {% if r.category %}<span class="dish-category-tag">{{ r.category }}</span>{% endif %}
+        {% if r.base %}<br><small class="license">{{ t('yield_base_note') }}</small>{% endif %}</td>
       <td data-label="{{ t('yield_rate') }}"><strong>{{ r.rate_percent|round(0)|int }}</strong>%</td>
       <td data-label="{{ t('yield_100g_becomes') }}">{{ r.rate_percent|round(0)|int }} g</td>
       <td data-label="{{ t('calories') }}">{{ r.energy_kcal|round(0)|int if r.energy_kcal is not none else '—' }}</td>
@@ -61,27 +76,62 @@
 <script>
 (function () {
   var grams = document.getElementById("yield-grams");
+  var gramsLabel = document.getElementById("yield-grams-label");
   var food = document.getElementById("yield-food");
   var out = document.getElementById("yield-result");
+  var pair = document.getElementById("yield-pair");
+  var dirs = document.querySelectorAll("input[name=yield-dir]");
+
+  var LABEL_IN = { forward: "{{ t('yield_raw_input') }}", back: "{{ t('yield_input_after') }}" };
+  var BEFORE_FALLBACK = "{{ t('yield_before_label') }}";
+
+  function direction() {
+    for (var i = 0; i < dirs.length; i++) { if (dirs[i].checked) return dirs[i].value; }
+    return "forward";
+  }
 
   function render() {
     var g = parseFloat(grams.value);
     var opt = food.options[food.selectedIndex];
-    if (!opt || !(g > 0)) { out.textContent = ""; return; }
+    var dir = direction();
+    gramsLabel.textContent = LABEL_IN[dir];
+    if (!opt || !(g > 0)) { out.textContent = ""; pair.textContent = ""; return; }
+
     var rate = parseFloat(opt.value);
-    var kcal = parseFloat(opt.dataset.kcal);
-    var cooked = g * rate / 100;
-    var text = "{{ t('yield_result_weight') }}"
-      .replace("{raw}", g.toLocaleString())
-      .replace("{cooked}", Math.round(cooked).toLocaleString());
+    var kcal = parseFloat(opt.dataset.kcal);          // per 100 g, cooked
+    var beforeKcal = parseFloat(opt.dataset.beforeKcal); // per 100 g, before cooking
+    // Both directions are the same published rate, read the way round the
+    // person is measuring. Nothing new is claimed by inverting it.
+    var raw = dir === "forward" ? g : g * 100 / rate;
+    var cooked = dir === "forward" ? g * rate / 100 : g;
+
+    out.textContent = dir === "forward"
+      ? "{{ t('yield_result_weight') }}".replace("{raw}", Math.round(raw).toLocaleString())
+                                        .replace("{cooked}", Math.round(cooked).toLocaleString())
+      : "{{ t('yield_result_back') }}".replace("{raw}", Math.round(raw).toLocaleString())
+                                      .replace("{cooked}", Math.round(cooked).toLocaleString());
+
+    // Energy is only stated for a state whose own composition MEXT publishes.
+    // The cooked figure is always there; the one before cooking is there only
+    // when the raw food could be named without guessing between 生 and 乾.
+    var lines = [];
     if (!isNaN(kcal)) {
-      text += " " + "{{ t('yield_result_kcal') }}"
-        .replace("{kcal}", Math.round(cooked * kcal / 100).toLocaleString());
+      lines.push("{{ t('yield_energy_after') }}"
+        .replace("{cooked}", Math.round(cooked).toLocaleString())
+        .replace("{kcal}", Math.round(cooked * kcal / 100).toLocaleString()));
     }
-    out.textContent = text;
+    if (!isNaN(beforeKcal)) {
+      lines.push("{{ t('yield_energy_before') }}"
+        .replace("{raw}", Math.round(raw).toLocaleString())
+        .replace("{kcal}", Math.round(raw * beforeKcal / 100).toLocaleString()));
+    }
+    var name = opt.dataset.before || opt.dataset.base || BEFORE_FALLBACK;
+    pair.textContent = name + " → " + opt.textContent + (lines.length ? "　" + lines.join(" ") : "");
   }
+
   grams.addEventListener("input", render);
   food.addEventListener("change", render);
+  for (var i = 0; i < dirs.length; i++) { dirs[i].addEventListener("change", render); }
   render();
 
   var filter = document.getElementById("yield-filter");
