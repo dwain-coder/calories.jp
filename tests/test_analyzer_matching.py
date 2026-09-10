@@ -129,13 +129,18 @@ class TestAgainstWhatTheChainsPublish(unittest.TestCase):
     def test_the_total_is_no_longer_biased_low(self):
         errs = sorted((got - pub) / pub * 100 for _s, pub, got in self.rows)
         median = errs[len(errs) // 2]
-        self.assertGreater(median, -20, f"back to under-reading: median {median:+.0f}%")
-        self.assertLess(median, 25, f"now over-reading: median {median:+.0f}%")
+        self.assertGreater(median, -15, f"back to under-reading: median {median:+.0f}%")
+        self.assertLess(median, 15, f"now over-reading: median {median:+.0f}%")
 
     # Composite broths. MEXT publishes the ingredients of a 中華スープ and not the
     # soup, so there is nothing to match these to and nothing to fix. Named here
     # rather than allowed by a loosened threshold, so a NEW miss still fails.
-    NO_SUCH_ROW = ("担々スープ", "中華スープ")
+    # A composite soup, a dipping sauce, a sprinkle: MEXT publishes what goes
+    # into these and not the thing itself. 「中華スープ（チキンブイヨンベース）」 is
+    # the same absence wearing a longer name.
+    NO_SUCH_ROW = ("担々スープ", "中華スープ", "チキンスープ",
+                   "中華スープ（チキンブイヨンベース）", "天つゆ", "黒酢あん（甘酢あん）",
+                   "野菜の漬物", "スプラウト", "しそふりかけ", "赤しそふりかけ")
 
     def test_almost_nothing_is_left_unmatched(self):
         """Sixteen ingredients matched nothing across eleven photographs, 690 g
@@ -149,8 +154,8 @@ class TestAgainstWhatTheChainsPublish(unittest.TestCase):
         """Eleven photographs read +18% and twenty-three read -4%: the first
         number was noise. Chains and calorie bands both have to be spread, or a
         set of side dishes says nothing about a 1,342 kcal ramen set."""
-        self.assertGreaterEqual(len(self.rows), 20)
-        self.assertGreaterEqual(len({p for p, _pub, _got in self.rows}), 20)
+        self.assertGreaterEqual(len(self.rows), 60)
+        self.assertGreaterEqual(len({p for p, _pub, _got in self.rows}), 60)
 
 
 class TestTheTotalSaysWhenItIsPartial(unittest.TestCase):
