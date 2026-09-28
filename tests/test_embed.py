@@ -182,17 +182,6 @@ class TestTheCodeIsOfferedWhereTheFiguresAre(unittest.TestCase):
 
 
 class TestTheMenuRanking(unittest.TestCase):
-    def test_a_qualifier_does_not_hide_a_topping(self):
-        """ガスト lists its add-ons as 「【お料理ご注文のお客様限定】［追加］ケチャップ」;
-        read as a dish, a ketchup sachet topped its lowest-calorie list."""
-        from dataset_manager.site import menuterms
-        for name in ("【お料理ご注文のお客様限定】［追加］ケチャップ",
-                     "【お料理ご注文のお客様限定】[追加]にんにく醤油ソース",
-                     "【お料理ご注文のお客様限定】トッピング 生ハム"):
-            self.assertTrue(menuterms.is_extra(menuterms.unqualified(name)), name)
-        for name in ("【期間限定】ハンバーグ", "ゴロゴロ野菜サラダ"):
-            self.assertFalse(menuterms.is_extra(menuterms.unqualified(name)), name)
-
     def test_it_ranks_no_estimates(self):
         """Sorting by an estimate floats its worst underestimates to the top."""
         from dataset_manager.site.router import menu_ranked

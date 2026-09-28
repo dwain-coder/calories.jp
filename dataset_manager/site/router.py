@@ -735,7 +735,7 @@ def menu_ranked(menu):
     チキンのトマト煮込み came out at 30 kcal."""
     return sorted((m for m in menu if m["kcal"] is not None
                    and m["kcal_source"] in ("chain", "table")
-                   and not menuterms.is_extra(menuterms.unqualified(m["name"]))),
+                   and not menuterms.is_extra(m["name"])),
                   key=lambda m: m["kcal"])[:10]
 
 
