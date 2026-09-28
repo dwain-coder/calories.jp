@@ -162,7 +162,7 @@ _DRINK_CATEGORIES = frozenset({"ドリンク", "アルコール", "コーヒー"
 
 def is_extra(name):
     """A topping, a refill or a side of sauce rather than a dish."""
-    n = (name or "").strip()
+    n = unqualified(name)
     if not n:
         return False
     return bool(_EXTRA_PREFIX.match(n) or _CONDIMENT_ONLY.match(n)
@@ -179,9 +179,8 @@ def unqualified(name):
 
     is_extra anchors on the start of a name, so a qualifier in front hides the
     topping behind it: ガスト's 「【…限定】［追加］ケチャップ」 passed as a dish.
-    Not applied inside is_extra yet — build_shops precomputes each chain's 品数
-    with is_extra, and changing the rule without rebuilding site.db would leave
-    every affected count disagreeing with its page. Fold it in with a rebuild.
+    build_shops precomputes each chain's 品数 with is_extra, so a change here
+    needs `build-shops` re-run, or the stored count disagrees with its page.
     """
     return _BRACKETED.sub(lambda m: m.group(1), _LEADING_QUALIFIER.sub("", name or "")).strip()
 

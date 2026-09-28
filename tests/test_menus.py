@@ -170,6 +170,18 @@ class TestNotADish(unittest.TestCase):
                      "US産リブアイステーキ 自家製醤油ソース [200g]"):
             self.assertFalse(menuterms.is_extra(name), name)
 
+    def test_a_qualifier_does_not_hide_a_topping(self):
+        """ガスト lists its add-ons as 「【お料理ご注文のお客様限定】［追加］ケチャップ」.
+        Matched from the first character, the 【…】 hid the topping, and 28 of
+        them were listed and counted as dishes on its page."""
+        from dataset_manager.site import menuterms
+        for name in ("【お料理ご注文のお客様限定】［追加］ケチャップ",
+                     "【お料理ご注文のお客様限定】[追加]にんにく醤油ソース",
+                     "【お料理ご注文のお客様限定】トッピング 生ハム"):
+            self.assertTrue(menuterms.is_extra(name), name)
+        for name in ("【期間限定】ハンバーグ", "ゴロゴロ野菜サラダ"):
+            self.assertFalse(menuterms.is_extra(name), name)
+
     def test_drinks_go_by_their_category(self):
         from dataset_manager.site import menuterms
         from dataset_manager.site.brand_assets import classify_dish_visual
@@ -259,11 +271,10 @@ class TestEmptyRows(unittest.TestCase):
 
     def test_the_page_and_its_count_agree(self):
         """The 品数 on the index and the rows on the page are filtered by the
-        same rules, so one cannot drift from the other."""
+        same rules, so one cannot drift from the other. Every page, because the
+        drift shows up one chain at a time: ガスト by 28 toppings, 12 others by a
+        photograph or two."""
         from dataset_manager.site import queries
-        for slug in ("くら寿司", "はま寿司"):
-            page = queries.get_shop_page("ja", slug)
-            if not page:
-                continue
-            data = queries.get_shop_page_data(page)
-            self.assertEqual(data["shop"]["item_count"], len(data["menu"]), slug)
+        for shop in queries.shops_index("ja"):
+            data = queries.get_shop_page_data(queries.get_shop_page("ja", shop["slug"]))
+            self.assertEqual(shop["item_count"], len(data["menu"]), shop["slug"])

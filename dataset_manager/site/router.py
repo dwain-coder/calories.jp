@@ -749,7 +749,7 @@ def menu_ranked(menu, by="kcal"):
     """
     field = MENU_LISTS[by][2]
     return sorted((m for m in menu if m.get(field) is not None and m["kcal_source"] == "chain"
-                   and not menuterms.is_extra(menuterms.unqualified(m["name"]))),
+                   and not menuterms.is_extra(m["name"])),
                   key=lambda m: m[field], reverse=(by == "protein"))[:10]
 
 
