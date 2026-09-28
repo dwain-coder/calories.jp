@@ -224,6 +224,12 @@ ALIASES = {
     "卵": ["鶏卵 全卵 生"], "たまご": ["鶏卵 全卵 生"], "鶏卵": ["鶏卵 全卵 生"],
     "牛乳": ["普通牛乳"], "生クリーム": ["クリーム 乳脂肪"],
     "チーズ": ["プロセスチーズ"],
+    # The tables file ナチュラルチーズ as a family of thirteen rows, and once the
+    # チーズ alias stopped answering it with processed cheese — a different food —
+    # the search took whichever it ranked first: goat cheese, on two pizzas.
+    # What a model sees melted on a plate is the shredded cheese sold for
+    # cooking, which in Japan is gouda-based.
+    "ナチュラルチーズ": ["ナチュラルチーズ ゴーダ"],
     "ヨーグルト": ["ヨーグルト 全脂無糖"],
     "豚カツ": ["ぶた 大型種肉 ヒレ 赤肉 とんかつ", "ぶた 大型種肉 ロース 赤肉 とんかつ"],
     "とんかつ": ["ぶた 大型種肉 ヒレ 赤肉 とんかつ", "ぶた 大型種肉 ロース 赤肉 とんかつ"],
