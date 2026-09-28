@@ -180,7 +180,7 @@ def _shop_stats(conn, shop_id, with_nutrition):
     renders as a dash.
     """
     items = conn.execute(
-        """SELECT smi.name, smi.item_id, smi.price_yen, cn.energy_kcal AS chain_kcal,
+        """SELECT smi.name, smi.item_id, smi.price_yen, smi.price_max_yen, cn.energy_kcal AS chain_kcal,
                   min.energy_kcal AS shown_kcal, min.provenance,
                   pp.file AS product_image, ii.url AS db_image_url
            FROM shop_menu_items smi
@@ -211,6 +211,12 @@ def _shop_stats(conn, shop_id, with_nutrition):
         # for the report so the gap between the two is visible.
         "shown": sum(1 for i in items if i["shown_kcal"] is not None or sourced(i)),
         "priced": sum(1 for i in items if i["price_yen"]),
+        # The price range of the same rows. Taken at import from every row, it
+        # was a condiment's: 「価格は5円〜」 for さぼてん was its からし, ¥20 for
+        # ガスト its ketchup — about 60 chains opened below ¥100.
+        "price_min": min((i["price_yen"] for i in items if i["price_yen"]), default=None),
+        "price_max": max((i["price_max_yen"] or i["price_yen"] for i in items if i["price_yen"]),
+                         default=None),
     }
 
 
@@ -414,9 +420,25 @@ def build_pages(conn, lang="ja"):
     existing = {r[0]: r[1] for r in conn.execute(
         "SELECT shop_id, slug FROM shop_pages WHERE lang = ?", (lang,))}
 
-    shops = conn.execute(
+    rows = conn.execute(
         "SELECT id, name, item_count, price_min, price_max, imported_at "
         "FROM shops ORDER BY id").fetchall()
+
+    # Every row's count and price range, refreshed BEFORE the pick below ranks
+    # on them. Refreshing only the winners after the pick left each build
+    # choosing on the previous build's numbers, so the result moved between two
+    # runs of the same code on the same data.
+    stats_by_id = {s["id"]: _shop_stats(conn, s["id"], with_nutrition) for s in rows}
+    shops = []
+    for s in rows:
+        st = stats_by_id[s["id"]]
+        counted = (st["items"], st["price_min"], st["price_max"])
+        if counted != (s["item_count"], s["price_min"], s["price_max"]):
+            # Written back for the same reason as the name below: the index, the
+            # page, the meta description and the JSON-LD all read the shops row.
+            conn.execute("UPDATE shops SET item_count = ?, price_min = ?, price_max = ? WHERE id = ?",
+                         (*counted, s["id"]))
+        shops.append(dict(s, item_count=st["items"]))
 
     # A page per business, not a page per menu. Rows that name a section rather
     # than a restaurant, and the smaller duplicates of a business that appears
@@ -429,6 +451,12 @@ def build_pages(conn, lang="ja"):
            GROUP BY shop_id""")}
     keep = pick_canonical(shops, sourced)
     dropped = [s for s in shops if s["id"] not in keep]
+    # A business whose winning menu changes keeps its URL. When a filter change
+    # moved AZABUDAI HILLS CAFE's winner, its page came back as …-2, and
+    # T.Y.ハーバー's as a new slug, while the old URLs 404'd. Matched by business
+    # (chain_key, the key the pick groups on), not by slug: T.Y.ハーバー's page
+    # lived at T.Y.HARBOR, which its name would never produce.
+    freed = {chain_key(s["name"]): existing[s["id"]] for s in dropped if s["id"] in existing}
     for shop in dropped:
         conn.execute("DELETE FROM shop_pages WHERE shop_id = ?", (shop["id"],))
 
@@ -442,21 +470,18 @@ def build_pages(conn, lang="ja"):
             # page heading, the title and the JSON-LD all read shops.name, and one
             # UPDATE keeps them agreeing instead of four places to forget.
             conn.execute("UPDATE shops SET name = ? WHERE id = ?", (name, shop["id"]))
-        stats = _shop_stats(conn, shop["id"], with_nutrition)
-        if stats["items"] != shop["item_count"]:
-            conn.execute("UPDATE shops SET item_count = ? WHERE id = ?",
-                         (stats["items"], shop["id"]))
-        stats["price_min"] = shop["price_min"]
-        stats["price_max"] = shop["price_max"]
+        stats = stats_by_id[shop["id"]]
         ok, reason = gate(stats)
         title, meta = _titles(name, stats, shop["imported_at"])
 
         slug = existing.get(shop["id"])
         if slug is None:
-            base = build_site.slugify_ja(name) or f"shop-{shop['id']}"
-            slug, n = base, 2
-            while slug in taken:
-                slug, n = f"{base}-{n}", n + 1
+            slug = freed.pop(chain_key(shop["name"]), None)
+            if slug is None:
+                base = build_site.slugify_ja(name) or f"shop-{shop['id']}"
+                slug, n = base, 2
+                while slug in taken:
+                    slug, n = f"{base}-{n}", n + 1
             taken.add(slug)
             conn.execute(
                 """INSERT INTO shop_pages (shop_id, lang, slug, page_type, title,

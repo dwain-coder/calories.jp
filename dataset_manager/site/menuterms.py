@@ -135,7 +135,20 @@ _CONDIMENT_ONLY = re.compile(
     r"生わさび|しょうゆ|醤油|お醤油|塩|藻塩|岩塩|タレ|たれ|specialタレ|ふりかけ|七味|"
     r"一味|山椒|粉山椒|辛子|からし|ラー油|食べるラー油|酢|お酢|ガリ|紅生姜|生姜|薬味|"
     r"のり|海苔|刻みのり|バター|ジャム|シロップ|ガムシロップ|ミルク|フレッシュ|氷|"
-    r"お冷|水|お水|おしぼり|割り箸)$")
+    r"お冷|水|お水|おしぼり|割り箸|粉チーズ|タルタルソース|"
+    # Sauces sold as their own line. Named, not matched on 「…ソース」: a dish
+    # name ends that way too (「自家製ハンバーグガーリックトマトソース」).
+    r"濃厚肉汁ソース|ハニーマスタードソース|胡麻にんにくダレ＆甘とろダレ)$")
+
+# Toppings a menu also lists on their own, bare, at the topping's price:
+# ガスト sells 「ホイップクリーム」 ¥109 both behind its 【…限定】 qualifier and
+# without it. No rule tells these from a real side by shape — 夢庵's 御飯 is
+# listed the same way — so they are named.
+_BARE_TOPPING = re.compile(
+    r"^(?:ホイップクリーム|粒あん|つぶあん|温泉卵|温泉玉子|どっさり青ネギ|海苔\d+枚)$")
+
+# An add-on said at the end instead of the start: 「チキンナゲット用ソース(追加)」.
+_EXTRA_SUFFIX = re.compile(r"[（(]\s*追加\s*[)）]$")
 
 # Drinks get their own vocabulary rather than borrowing the display classifier
 # in brand_assets: that one is ordered for icons, so it files 「アイスコーヒー」
@@ -147,7 +160,16 @@ _DRINK = re.compile(
     r"ジュース|コーラ|ソーダ|サイダー|ドリンク|スムージー|シェイク|フロート|"
     r"レモネード|ラッシー|カルピス|牛乳|ミルク|ネクター|エード|ウォーター|"
     r"ビール|発泡酒|ハイボール|サワー|酎ハイ|チューハイ|ワイン|焼酎|日本酒|"
-    r"カクテル|ウイスキー|ウィスキー|ジントニック|梅酒|マッコリ|紹興酒|泡盛")
+    r"カクテル|ウイスキー|ウィスキー|ジントニック|梅酒|マッコリ|紹興酒|泡盛|"
+    # chawan's 「オレンジ100％（濃縮還元）」 and モスバーガー's ジンジャーエール
+    # were the cheapest dishes on their pages. Not a bare 「100％」: that is
+    # also 「アンガスビーフ100％ステーキハンバーグ」.
+    r"ジンジャーエール|濃縮還元|(?:果汁|ストレート)\s*100[%％]|スカッシュ|"
+    # Beer and shochu by brand, and anything poured by the glass, jug, bottle
+    # or can: ガスト listed 「アサヒスーパードライ（グラス）」 as a dish, and it
+    # came tenth in its lowest-calorie list.
+    r"スーパードライ|ドライゼロ|プレミアムモルツ|一番搾り|黒ラベル|ヱビス|いいちこ|黒霧島|"
+    r"ジョッキ|[（(]グラス|グラス[）)]|グラス$|ボトル|中瓶|瓶[）)]|[（(]缶[）)]|[0-9０-９]+\s*(?:ml|ML|ｍｌ)")
 
 # A drink word inside a dish is still a dish: 抹茶パフェ, コーヒーゼリー, ビール酵母
 # パン, ミルクレープ. The form word wins.
@@ -165,7 +187,11 @@ def is_extra(name):
     n = unqualified(name)
     if not n:
         return False
-    return bool(_EXTRA_PREFIX.match(n) or _CONDIMENT_ONLY.match(n)
+    # 「マヨネーズ、かけ放題！！！」 is a condiment with a sales line after it;
+    # the whole-name rules read the part before the first comma.
+    head = re.split(r"[、,，]", n, maxsplit=1)[0].strip()
+    return bool(_EXTRA_PREFIX.match(n) or _EXTRA_SUFFIX.search(n)
+                or _CONDIMENT_ONLY.match(head) or _BARE_TOPPING.match(head)
                 or _NOT_FOOD.search(n))
 
 

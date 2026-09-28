@@ -106,6 +106,8 @@ def import_menus(conn, text, imported_at=None):
     shops, stats = read_rows(text)
 
     for shop in shops:
+        # Provisional, over every row: build-shops rewrites the count and the
+        # price range from the rows a reader is actually shown.
         prices = [i["price_max_yen"] or i["price_yen"] for i in shop["items"] if i["price_yen"]]
         lows = [i["price_yen"] for i in shop["items"] if i["price_yen"]]
         conn.execute(
