@@ -17,6 +17,9 @@ the answer still has to exist in the corpus.
 """
 import re
 import unicodedata
+from functools import lru_cache
+
+from ..api.database import get_connection
 
 # Ingredients with no nutrition to contribute. Counting them as unmatched made
 # recipe coverage look worse than it is — 320 recipe lines are just water.
@@ -396,6 +399,53 @@ def _strip_noise(s):
     return " ".join(s.split())
 
 
+@lru_cache(maxsize=1)
+def _food_heads():
+    """The leading word of every food the site search can return: すいか,
+    メロンパン, 七面鳥ひき肉.
+
+    Read from the corpus rather than written down, because a few hundred of
+    them contain an alias word and the list moves whenever ALIASES does. Only
+    foods with a page count: an FDC row with none is invisible to the search,
+    and refusing the alias for 「ポークソーセージ」 on its account left a grilled
+    sausage matching nothing at all.
+    """
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT COALESCE(nm.name, sp.title) FROM site_pages sp
+           LEFT JOIN item_names nm ON nm.item_id = sp.item_id
+                AND nm.lang = sp.lang AND nm.is_primary = 1
+           WHERE sp.lang = 'ja' AND sp.page_type = 'food'""").fetchall()
+    conn.close()
+    # MEXT separates food from form with a space, FDC with a comma or a bracket
+    # (which normalise() already dropped): 「すいか 赤肉種 生」, 「スライスハム（…）」.
+    return frozenset(filter(None, (re.split(r"[\s、,]", normalise(r[0]))[0] for r in rows)))
+
+
+def _alias_inside(texts, skip=EXACT_ONLY):
+    """The longest alias word inside the name, unless it is only part of the
+    name of a different food.
+
+    The tables are full of foods whose names contain another food's: すいか is
+    not いか, メロンパン is not パン, 甘納豆 is not 納豆 and とんぶり is not ぶり.
+    Taking the alias there answered a watermelon with squid and a turkey mince
+    with beef — the plain name, tried next, would have found the food itself.
+    A table name that is the alias's own food (ぶなしめじ for しめじ, 食パン for
+    パン) does not count against it, and each text is judged on its own, so a
+    group label like 【辛子酢みそ】 cannot veto the 米みそ written after it.
+    """
+    heads = _food_heads()
+    for word in sorted(ALIASES, key=len, reverse=True):
+        if word in skip or len(word) < 2 or not any(word in t for t in texts):
+            continue
+        own = {w for target in ALIASES[word] for w in target.split()}
+        for t in texts:
+            if word in t and not any(
+                    word in h and h != word and h not in own and h in t for h in heads):
+                return word
+    return None
+
+
 def search_terms(name, cooked=False):
     """Search strings to try for one ingredient, most specific first.
 
@@ -469,8 +519,9 @@ def search_terms(name, cooked=False):
             add_alias(target)
     # then an alias for any word inside the name — 「牛ひき肉 500g」 and
     # 「合いびき肉（牛豚）」 both have to reach うし ひき肉. Longest word wins,
-    # so 牛ひき肉 is not resolved as 牛肉.
-    # EXACT_ONLY keys are skipped here: 「ソース」 alone means Worcestershire, but
+    # so 牛ひき肉 is not resolved as 牛肉, and a word that is only part of
+    # another food's name is not taken at all: see _alias_inside.
+    # EXACT_ONLY keys are skipped too: 「ソース」 alone means Worcestershire, but
     # as a SUBSTRING it turned チーズソース, ホワイトソース, タルタルソース and
     # おろしポン酢ソース into Worcestershire too — 117 kcal of thin brown sauce
     # standing in for a cheese sauce, with a source line under it.
@@ -478,13 +529,9 @@ def search_terms(name, cooked=False):
     # than a qualifier: 「魚肉ねり製品 (なると)」 is a naruto, and the tables have
     # exactly one row called なると. Look inside it for a curated word too.
     inside = unicodedata.normalize("NFKC", str(name or "")).replace(" ", "")
-    for word in sorted(ALIASES, key=len, reverse=True):
-        if word in EXACT_ONLY:
-            continue
-        if len(word) >= 2 and (word in compact or word in inside):
-            for target in ALIASES[word]:
-                add_alias(target)
-            break
+    word = _alias_inside((compact, inside))
+    for target in ALIASES.get(word, ()):
+        add_alias(target)
     add(base)
     add(stripped)
 
@@ -609,10 +656,11 @@ def alias_target(name):
     for key in (base, compact):
         if key in ALIASES:
             return ALIASES[key][0]
-    for word in sorted(ALIASES, key=len, reverse=True):
-        if len(word) >= 2 and word in compact:
-            return ALIASES[word][0]
-    return None
+    # EXACT_ONLY is not skipped here, as it never was. The recipe linker only
+    # trusts this answer when search_terms agrees with it, and a 「ウスターソース」
+    # line is linked through that agreement.
+    word = _alias_inside((compact,), skip=())
+    return ALIASES[word][0] if word else None
 
 
 # A composition table's canonical entry for a preservable food is the DRIED
