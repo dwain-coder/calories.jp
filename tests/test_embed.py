@@ -201,6 +201,31 @@ class TestTheSnippetsLinkBack(unittest.TestCase):
         # The home page gets the bare name, not a phrase repeated on every blog.
         self.assertIn(f'<a href="{BASE}/">calories.jp</a>', box)
 
+    def test_the_promo_card_is_plain_html_that_links_and_says_pr(self):
+        """For food sites to carry in an article: its links must be the page's
+        own (no frame), it keeps its colours without our stylesheet, and it
+        says it is a promotion."""
+        card = embeds.promo_card()
+        self.assertIn(card, self.codes)
+        self.assertNotIn("<iframe", card)
+        self.assertNotIn("<script", card)
+        self.assertNotIn("class=", card)          # nothing that needs our CSS
+        self.assertIn(">PR</span>", card)
+        self.assertIn(f'href="{BASE}/analyzer"', card)
+        self.assertIn(f'src="{BASE}/static/media/promo-analyzer.webp"', card)
+        self.assertRegex(card, r'alt="[^"]+"')
+        img = client.get("/static/media/promo-analyzer.webp")
+        self.assertEqual(img.status_code, 200)
+        # Served as application/octet-stream beside nosniff until the type was registered.
+        self.assertEqual(img.headers["content-type"], "image/webp")
+
+    def test_the_figure_on_the_promo_picture_is_the_analyzers_own(self):
+        """The picture shows the analyzer's saved result for that photograph,
+        printed the way the analyzer prints it: a partial total is a floor."""
+        import json
+        from tools.build_promo_image import RESULT, headline
+        self.assertEqual(headline(json.loads(RESULT.read_text(encoding="utf-8"))), "≥ 400")
+
     def test_the_documented_rate_limit_is_the_enforced_one(self):
         from dataset_manager.api import analyzer
         self.assertIn(str(analyzer.RATE_LIMIT), self.index)
