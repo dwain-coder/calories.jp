@@ -935,7 +935,10 @@ def embed_index(request: Request, food: str = "", food_q: str = "", a: str = "",
     sections = [_section("analyzer", t(lang, "embed_analyzer_title"), t(lang, "embed_analyzer_note"),
                          [_iframe_code("/embed/analyzer", EMBED_HEIGHT["analyzer"], analyzer,
                                        [(base + "/analyzer", analyzer)])],
-                         [("/embed/analyzer", EMBED_HEIGHT["analyzer"], analyzer)])]
+                         [("/embed/analyzer", EMBED_HEIGHT["analyzer"], analyzer)]),
+                # Plain HTML, so /embed previews it as itself.
+                _section("promo", t(lang, "embed_promo_title"), t(lang, "embed_promo_note"),
+                         [(t(lang, "embed_kind_html"), embeds.promo_card())])]
     try:
         fs, fd, fn = _pick_food(food, food_q, EXAMPLE_FOOD)
         sections.append(_section(

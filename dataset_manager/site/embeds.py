@@ -64,6 +64,58 @@ def search_box():
             f'{_credit([(base + "/", None)])}')
 
 
+# The promo card's colours: the site's orange on a warm dark ground, so it reads
+# as a card in any blog theme, light or dark.
+_PROMO = {"ground": "#1E1612", "edge": "#4A3426", "text": "#FFF8F3", "faint": "#B8A79B",
+          "chip": "#3A2A20", "pill": "#3A2418", "pill_text": "#F7A072", "accent": "#F26722"}
+
+
+def promo_card():
+    """The analyzer as an in-feed card, the shape food sites already run
+    promotions in. Plain HTML with every style inline: a blog keeps the
+    colours without our stylesheet, and the links are the host page's own.
+
+    The picture is the site's own photograph, and the figure on it is the
+    analyzer's saved result for that photograph (tools/build_promo_image.py).
+
+    Labelled PR, not AD. A business's own promotion placed in someone's
+    content has to say it is one — the safe reading of Japan's 2023
+    stealth-marketing rule — and an "AD" label on a followed link reads to a
+    search engine as a paid link.
+    """
+    base, c, e = seo.base_url(LANG), _PROMO, lambda k: escape(t(LANG, k))
+    return (
+        f'<aside style="position:relative;max-width:640px;margin:16px 0;padding:18px 20px;'
+        f'border:1px solid {c["edge"]};border-radius:18px;background:{c["ground"]};'
+        f'color:{c["text"]};font-size:14px;line-height:1.5;box-sizing:border-box">\n'
+        f'  <button type="button" aria-label="{e("embed_promo_close")}" onclick="this.parentNode.remove()"'
+        f' style="position:absolute;top:8px;right:12px;padding:4px;border:0;background:none;'
+        f'color:{c["faint"]};font-size:20px;line-height:1;cursor:pointer">×</button>\n'
+        f'  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px">\n'
+        f'    <div style="flex:1 1 260px;min-width:0">\n'
+        f'      <p style="margin:0 0 6px;display:flex;align-items:center;gap:8px">'
+        f'<span style="width:14px;height:14px;border-radius:3px;background:{c["accent"]}"></span>'
+        f'<a href="{base}/" style="color:{c["text"]};font-weight:700;text-decoration:none">'
+        f'{escape(SITE_NAME[LANG])}</a>'
+        f'<span style="padding:1px 8px;border-radius:9px;background:{c["chip"]};color:{c["faint"]};'
+        f'font-size:11px">PR</span></p>\n'
+        f'      <p style="margin:0 0 14px;font-size:18px;font-weight:700;color:{c["text"]}">'
+        f'{e("embed_promo_headline")}</p>\n'
+        f'      <p style="margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px">'
+        f'<span style="padding:6px 12px;border-radius:999px;background:{c["pill"]};'
+        f'color:{c["pill_text"]};font-weight:700">{e("embed_promo_pill")}</span>'
+        f'<a href="{base}/analyzer" style="padding:8px 18px;border-radius:999px;'
+        f'background:{c["accent"]};color:#FFFFFF;font-weight:700;text-decoration:none">'
+        f'{e("embed_promo_cta")} ›</a></p>\n'
+        f'      <p style="margin:12px 0 0;font-size:12px;color:{c["faint"]}">{e("embed_promo_small")}</p>\n'
+        f'    </div>\n'
+        f'    <a href="{base}/analyzer" style="flex:0 0 auto;margin-right:18px">'
+        f'<img src="{base}/static/media/promo-analyzer.webp" width="140" height="140" loading="lazy"'
+        f' alt="{e("embed_promo_alt")}" style="display:block;border:0;max-width:100%;height:auto"></a>\n'
+        f'  </div>\n'
+        f'</aside>')
+
+
 # (label key, nutrition field, unit, decimals)
 _MACROS = (("energy", "energy_kcal", "kcal", 0), ("protein", "protein_g", "g", 1),
            ("fat", "fat_g", "g", 1), ("carbs", "carbohydrate_g", "g", 1))

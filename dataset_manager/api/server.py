@@ -351,5 +351,12 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.include_router(search_router)
 app.include_router(analyzer_router)
 app.include_router(site_router)
+# Python 3.12's mimetypes has no .webp, so every WebP on the site went out as
+# application/octet-stream beside X-Content-Type-Options: nosniff. Chrome draws
+# it anyway; a browser that honours the header for images need not. The promo
+# card puts one on other people's pages, where we cannot see what breaks.
+import mimetypes as _mimetypes
+_mimetypes.add_type("image/webp", ".webp")
+
 if _Path("static").is_dir():
     app.mount("/static", StaticFiles(directory="static"), name="static")
