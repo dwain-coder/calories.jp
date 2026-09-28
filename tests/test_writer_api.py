@@ -50,6 +50,14 @@ class TestWriterApi(unittest.TestCase):
         self.assertEqual((body["basis"], body["quality"]), ("per_100g", "measured_only"))
         self.assertEqual(len(body["ranking"]), 5)
 
+    def test_a_food_says_what_one_serving_is(self):
+        """Handed per-100 g only, the writer did the pack arithmetic itself and
+        put natto at 83-95 kcal a pack. The serving is public: no key needed."""
+        hit = next(r for r in client.get("/api/search", params={"q": "糸引き納豆"}).json()
+                   if r["page_type"] == "food")
+        body = client.get(f"/api/foods/{hit['item_id']}/nutrition").json()
+        self.assertEqual(body["serving"], {"label": "1パック", "grams": 45.0})
+
     def test_reference_values_are_the_2025_tables(self):
         body = client.get("/api/reference-values", headers=KEY).json()
         self.assertEqual(body["labelling_reference"]["macros"]["protein_g"], 85)

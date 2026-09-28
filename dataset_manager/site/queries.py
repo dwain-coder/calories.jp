@@ -2100,6 +2100,10 @@ def food_nutrition_json(item_id):
         "nutrients": nutrients,
         "cooking_yield": yields,
         "portions": portions,
+        # The curated 目安量 (1パック 45 g, 茶碗1杯 150 g) or None. A writer handed
+        # only per-100 g figures does the pack arithmetic itself, and got natto
+        # at 83-95 kcal a pack against 74-92.
+        "serving": servings.for_food((names.get("ja") or {}).get("primary") or item["name"]),
     }
 
 
