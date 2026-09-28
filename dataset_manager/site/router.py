@@ -203,6 +203,7 @@ def food_page(request: Request, slug: str):
         "embed_offer": (food_snippets(slug, data, name)
                         if page.get("indexable") and data["nutrition"] else None),
         "embed_compare_url": f"/embed?a={quote(slug)}#compare",
+        "embed_preview_url": f"/embed?food={quote(slug)}#food",
     })
 
 
@@ -298,6 +299,7 @@ def menu_page(request: Request, slug: str):
         "noindex": not page.get("indexable"),
         "embed_offer": menu_snippets(canonical_slug, name, [
             by for by in MENU_LISTS if page.get("indexable") and menu_ranked(data["menu"], by)]),
+        "embed_preview_url": f"/embed?chain={quote(canonical_slug)}#menu",
     })
 
 
@@ -570,6 +572,7 @@ def cooking_yield_page(request: Request):
         "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
         "meta_description": t(lang, "yield_lede"),
         "embed_offer": yield_snippets(),
+        "embed_preview_url": "/embed#yield",
     })
 
 
@@ -647,6 +650,7 @@ def nutrient_page(request: Request, slug: str):
         "jsonld": [seo.jsonld_script(j) for j in jsonld],
         "meta_description": blurb,
         "embed_offer": nutrient_snippets(slug, heading),
+        "embed_preview_url": f"/embed?nutrient={slug}#nutrient",
     })
 
 
@@ -780,11 +784,11 @@ def embed_chains():
     return tuple(out)
 
 
-# The height each frame starts at, measured at a blog's column width. The widget
-# corrects it once loaded; starting close keeps the host page from jumping, which
-# is also what its own Core Web Vitals score is measuring.
-EMBED_HEIGHT = {"analyzer": 180, "food": 590, "compare": 480, "nutrient": 660,
-                "menu_kcal": 650, "menu_protein": 880, "yield": 320}
+# The height each frame starts at, measured at a 680 px blog column with the
+# disclaimer in. The widget corrects it once loaded; starting close keeps the host
+# page from jumping, which is also what its own Core Web Vitals score measures.
+EMBED_HEIGHT = {"analyzer": 190, "food": 790, "compare": 540, "nutrient": 800,
+                "menu_kcal": 760, "menu_protein": 960, "yield": 470}
 
 
 def _iframe_code(path, height, title, links):
@@ -967,9 +971,8 @@ def embed_index(request: Request, food: str = "", food_q: str = "", a: str = "",
     if cs:
         name, lists = chains[cs]
         wanted = rank if rank in MENU_LISTS else "kcal"
-        # Before anyone chooses, show every list the example supports; after,
-        # just the one chosen (or what the chain can support instead).
-        shown = ((wanted,) if wanted in lists else lists[:1]) if (chain or rank) else lists
+        # Every list the chain supports, until a reader picks one ranking.
+        shown = ((wanted,) if wanted in lists else lists[:1]) if rank else lists
         codes = menu_snippets(cs, name, shown)
         suffix = {by: MENU_LISTS[by][0] for by in shown}
         sections.append(_section(
@@ -984,7 +987,7 @@ def embed_index(request: Request, food: str = "", food_q: str = "", a: str = "",
                              yield_snippets(),
                              [("/embed/cooking-yield", EMBED_HEIGHT["yield"], t(lang, "yield_calc_title"))]))
     sections.append(_section("search", t(lang, "embed_search_title"), t(lang, "embed_search_note"),
-                             [(t(lang, "embed_kind_html"), embeds.search_box())], live_html=True))
+                             [(t(lang, "embed_kind_html"), embeds.search_box())]))
     crumbs = [(t(lang, "home"), base + "/"), (t(lang, "embed_title"), None)]
     chose = any((food, food_q, a, a_q, b, b_q, nutrient, chain, rank))
     return _render(request, "embed.html", lang, {

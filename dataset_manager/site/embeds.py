@@ -110,6 +110,9 @@ def food_table(d, name, url):
     if any("(" in c for _l, *vals in rows for c in vals if c):
         note += escape(t(LANG, "embed_paren_note"))
     lines.append(_credit([(url, name)], f"（{note}）"))
+    # Pasted HTML becomes the writer's own content and never updates, so the
+    # caveat has to travel inside it rather than live on our side of a frame.
+    lines.append(f'<p style="margin:2px 0 0;font-size:11px">{escape(t(LANG, "embed_disc_html"))}</p>')
     return "\n".join(lines)
 
 

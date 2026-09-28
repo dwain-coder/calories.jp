@@ -63,8 +63,13 @@
             style="width:100%;border:0;height:{{ height }}px" loading="lazy"
             title="{{ title }}" data-preview></iframe>
     {% endfor %}
-    {# No frame to preview: the snippet is plain HTML we generated, so show it as it is. #}
-    {% if s.live_html %}{{ s.codes[0][1] | safe }}{% endif %}
+    {# A snippet with no frame is plain HTML we generated from escaped values,
+       so it previews as itself. Under a frame preview it gets its own label. #}
+    {% for label, code in s.codes if '<iframe' not in code %}
+      {% if s.previews %}<h4 class="embed-preview-label">{{ label }}</h4>{% endif %}
+      <div class="embed-html-preview">{{ code | safe }}</div>
+      <p class="license">{{ t('embed_html_preview_note') }}</p>
+    {% endfor %}
   </div>
 </section>
 {% endfor %}
@@ -77,6 +82,8 @@
     <li>{{ t('embed_terms_live') }}</li>
     <li>{{ t('embed_terms_rate', n=rate_limit) }}</li>
     <li>{{ t('embed_terms_estimate') }}</li>
+    <li>{{ t('embed_terms_disclaimer') }} {{ t('terms_liability_body') }}
+      <a href="/terms">{{ t('terms_title') }} →</a></li>
   </ul>
 </div>
 

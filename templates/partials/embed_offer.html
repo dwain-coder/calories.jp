@@ -5,9 +5,10 @@
 <details class="card embed-offer">
   <summary><h2>{{ t('embed_offer_title') }}</h2></summary>
   <p class="license">{{ t('embed_offer_note') }}</p>
+  {# nofollow on both builder links: one /embed?… per page is thousands of URLs
+     of the same page for a crawler to walk; the builder is for people. #}
+  {% if embed_preview_url %}<p><a class="button-pill secondary" href="{{ embed_preview_url }}" rel="nofollow">{{ t('embed_preview_link') }} →</a></p>{% endif %}
   {% for label, code in embed_offer %}{{ code_box('embed-code-' ~ loop.index, label, code) }}{% endfor %}
-  {# nofollow: one /embed?a=… per food is 2,633 URLs of the same page for a
-     crawler to walk; the builder is for people. #}
   {% if embed_compare_url %}<p class="license"><a href="{{ embed_compare_url }}" rel="nofollow">{{ t('embed_compare_link') }} →</a></p>{% endif %}
   <p class="license"><a href="/embed">{{ t('embed_all') }} →</a></p>
 </details>

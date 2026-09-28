@@ -23,3 +23,4 @@
     {%- if foods | selectattr('0.macro_quality') | list %}{{ t('embed_paren_note') }}{% endif %}</p>
 </div>
 {% endblock %}
+{% block disclaimer %}{{ t('embed_disc_food') }}{% endblock %}

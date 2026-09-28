@@ -87,6 +87,20 @@ class TestEmbedContent(unittest.TestCase):
                 self.assertNotIn("site-header", body)
                 self.assertNotIn("site-footer", body)
 
+    def test_every_widget_says_what_its_figures_are_and_are_not(self):
+        """A number on someone else's page, without our site around it, needs
+        its caveat in the frame: what kind of figure it is, that it is not
+        advice, and where the full terms are."""
+        from dataset_manager.site.i18n import t
+        expected = {"/embed/analyzer": "api_terms_estimates", "/embed/cooking-yield": "embed_disc_yield"}
+        for path in WIDGETS:
+            kind = expected.get(path, "embed_disc_chain" if "/menu/" in path else "embed_disc_food")
+            with self.subTest(path=path):
+                body = client.get(path).text
+                self.assertIn(t("ja", kind), body)
+                self.assertIn(t("ja", "embed_disc_advice"), body)
+                self.assertIn(f'href="{BASE}/terms"', body)
+
     def test_every_widget_reports_its_height(self):
         """An iframe cannot size itself; without this the widget is clipped."""
         for path in WIDGETS:
@@ -208,6 +222,9 @@ class TestTheCodeIsOfferedWhereTheFiguresAre(unittest.TestCase):
         table = next(c for c in codes if c.startswith("<table>"))
         self.assertNotIn("<iframe", table)
         self.assertIn(f'<a href="{BASE}/food/{quote(EXAMPLE_FOOD)}">', table)
+        # Pasted HTML never updates, so its caveat has to be in the paste.
+        from dataset_manager.site.i18n import t
+        self.assertIn(t("ja", "embed_disc_html"), table)
 
 
 class TestTheMenuRanking(unittest.TestCase):
@@ -275,6 +292,39 @@ class TestTheBuilders(unittest.TestCase):
     def test_a_food_page_leads_to_the_comparison_builder(self):
         body = client.get(f"/food/{FOOD}").text
         self.assertIn(f'href="/embed?a={FOOD}#compare" rel="nofollow"', body)
+
+
+class TestPreviews(unittest.TestCase):
+    """Nobody pastes code they cannot see the result of."""
+
+    def test_every_snippet_on_the_index_is_previewed(self):
+        body = client.get("/embed").text
+        for section in re.findall(r'<section class="card" id="(\w+)">(.*?)</section>', body, re.S):
+            key, html_ = section
+            with self.subTest(section=key):
+                codes = snippets(html_)
+                frames = re.findall(r'<iframe src="([^"]+)"[^>]*data-preview', html_)
+                for code in codes:
+                    if "<iframe" in code:
+                        src = re.search(r'<iframe src="([^"]+)"', code).group(1)
+                        self.assertIn(src, frames)
+                    else:
+                        # Plain HTML renders as itself, outside the code box.
+                        preview = html_.split('class="embed-preview"', 1)[1]
+                        self.assertIn(code, preview)
+
+    def test_each_page_links_to_a_preview_of_its_own_widget(self):
+        for page, anchor in ((f"/food/{FOOD}", f"/embed?food={FOOD}#food"),
+                             (f"/nutrient/{EXAMPLE_NUTRIENT}", f"/embed?nutrient={EXAMPLE_NUTRIENT}#nutrient"),
+                             (f"/menu/{CHAIN}", f"/embed?chain={CHAIN}#menu"),
+                             ("/cooking-yield", "/embed#yield")):
+            with self.subTest(page=page):
+                self.assertIn(f'href="{anchor}" rel="nofollow"', client.get(page).text)
+
+    def test_a_chain_preview_shows_every_list_it_offers(self):
+        body = client.get("/embed", params={"chain": EXAMPLE_CHAIN}).text
+        frames = re.findall(r'<iframe src="[^"]*?(/embed/menu/[^"]+)"[^>]*data-preview', body)
+        self.assertEqual(frames, [f"/embed/menu/{CHAIN}", f"/embed/menu/{CHAIN}/protein"])
 
 
 class TestFoodFigures(unittest.TestCase):
