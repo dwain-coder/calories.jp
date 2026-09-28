@@ -2097,16 +2097,20 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.8rem; flex-wrap: wrap;
 }
-.snippet-head h2 { margin: 0; }
-#copy-embed.copied { background: var(--verified-bg, #e8f5e9); border-color: #1e7e34; color: #1e7e34; }
+.snippet-head h2, .snippet-head h3 { margin: 0; }
+.snippet-head h3 { font-size: 0.95rem; }
+.snippet-head + .api-example { margin-top: 0.5rem; }
+button[data-copy].copied { background: var(--verified-bg, #e8f5e9); border-color: #1e7e34; color: #1e7e34; }
 /* The snippet is meant to be read as well as copied, so it wraps rather than
    running off the side — the copy button is what actually gets used. */
-#embed-snippet code { white-space: pre-wrap; word-break: break-word; }
+.api-example[id] code { white-space: pre-wrap; word-break: break-word; }
 .embed-preview { padding: 0.6rem; }
+.embed-offer summary { cursor: pointer; }
+.embed-offer summary h2 { display: inline; }
 
 @media (max-width: 640px) {
   .snippet-head { gap: 0.5rem; }
-  #copy-embed { width: 100%; justify-content: center; }
+  button[data-copy] { width: 100%; justify-content: center; }
 }
 
 /* ------------------------------------------------- The analyzer as the hero

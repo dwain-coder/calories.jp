@@ -1,0 +1,23 @@
+{% extends "embed_base.html" %}
+{% block title %}{{ t('embed_menu_heading', chain=shop) }}{% endblock %}
+{% block widget %}
+<div class="card">
+  <p class="embed-title">{{ t('embed_menu_heading', chain=shop) }}</p>
+  <table class="nutrition-table">
+    <thead><tr><th>#</th><th>{{ t('name_col') }}</th><th>{{ t('calories') }}</th></tr></thead>
+    <tbody>
+    {% for it in items %}
+      <tr><td class="rank-num">{{ loop.index }}</td>
+          <td class="wrap">{{ it.name }}{% if it.price_yen %} <small>¥{{ '{:,}'.format(it.price_yen) }}</small>{% endif %}</td>
+          {# The same three labels the menu page uses: a figure never travels
+             without the rung it stands on (see get_shop_page_data). #}
+          <td><strong>{{ it.kcal|round(0)|int }}</strong> <small>kcal</small>
+            {% if it.kcal_source == 'chain' %}<span class="prov-tag chain">{{ t('embed_src_chain') }}</span>
+            {% elif it.kcal_source == 'table' %}<span class="prov-tag table">{{ t('embed_src_table') }}</span>
+            {% else %}<span class="prov-tag calc">{{ t('embed_src_calc') }}</span>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="license">{{ t('embed_menu_note') }}</p>
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{# "Embed this" on the page a widget duplicates. Collapsed: it is for the few
+   readers who write about food, not for the many who came for a number. #}
+{% if embed_offer %}
+{% from "partials/embed_code.html" import code_box with context %}
+<details class="card embed-offer">
+  <summary><h2>{{ t('embed_offer_title') }}</h2></summary>
+  <p class="license">{{ t('embed_offer_note') }}</p>
+  {% for label, code in embed_offer %}{{ code_box('embed-code-' ~ loop.index, label, code) }}{% endfor %}
+  <p class="license"><a href="/embed">{{ t('embed_all') }} →</a></p>
+</details>
+<script src="{{ asset('/static/embed_copy.js') }}" defer></script>
+{% endif %}

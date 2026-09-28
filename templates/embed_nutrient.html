@@ -1,0 +1,18 @@
+{% extends "embed_base.html" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block widget %}
+<div class="card">
+  <p class="embed-title">{{ heading }}</p>
+  <table class="nutrition-table">
+    <thead><tr><th>#</th><th>{{ t('name_col') }}</th><th>{{ term }}<small>（{{ t('per_100g') }}）</small></th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td class="rank-num">{{ loop.index }}</td>
+          <td class="wrap">{{ r.name }}{% if r.category %} <span class="dish-category-tag">{{ r.category }}</span>{% endif %}</td>
+          <td><strong>{{ r.amount }}</strong> <small>{{ r.unit }}</small></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="license">{{ t('nutrient_measured_only') }}</p>
+</div>
+{% endblock %}

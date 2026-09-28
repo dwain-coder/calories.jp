@@ -2165,6 +2165,7 @@ STATIC_PAGES = ("", "foods", "atlas", "menu", "nutrients", "cooking-yield", "mea
 UNLISTED_PAGES = frozenset({
     "/search",           # a query's results are thin and duplicate the pages they link to
     "/embed/analyzer",   # the widget itself; noindex, canonical to /analyzer
+    "/embed/cooking-yield",  # likewise, canonical to /cooking-yield
 })
 
 

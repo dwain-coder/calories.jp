@@ -1,0 +1,11 @@
+{# One snippet to copy: a heading, the code, and a button that copies it.
+   The code arrives as a plain string and is autoescaped, so what the reader
+   sees in the box is exactly what lands on the clipboard. #}
+{% macro code_box(sid, label, code) -%}
+<div class="snippet-head">
+  <h3>{{ label }}</h3>
+  <button type="button" class="button-pill secondary" data-copy="{{ sid }}"
+          data-label="{{ t('embed_copy') }}" data-done="{{ t('embed_copied') }}">{{ t('embed_copy') }}</button>
+</div>
+<pre class="api-example" id="{{ sid }}"><code>{{ code }}</code></pre>
+{%- endmacro %}
