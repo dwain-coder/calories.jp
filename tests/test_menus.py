@@ -271,11 +271,10 @@ class TestEmptyRows(unittest.TestCase):
 
     def test_the_page_and_its_count_agree(self):
         """The 品数 on the index and the rows on the page are filtered by the
-        same rules, so one cannot drift from the other."""
+        same rules, so one cannot drift from the other. Every page, because the
+        drift shows up one chain at a time: ガスト by 28 toppings, 12 others by a
+        photograph or two."""
         from dataset_manager.site import queries
-        for slug in ("くら寿司", "はま寿司", "ガスト"):
-            page = queries.get_shop_page("ja", slug)
-            if not page:
-                continue
-            data = queries.get_shop_page_data(page)
-            self.assertEqual(data["shop"]["item_count"], len(data["menu"]), slug)
+        for shop in queries.shops_index("ja"):
+            data = queries.get_shop_page_data(queries.get_shop_page("ja", shop["slug"]))
+            self.assertEqual(shop["item_count"], len(data["menu"]), shop["slug"])

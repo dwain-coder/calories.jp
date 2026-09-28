@@ -182,20 +182,23 @@ def _shop_stats(conn, shop_id, with_nutrition):
     items = conn.execute(
         """SELECT smi.name, smi.item_id, smi.price_yen, cn.energy_kcal AS chain_kcal,
                   min.energy_kcal AS shown_kcal, min.provenance,
-                  pp.file AS product_image
+                  pp.file AS product_image, ii.url AS db_image_url
            FROM shop_menu_items smi
            LEFT JOIN product_photos pp ON pp.shop_menu_item_id = smi.id
+           LEFT JOIN item_images ii ON ii.item_id = smi.item_id
            LEFT JOIN chain_nutrition cn ON cn.id = smi.chain_nutrition_id
            LEFT JOIN menu_item_nutrition min ON min.shop_menu_item_id = smi.id
            WHERE smi.shop_id = ?""", (shop_id,)).fetchall()
     # Count the menu a reader sees. Drinks and condiments are filtered out of
     # the page, so leaving them in here would gate on a menu nobody is shown
-    # and print a 品数 that disagrees with the rows under it.
+    # and print a 品数 that disagrees with the rows under it. The photograph is
+    # the page's too: the chain's own, else the food's. Passing only the chain's
+    # left 14 dishes on 12 pages shown but not counted.
     items = [i for i in items if not (
         menuterms.is_extra(i["name"])
         or menuterms.is_drink(i["name"], classify_dish_visual(i["name"])["category"])
         or menuterms.says_nothing(i["price_yen"], i["shown_kcal"] or i["chain_kcal"])
-        or not food_images.has_photo(i["name"], _product_image(i)))]
+        or not food_images.has_photo(i["name"], _product_image(i) or i["db_image_url"]))]
 
     def sourced(i):
         """The chain's own figure, or a composition-table row for this dish."""
