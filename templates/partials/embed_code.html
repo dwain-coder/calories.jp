@@ -9,3 +9,15 @@
 </div>
 <pre class="api-example" id="{{ sid }}"><code>{{ code }}</code></pre>
 {%- endmacro %}
+
+{# A food picker for the /embed builders. suggest.js fills the hidden slug;
+   without it the typed text goes up as <field>_q and the server searches. #}
+{% macro food_picker(field, label, slug, name) -%}
+<label class="embed-pick">{{ label }}
+  <span class="suggest-box">
+    <input type="search" name="{{ field }}_q" value="{{ name }}" autocomplete="off"
+           placeholder="{{ t('embed_pick_ph') }}" data-suggest="{{ lang }}" data-pick="{{ field }}">
+    <input type="hidden" name="{{ field }}" value="{{ slug }}">
+  </span>
+</label>
+{%- endmacro %}

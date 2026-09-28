@@ -1,20 +1,21 @@
 {% extends "embed_base.html" %}
-{% block title %}{{ t('embed_menu_heading', chain=shop) }}{% endblock %}
+{% block title %}{{ heading }}{% endblock %}
 {% block widget %}
 <div class="card">
-  <p class="embed-title">{{ t('embed_menu_heading', chain=shop) }}</p>
+  <p class="embed-title">{{ heading }}</p>
   <table class="nutrition-table">
-    <thead><tr><th>#</th><th>{{ t('name_col') }}</th><th>{{ t('calories') }}</th></tr></thead>
+    <thead><tr><th>#</th><th>{{ t('name_col') }}</th>
+      <th>{{ t('protein') if by == 'protein' else t('calories') }}</th></tr></thead>
     <tbody>
     {% for it in items %}
       <tr><td class="rank-num">{{ loop.index }}</td>
           <td class="wrap">{{ it.name }}{% if it.price_yen %} <small>¥{{ '{:,}'.format(it.price_yen) }}</small>{% endif %}</td>
-          {# The same three labels the menu page uses: a figure never travels
-             without the rung it stands on (see get_shop_page_data). #}
-          <td><strong>{{ it.kcal|round(0)|int }}</strong> <small>kcal</small>
-            {% if it.kcal_source == 'chain' %}<span class="prov-tag chain">{{ t('embed_src_chain') }}</span>
-            {% elif it.kcal_source == 'table' %}<span class="prov-tag table">{{ t('embed_src_table') }}</span>
-            {% else %}<span class="prov-tag calc">{{ t('embed_src_calc') }}</span>{% endif %}</td></tr>
+          {# Ranked on the chain's own figures only (menu_ranked), and labelled
+             as such: a figure never travels without the rung it stands on. #}
+          <td>{% if by == 'protein' %}<strong>{{ it.protein_g }}</strong> <small>g</small>
+                <br><small>{{ it.kcal|round(0)|int }} kcal</small>
+              {% else %}<strong>{{ it.kcal|round(0)|int }}</strong> <small>kcal</small>{% endif %}
+            <span class="prov-tag chain">{{ t('embed_src_chain') }}</span></td></tr>
     {% endfor %}
     </tbody>
   </table>

@@ -15,17 +15,22 @@ from fastapi.testclient import TestClient
 
 from dataset_manager.api.server import app
 from dataset_manager.site import embeds
-from dataset_manager.site.router import EXAMPLE_CHAIN, EXAMPLE_FOOD, EXAMPLE_NUTRIENT
+from dataset_manager.site.router import (EXAMPLE_CHAIN, EXAMPLE_COMPARE, EXAMPLE_FOOD,
+                                          EXAMPLE_NUTRIENT)
 
 client = TestClient(app)
 BASE = "https://calories.jp"
+FOOD, OTHER, CHAIN = quote(EXAMPLE_FOOD), quote(EXAMPLE_COMPARE), quote(EXAMPLE_CHAIN)
 
-# Each widget, and the page it duplicates and must point back to.
+# Each widget, and the page it duplicates and must point back to. A comparison
+# duplicates two pages; its canonical is the first and its citation names both.
 WIDGETS = {
     "/embed/analyzer": "/analyzer",
-    f"/embed/food/{quote(EXAMPLE_FOOD)}": f"/food/{quote(EXAMPLE_FOOD)}",
+    f"/embed/food/{FOOD}": f"/food/{FOOD}",
+    f"/embed/compare/{FOOD}/{OTHER}": f"/food/{FOOD}",
     f"/embed/nutrient/{EXAMPLE_NUTRIENT}": f"/nutrient/{EXAMPLE_NUTRIENT}",
-    f"/embed/menu/{quote(EXAMPLE_CHAIN)}": f"/menu/{quote(EXAMPLE_CHAIN)}",
+    f"/embed/menu/{CHAIN}": f"/menu/{CHAIN}",
+    f"/embed/menu/{CHAIN}/protein": f"/menu/{CHAIN}",
     "/embed/cooking-yield": "/cooking-yield",
 }
 
@@ -104,12 +109,30 @@ class TestEmbedContent(unittest.TestCase):
         kcals = [int(k) for k in re.findall(r"<strong>(\d+)</strong> <small>kcal", body)]
         self.assertEqual(kcals, sorted(kcals))
 
+    def test_the_protein_list_runs_the_other_way(self):
+        body = client.get(f"/embed/menu/{CHAIN}/protein").text
+        grams = [float(g) for g in re.findall(r"<strong>([\d.]+)</strong> <small>g", body)]
+        self.assertEqual(len(grams), 10)
+        self.assertEqual(grams, sorted(grams, reverse=True))
+
+    def test_a_comparison_shows_both_foods_on_one_basis(self):
+        body = client.get(f"/embed/compare/{FOOD}/{OTHER}").text
+        self.assertEqual(body.count('<th class="wrap">'), 2)
+        self.assertIn("100gあたり", body)
+
     def test_nothing_is_offered_for_a_page_search_engines_will_not_index(self):
         """A citation pointing at a noindex page is a link to nowhere."""
         self.assertEqual(client.get("/embed/menu/" + quote("8番らーめん")).status_code, 404)
         self.assertNotIn("embed-offer", client.get("/menu/" + quote("8番らーめん")).text)
         self.assertEqual(client.get("/embed/nutrient/no-such-thing").status_code, 404)
         self.assertEqual(client.get("/embed/food/no-such-food").status_code, 404)
+        self.assertEqual(client.get(f"/embed/compare/{FOOD}/no-such-food").status_code, 404)
+
+    def test_a_list_the_chain_cannot_support_is_not_served(self):
+        """ガスト publishes calories but not protein. A protein ranking of it
+        could only be built from our estimates."""
+        self.assertEqual(client.get("/embed/menu/" + quote("ガスト") + "/protein").status_code, 404)
+        self.assertEqual(client.get(f"/embed/compare/{FOOD}/{FOOD}").status_code, 404)
 
 
 class TestTheSnippetsLinkBack(unittest.TestCase):
@@ -132,6 +155,12 @@ class TestTheSnippetsLinkBack(unittest.TestCase):
                 link = code.index(f'<a href="{BASE}{page}">')
                 self.assertGreater(link, code.index("</iframe>"))
                 self.assertIn(f'>calories.jp「', code[link:])
+
+    def test_a_comparison_cites_both_foods(self):
+        code = next(c for c in self.codes if "/embed/compare/" in c)
+        after = code[code.index("</iframe>"):]
+        self.assertIn(f'<a href="{BASE}/food/{FOOD}">', after)
+        self.assertIn(f'<a href="{BASE}/food/{OTHER}">', after)
 
     def test_the_link_is_an_ordinary_visible_link(self):
         """nofollow or a hidden link would give up exactly what the snippet is for;
@@ -166,8 +195,8 @@ class TestTheSnippetsLinkBack(unittest.TestCase):
 class TestTheCodeIsOfferedWhereTheFiguresAre(unittest.TestCase):
     def test_each_page_offers_its_own_widget(self):
         for path, page in WIDGETS.items():
-            if path == "/embed/analyzer":
-                continue
+            if path == "/embed/analyzer" or "/compare/" in path:
+                continue    # no page of their own; see the builder tests below
             with self.subTest(page=page):
                 codes = snippets(client.get(page).text)
                 self.assertTrue(any(f'src="{BASE}{path}"' in c for c in codes), page)
@@ -182,15 +211,70 @@ class TestTheCodeIsOfferedWhereTheFiguresAre(unittest.TestCase):
 
 
 class TestTheMenuRanking(unittest.TestCase):
-    def test_it_ranks_no_estimates(self):
-        """Sorting by an estimate floats its worst underestimates to the top."""
+    MENU = [{"name": "チキンのトマト煮込み", "kcal": 30, "protein_g": 40, "kcal_source": "mext_calc"},
+            {"name": "【限定】トッピング 生ハム", "kcal": 11, "protein_g": 3, "kcal_source": "chain"},
+            {"name": "味噌汁", "kcal": 28, "protein_g": 2.1, "kcal_source": "chain"},
+            {"name": "ロースかつ定食", "kcal": 980, "protein_g": 38.5, "kcal_source": "chain"},
+            {"name": "ごはん", "kcal": 156, "protein_g": 2.5, "kcal_source": "table"},
+            {"name": "未公表の皿", "kcal": None, "protein_g": None, "kcal_source": None}]
+
+    def test_it_ranks_only_what_the_chain_published(self):
+        """Not our estimates — sorting by one floats its worst errors to the
+        top — and not a composition-table figure, which is per 100 g and
+        cannot be ranked against a whole dish."""
         from dataset_manager.site.router import menu_ranked
-        menu = [{"name": "チキンのトマト煮込み", "kcal": 30, "kcal_source": "mext_calc"},
-                {"name": "【限定】トッピング 生ハム", "kcal": 11, "kcal_source": "chain"},
-                {"name": "味噌汁", "kcal": 28, "kcal_source": "chain"},
-                {"name": "ごはん", "kcal": 234, "kcal_source": "table"},
-                {"name": "未公表の皿", "kcal": None, "kcal_source": None}]
-        self.assertEqual([m["name"] for m in menu_ranked(menu)], ["味噌汁", "ごはん"])
+        self.assertEqual([m["name"] for m in menu_ranked(self.MENU)], ["味噌汁", "ロースかつ定食"])
+        self.assertEqual([m["name"] for m in menu_ranked(self.MENU, "protein")],
+                         ["ロースかつ定食", "味噌汁"])
+
+
+class TestTheBuilders(unittest.TestCase):
+    """/embed builds the code for any food, pair, nutrient or chain."""
+
+    def code(self, query, key):
+        body = client.get("/embed", params=query).text
+        return [c for c in snippets(body) if f"/embed/{key}" in c], body
+
+    def test_any_two_foods(self):
+        codes, _ = self.code({"a": EXAMPLE_COMPARE, "b": EXAMPLE_FOOD}, "compare")
+        self.assertIn(f'src="{BASE}/embed/compare/{OTHER}/{FOOD}"', codes[0])
+
+    def test_typed_text_finds_a_food_without_javascript(self):
+        codes, _ = self.code({"food_q": "ぶた"}, "food/")
+        self.assertTrue(codes)
+        self.assertNotIn(f"/embed/food/{FOOD}", codes[0])
+
+    def test_text_typed_over_a_choice_goes_by_the_text(self):
+        """Without JavaScript the hidden slug still holds the old choice."""
+        codes, _ = self.code({"food": EXAMPLE_FOOD, "food_q": "ぶた"}, "food/")
+        self.assertNotIn(f"/embed/food/{FOOD}", codes[0])
+
+    def test_a_pair_of_one_food_is_not_a_comparison(self):
+        codes, _ = self.code({"a": EXAMPLE_FOOD, "b": EXAMPLE_FOOD}, "compare")
+        self.assertIn(f"/embed/compare/{FOOD}/{OTHER}", codes[0])
+
+    def test_any_nutrient(self):
+        codes, _ = self.code({"nutrient": "fat"}, "nutrient")
+        self.assertIn(f'src="{BASE}/embed/nutrient/fat"', codes[0])
+
+    def test_a_chain_without_protein_figures_says_so(self):
+        codes, body = self.code({"chain": "ガスト", "rank": "protein"}, "menu")
+        self.assertEqual(len(codes), 1)
+        self.assertIn("/embed/menu/" + quote("ガスト") + '"', codes[0])
+        self.assertIn("たんぱく質を公表していない", body)
+
+    def test_nonsense_falls_back_to_the_examples(self):
+        r = client.get("/embed", params={"food": "x", "a": "y", "nutrient": "z", "chain": "w", "rank": "v"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(f"/embed/food/{FOOD}", html.unescape(r.text))
+
+    def test_only_the_plain_page_is_indexable(self):
+        self.assertNotIn("noindex", client.get("/embed").text)
+        self.assertIn("noindex", client.get("/embed", params={"nutrient": "fat"}).text)
+
+    def test_a_food_page_leads_to_the_comparison_builder(self):
+        body = client.get(f"/food/{FOOD}").text
+        self.assertIn(f'href="/embed?a={FOOD}#compare" rel="nofollow"', body)
 
 
 class TestFoodFigures(unittest.TestCase):
