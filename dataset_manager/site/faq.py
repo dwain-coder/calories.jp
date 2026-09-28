@@ -46,8 +46,8 @@ def food_faq(lang, name, nutrition, salt_g=None, portions=None, preps=None,
         if salt_g is not None:
             qa.append((
                 f"{name}の食塩相当量は？",
-                f"100gあたり{_R1(salt_g)}gです。1日の目標量（男性7.5g未満・女性6.5g未満、"
-                f"日本人の食事摂取基準2020年版）に対して約{round(salt_g / 7.0 * 100)}%にあたります。",
+                f"100gあたり{_R1(salt_g)}gで、栄養素等表示基準値（7.0g）の約{round(salt_g / 7.0 * 100)}%にあたります。"
+                f"1日の目標量は男性7.5g未満・女性6.5g未満です（日本人の食事摂取基準2025年版）。",
             ))
         if preps:
             hi = max(preps, key=lambda x: x["energy_kcal"] or 0)

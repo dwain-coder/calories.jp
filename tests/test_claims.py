@@ -45,5 +45,35 @@ class TestClaims(unittest.TestCase):
         self.assertEqual(out[0]["code"], "VITC")    # 10x its threshold
 
 
+class TestReferenceValues(unittest.TestCase):
+    """食品表示基準 別表第十, as revised by 令和7年内閣府令第26号.
+
+    The %-of-reference figures used the pre-2025 table — protein 81 g, fat
+    62 g, salt 7.5 g, vitamin D 5.5 µg — while the claims above already used the
+    revised 別表第十二, so one page measured against two editions of the law.
+    """
+    STATUTE = {"energy_kcal": 2200, "protein_g": 85, "fat_g": 70,
+               "carbohydrate_g": 320, "salt_g": 7.0,
+               "PROT-": 85, "FAT-": 70, "CHOCDF-": 320, "FIB-": 20,
+               "CA": 700, "FE": 6.5, "K": 2800, "MG": 320, "ZN": 8.5,
+               "VITC": 100, "VITA_RAE": 770, "VITD": 9.0, "VITB12": 4.0,
+               "THIA": 1.0, "RIBF": 1.4, "FOL": 240}
+
+    def test_every_table_uses_the_revised_values(self):
+        from dataset_manager.site.cards import FINGERPRINT
+        from dataset_manager.site.i18n import MACRO_DV, MICRO_DV
+        used = dict(MACRO_DV["ja"])
+        used.update({code: dv for code, (_label, dv, _unit) in MICRO_DV["ja"].items()})
+        used.update({code: dv for code, _name, dv in FINGERPRINT})
+        wrong = {k: v for k, v in used.items() if self.STATUTE.get(k) != v}
+        self.assertEqual(wrong, {})
+
+    def test_no_page_cites_the_old_edition(self):
+        from dataset_manager.site.i18n import STRINGS
+        old = [k for lang in STRINGS.values() for k, v in lang.items()
+               if "表示基準値" in v and "2020" in v]
+        self.assertEqual(old, [])
+
+
 if __name__ == "__main__":
     unittest.main()
