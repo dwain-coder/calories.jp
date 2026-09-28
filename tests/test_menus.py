@@ -278,3 +278,16 @@ class TestEmptyRows(unittest.TestCase):
         for shop in queries.shops_index("ja"):
             data = queries.get_shop_page_data(queries.get_shop_page("ja", shop["slug"]))
             self.assertEqual(shop["item_count"], len(data["menu"]), shop["slug"])
+
+    def test_the_price_range_is_the_pages_own(self):
+        """「価格は5円〜」 was とんかつ新宿さぼてん's からし: the range was taken at
+        import from every row, condiments and all, and about 60 chains opened
+        below ¥100 in their meta description and on the index."""
+        from dataset_manager.site import queries
+        for shop in queries.shops_index("ja"):
+            menu = queries.get_shop_page_data(queries.get_shop_page("ja", shop["slug"]))["menu"]
+            priced = [m for m in menu if m["price_yen"]]
+            with self.subTest(shop=shop["slug"]):
+                self.assertEqual(shop["price_min"], min((m["price_yen"] for m in priced), default=None))
+                self.assertEqual(shop["price_max"], max(
+                    (m["price_max_yen"] or m["price_yen"] for m in priced), default=None))

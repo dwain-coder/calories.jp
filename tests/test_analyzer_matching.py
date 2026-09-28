@@ -22,6 +22,23 @@ from pathlib import Path
 from dataset_manager.site import foodterms
 
 RAW = Path("data/raw/analyzer_examples")
+# The chains' published figures live in the full working database, which is
+# not in the repository. sqlite3.connect() on a missing path creates an empty
+# file and the class then errors, so a clean checkout skips it instead.
+FULL_DB = Path("data/metadata/dataset_manager.db")
+
+
+def _have_full_db():
+    """Opened read-only, so asking cannot create the file it asks about."""
+    if not FULL_DB.is_file():
+        return False
+    import sqlite3
+    conn = sqlite3.connect(f"file:{FULL_DB.as_posix()}?mode=ro", uri=True)
+    try:
+        return conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name = 'product_photos'").fetchone() is not None
+    finally:
+        conn.close()
 
 
 def match(name):
@@ -97,6 +114,7 @@ class TestAnimals(unittest.TestCase):
         self.assertTrue(foodterms.conflicts("豚ロース", "うし かた 赤肉 生"))
 
 
+@unittest.skipUnless(_have_full_db(), "needs the full working database, data/metadata/dataset_manager.db")
 class TestAgainstWhatTheChainsPublish(unittest.TestCase):
     """The regression set. `tools/score_analyzer.py` prints the same figures."""
 
@@ -105,7 +123,7 @@ class TestAgainstWhatTheChainsPublish(unittest.TestCase):
         import sqlite3
         from tools.score_analyzer import rescore
 
-        conn = sqlite3.connect("data/metadata/dataset_manager.db")
+        conn = sqlite3.connect(FULL_DB)
         cls.rows, cls.misses = [], []
         for path in sorted(RAW.glob("*.json")):
             if not path.stem.isdigit():

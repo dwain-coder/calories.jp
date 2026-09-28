@@ -180,7 +180,7 @@ def _shop_stats(conn, shop_id, with_nutrition):
     renders as a dash.
     """
     items = conn.execute(
-        """SELECT smi.name, smi.item_id, smi.price_yen, cn.energy_kcal AS chain_kcal,
+        """SELECT smi.name, smi.item_id, smi.price_yen, smi.price_max_yen, cn.energy_kcal AS chain_kcal,
                   min.energy_kcal AS shown_kcal, min.provenance,
                   pp.file AS product_image, ii.url AS db_image_url
            FROM shop_menu_items smi
@@ -211,6 +211,12 @@ def _shop_stats(conn, shop_id, with_nutrition):
         # for the report so the gap between the two is visible.
         "shown": sum(1 for i in items if i["shown_kcal"] is not None or sourced(i)),
         "priced": sum(1 for i in items if i["price_yen"]),
+        # The price range of the same rows. Taken at import from every row, it
+        # was a condiment's: 「価格は5円〜」 for さぼてん was its からし, ¥20 for
+        # ガスト its ketchup — about 60 chains opened below ¥100.
+        "price_min": min((i["price_yen"] for i in items if i["price_yen"]), default=None),
+        "price_max": max((i["price_max_yen"] or i["price_yen"] for i in items if i["price_yen"]),
+                         default=None),
     }
 
 
@@ -443,11 +449,12 @@ def build_pages(conn, lang="ja"):
             # UPDATE keeps them agreeing instead of four places to forget.
             conn.execute("UPDATE shops SET name = ? WHERE id = ?", (name, shop["id"]))
         stats = _shop_stats(conn, shop["id"], with_nutrition)
-        if stats["items"] != shop["item_count"]:
-            conn.execute("UPDATE shops SET item_count = ? WHERE id = ?",
-                         (stats["items"], shop["id"]))
-        stats["price_min"] = shop["price_min"]
-        stats["price_max"] = shop["price_max"]
+        # Written back for the same reason as the name: the index, the page, the
+        # meta description and the JSON-LD all read the shops row.
+        counted = (stats["items"], stats["price_min"], stats["price_max"])
+        if counted != (shop["item_count"], shop["price_min"], shop["price_max"]):
+            conn.execute("UPDATE shops SET item_count = ?, price_min = ?, price_max = ? WHERE id = ?",
+                         (*counted, shop["id"]))
         ok, reason = gate(stats)
         title, meta = _titles(name, stats, shop["imported_at"])
 
