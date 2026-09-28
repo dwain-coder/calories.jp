@@ -2105,6 +2105,10 @@ button[data-copy].copied { background: var(--verified-bg, #e8f5e9); border-color
    running off the side — the copy button is what actually gets used. */
 .api-example[id] code { white-space: pre-wrap; word-break: break-word; }
 .embed-preview { padding: 0.6rem; }
+.embed-preview-label { margin: 1rem 0 0.4rem; font-size: 0.85rem; }
+/* Roughly what a blog theme does to a bare table, so the preview is not a wall of text. */
+.embed-html-preview table { border-collapse: collapse; }
+.embed-html-preview th, .embed-html-preview td { border: 1px solid var(--hairline); padding: 0.3rem 0.6rem; }
 .embed-offer summary { cursor: pointer; }
 .embed-offer summary h2 { display: inline; }
 .embed-toc { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
