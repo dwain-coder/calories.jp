@@ -87,6 +87,20 @@ class TestEmbedContent(unittest.TestCase):
                 self.assertNotIn("site-header", body)
                 self.assertNotIn("site-footer", body)
 
+    def test_every_widget_says_what_its_figures_are_and_are_not(self):
+        """A number on someone else's page, without our site around it, needs
+        its caveat in the frame: what kind of figure it is, that it is not
+        advice, and where the full terms are."""
+        from dataset_manager.site.i18n import t
+        expected = {"/embed/analyzer": "api_terms_estimates", "/embed/cooking-yield": "embed_disc_yield"}
+        for path in WIDGETS:
+            kind = expected.get(path, "embed_disc_chain" if "/menu/" in path else "embed_disc_food")
+            with self.subTest(path=path):
+                body = client.get(path).text
+                self.assertIn(t("ja", kind), body)
+                self.assertIn(t("ja", "embed_disc_advice"), body)
+                self.assertIn(f'href="{BASE}/terms"', body)
+
     def test_every_widget_reports_its_height(self):
         """An iframe cannot size itself; without this the widget is clipped."""
         for path in WIDGETS:
@@ -208,6 +222,9 @@ class TestTheCodeIsOfferedWhereTheFiguresAre(unittest.TestCase):
         table = next(c for c in codes if c.startswith("<table>"))
         self.assertNotIn("<iframe", table)
         self.assertIn(f'<a href="{BASE}/food/{quote(EXAMPLE_FOOD)}">', table)
+        # Pasted HTML never updates, so its caveat has to be in the paste.
+        from dataset_manager.site.i18n import t
+        self.assertIn(t("ja", "embed_disc_html"), table)
 
 
 class TestTheMenuRanking(unittest.TestCase):

@@ -780,11 +780,11 @@ def embed_chains():
     return tuple(out)
 
 
-# The height each frame starts at, measured at a blog's column width. The widget
-# corrects it once loaded; starting close keeps the host page from jumping, which
-# is also what its own Core Web Vitals score is measuring.
-EMBED_HEIGHT = {"analyzer": 180, "food": 590, "compare": 480, "nutrient": 660,
-                "menu_kcal": 650, "menu_protein": 880, "yield": 320}
+# The height each frame starts at, measured at a 680 px blog column with the
+# disclaimer in. The widget corrects it once loaded; starting close keeps the host
+# page from jumping, which is also what its own Core Web Vitals score measures.
+EMBED_HEIGHT = {"analyzer": 190, "food": 790, "compare": 540, "nutrient": 800,
+                "menu_kcal": 760, "menu_protein": 960, "yield": 470}
 
 
 def _iframe_code(path, height, title, links):

@@ -38,11 +38,20 @@
   .embed-wrap td.wrap { white-space: normal; }
   .embed-credit a { color: var(--ink-soft); }
   .embed-credit strong { color: var(--ink); font-weight: 700; }
+  .embed-disclaimer { margin: 0.6rem 0 0; font-size: 0.72rem; line-height: 1.55; color: var(--ink-faint); }
+  .embed-disclaimer a { color: var(--ink-soft); }
 </style>
 </head>
 <body>
 <div class="embed-wrap">
   {% block widget %}{% endblock %}
+
+  {# The disclaimer lives inside the frame on purpose: it travels with every
+     copy of the widget, and a change here reaches every page it is on without
+     anyone re-pasting code. Each widget says what its own figures are. #}
+  <p class="embed-disclaimer">{% block disclaimer %}{% endblock %}<br>
+    {{ t('embed_disc_advice') }}
+    <a href="{{ seo_base }}/terms" target="_blank" rel="noopener">{{ t('terms_title') }}</a></p>
 
   <p class="embed-credit">
     <span>{{ t('embed_source') }}</span>
