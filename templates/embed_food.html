@@ -1,0 +1,47 @@
+{% extends "embed_base.html" %}
+{% block title %}{{ name }}{% endblock %}
+{% block widget %}
+{% set per_rows, serving = rows %}
+<div class="card" style="--c: {{ group_color(d.item.category) }}">
+  <p class="embed-title">{{ name }}</p>
+  <div class="food-hero">
+    <div class="food-hero-figure">
+      {{ pfc_donut(d.pfc, 112, (serving.nutrition.energy_kcal if serving else d.nutrition.energy_kcal)) | safe }}
+    </div>
+    <div class="food-hero-body">
+      {# Same headline as the food page: a serving where we know one, per 100 g beside it. #}
+      <p class="kcal-hero">
+        {% if serving %}<strong>{{ serving.nutrition.energy_kcal|round(0)|int }}</strong>
+        <span class="unit">{{ t('kcal') }}</span>
+        <span class="per">/ {{ serving.label }}（{{ serving.grams|round(0)|int }}g）</span>
+        {% else %}<strong>{{ d.nutrition.energy_kcal|round(0)|int if d.nutrition.energy_kcal is not none else '—' }}</strong>
+        <span class="unit">{{ t('kcal') }}</span>
+        <span class="per">/ {{ t('per_100g') }}</span>{% endif %}
+      </p>
+      {% if d.pfc %}
+      <div class="pfc" role="img" aria-label="{{ t('pfc_label') }}: {{ t('protein') }} {{ d.pfc.p }}%, {{ t('fat') }} {{ d.pfc.f }}%, {{ t('carbs') }} {{ d.pfc.c }}%">
+        <div class="pfc-bar">
+          <span class="pfc-p" style="width: {{ d.pfc.p }}%"></span><span class="pfc-f" style="width: {{ d.pfc.f }}%"></span><span class="pfc-c" style="width: {{ d.pfc.c }}%"></span>
+        </div>
+        <div class="pfc-legend">
+          <span class="lp"><i></i>{{ t('protein') }} <b>{{ d.pfc.p }}%</b></span>
+          <span class="lf"><i></i>{{ t('fat') }} <b>{{ d.pfc.f }}%</b></span>
+          <span class="lc"><i></i>{{ t('carbs') }} <b>{{ d.pfc.c }}%</b></span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <table class="nutrition-table">
+    <thead><tr><th></th><th>{{ t('per_100g') }}</th>
+      {% if serving %}<th>{{ serving.label }}（{{ serving.grams|round(0)|int }}g）</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for label, per100, per_serving in per_rows %}
+      <tr><td>{{ label }}</td><td>{{ per100 }}</td>{% if serving %}<td>{{ per_serving }}</td>{% endif %}</tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="license">{{ seo.source_label(d.item.source, lang) }}{% if d.macro_quality %}{{ t('embed_paren_note') }}{% endif %}</p>
+</div>
+{% endblock %}
+{% block disclaimer %}{{ t('embed_disc_food') }}{% endblock %}

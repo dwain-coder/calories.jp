@@ -1,0 +1,26 @@
+{% extends "embed_base.html" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block widget %}
+<div class="card">
+  <p class="embed-title">{{ heading }}</p>
+  <table class="nutrition-table">
+    <thead><tr><th>{{ t('per_100g') }}</th>
+      {% for _d, name in foods %}<th class="wrap">{{ name }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr><td>{{ row[0] }}</td>{% for v in row[1:] %}<td>{{ v }}</td>{% endfor %}</tr>
+    {% endfor %}
+    <tr><td>{{ t('pfc_label') }}</td>
+      {% for d, name in foods %}<td>{% if d.pfc %}
+        <div class="pfc-bar" role="img" aria-label="{{ name }}: {{ t('protein') }} {{ d.pfc.p }}%, {{ t('fat') }} {{ d.pfc.f }}%, {{ t('carbs') }} {{ d.pfc.c }}%">
+          <span class="pfc-p" style="width: {{ d.pfc.p }}%"></span><span class="pfc-f" style="width: {{ d.pfc.f }}%"></span><span class="pfc-c" style="width: {{ d.pfc.c }}%"></span>
+        </div>
+        <small>P{{ d.pfc.p }} F{{ d.pfc.f }} C{{ d.pfc.c }}</small>{% else %}—{% endif %}</td>{% endfor %}</tr>
+    </tbody>
+  </table>
+  <p class="license">
+    {%- for src in foods | map(attribute='0.item.source') | unique %}{{ '・' if not loop.first }}{{ seo.source_label(src, lang) }}{% endfor %}
+    {%- if foods | selectattr('0.macro_quality') | list %}{{ t('embed_paren_note') }}{% endif %}</p>
+</div>
+{% endblock %}
+{% block disclaimer %}{{ t('embed_disc_food') }}{% endblock %}

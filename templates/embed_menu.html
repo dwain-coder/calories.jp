@@ -1,0 +1,25 @@
+{% extends "embed_base.html" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block widget %}
+<div class="card">
+  <p class="embed-title">{{ heading }}</p>
+  <table class="nutrition-table">
+    <thead><tr><th>#</th><th>{{ t('name_col') }}</th>
+      <th>{{ t('protein') if by == 'protein' else t('calories') }}</th></tr></thead>
+    <tbody>
+    {% for it in items %}
+      <tr><td class="rank-num">{{ loop.index }}</td>
+          <td class="wrap">{{ it.name }}{% if it.price_yen %} <small>¥{{ '{:,}'.format(it.price_yen) }}</small>{% endif %}</td>
+          {# Ranked on the chain's own figures only (menu_ranked), and labelled
+             as such: a figure never travels without the rung it stands on. #}
+          <td>{% if by == 'protein' %}<strong>{{ it.protein_g }}</strong> <small>g</small>
+                <br><small>{{ it.kcal|round(0)|int }} kcal</small>
+              {% else %}<strong>{{ it.kcal|round(0)|int }}</strong> <small>kcal</small>{% endif %}
+            <span class="prov-tag chain">{{ t('embed_src_chain') }}</span></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="license">{{ t('embed_menu_note') }}</p>
+</div>
+{% endblock %}
+{% block disclaimer %}{{ t('embed_disc_chain') }}{% endblock %}

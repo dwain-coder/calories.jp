@@ -169,6 +169,23 @@ def is_extra(name):
                 or _NOT_FOOD.search(n))
 
 
+# A qualifier in front of the name: 「【お料理ご注文のお客様限定】トッピング 生ハム」.
+_LEADING_QUALIFIER = re.compile(r"^(?:【[^】]*】\s*)+")
+_BRACKETED = re.compile(r"[\[［]([^\]］]*)[\]］]")
+
+
+def unqualified(name):
+    """The name without a leading 【…】, and with ［追加］ read as 追加.
+
+    is_extra anchors on the start of a name, so a qualifier in front hides the
+    topping behind it: ガスト's 「【…限定】［追加］ケチャップ」 passed as a dish.
+    Not applied inside is_extra yet — build_shops precomputes each chain's 品数
+    with is_extra, and changing the rule without rebuilding site.db would leave
+    every affected count disagreeing with its page. Fold it in with a rebuild.
+    """
+    return _BRACKETED.sub(lambda m: m.group(1), _LEADING_QUALIFIER.sub("", name or "")).strip()
+
+
 def says_nothing(price_yen, energy_kcal):
     """A row with neither a price nor a calorie.
 

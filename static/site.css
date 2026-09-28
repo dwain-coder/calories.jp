@@ -2097,16 +2097,33 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.8rem; flex-wrap: wrap;
 }
-.snippet-head h2 { margin: 0; }
-#copy-embed.copied { background: var(--verified-bg, #e8f5e9); border-color: #1e7e34; color: #1e7e34; }
+.snippet-head h2, .snippet-head h3 { margin: 0; }
+.snippet-head h3 { font-size: 0.95rem; }
+.snippet-head + .api-example { margin-top: 0.5rem; }
+button[data-copy].copied { background: var(--verified-bg, #e8f5e9); border-color: #1e7e34; color: #1e7e34; }
 /* The snippet is meant to be read as well as copied, so it wraps rather than
    running off the side — the copy button is what actually gets used. */
-#embed-snippet code { white-space: pre-wrap; word-break: break-word; }
+.api-example[id] code { white-space: pre-wrap; word-break: break-word; }
 .embed-preview { padding: 0.6rem; }
+.embed-preview-label { margin: 1rem 0 0.4rem; font-size: 0.85rem; }
+/* Roughly what a blog theme does to a bare table, so the preview is not a wall of text. */
+.embed-html-preview table { border-collapse: collapse; }
+.embed-html-preview th, .embed-html-preview td { border: 1px solid var(--hairline); padding: 0.3rem 0.6rem; }
+.embed-offer summary { cursor: pointer; }
+.embed-offer summary h2 { display: inline; }
+.embed-toc { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.embed-builder {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem 0.9rem;
+  margin: 0.4rem 0 0.9rem;
+}
+.embed-pick { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; flex: 1 1 14rem; }
+.embed-pick input, .embed-pick select { width: 100%; }
+.embed-rank { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.2rem 0.8rem; font-size: 0.85rem; }
+.embed-rank legend { padding: 0; margin-bottom: 0.2rem; }
 
 @media (max-width: 640px) {
   .snippet-head { gap: 0.5rem; }
-  #copy-embed { width: 100%; justify-content: center; }
+  button[data-copy] { width: 100%; justify-content: center; }
 }
 
 /* ------------------------------------------------- The analyzer as the hero

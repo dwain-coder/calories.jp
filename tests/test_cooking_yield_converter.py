@@ -8,11 +8,15 @@ every rate as against the raw food would offer 100 g of dry spaghetti becoming
 """
 import re
 import unittest
-from pathlib import Path
 
+from fastapi.testclient import TestClient
+
+from dataset_manager.api.server import app
 from dataset_manager.site import queries
 
-PAGE = Path("templates/cooking_yield.html").read_text(encoding="utf-8")
+# The rendered page, not the template file: the converter lives in a partial
+# shared with its embed, and what matters is that the page still carries it.
+PAGE = TestClient(app).get("/cooking-yield").text
 
 
 class TestTheRatesThemselves(unittest.TestCase):
