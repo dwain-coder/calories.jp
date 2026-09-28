@@ -1,6 +1,7 @@
 """Public HTML site: pages at the root, robots.txt, sitemaps."""
 import hashlib
 import os
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
 
@@ -201,6 +202,7 @@ def food_page(request: Request, slug: str):
         "crumbs": crumbs,
         "embed_offer": (food_snippets(slug, data, name)
                         if page.get("indexable") and data["nutrition"] else None),
+        "embed_compare_url": f"/embed?a={quote(slug)}#compare",
     })
 
 
@@ -294,8 +296,8 @@ def menu_page(request: Request, slug: str):
         "jsonld": [seo.jsonld_script(j) for j in jsonld],
         "meta_description": page.get("meta_description"),
         "noindex": not page.get("indexable"),
-        "embed_offer": (menu_snippets(canonical_slug, name)
-                        if page.get("indexable") and menu_ranked(data["menu"]) else None),
+        "embed_offer": menu_snippets(canonical_slug, name, [
+            by for by in MENU_LISTS if page.get("indexable") and menu_ranked(data["menu"], by)]),
     })
 
 
@@ -728,59 +730,100 @@ def _food_for_embed(slug):
     return data, queries.display_name(data["names"], data["item"], SITE_LANG)
 
 
-def menu_ranked(menu):
-    """A chain's ten lowest-calorie dishes, ranked on figures that were
-    published or measured — never on our own per-serving estimates. Sorting by
-    an estimate floats its worst underestimates to the top: ガスト's
-    チキンのトマト煮込み came out at 30 kcal."""
-    return sorted((m for m in menu if m["kcal"] is not None
-                   and m["kcal_source"] in ("chain", "table")
+# by -> (URL suffix, heading key, the field ranked)
+MENU_LISTS = {"kcal": ("", "embed_menu_heading", "kcal"),
+              "protein": ("/protein", "embed_protein_heading", "protein_g")}
+
+
+def menu_ranked(menu, by="kcal"):
+    """A chain's top ten — lowest calories first, or most protein first —
+    ranked only on figures the chain itself published.
+
+    Sorting by an estimate floats its worst errors to the top: ranked on ours,
+    ガスト's チキンのトマト煮込み came out at 30 kcal. And a composition-table
+    figure is per 100 g, which cannot be ranked against a whole dish.
+    """
+    field = MENU_LISTS[by][2]
+    return sorted((m for m in menu if m.get(field) is not None and m["kcal_source"] == "chain"
                    and not menuterms.is_extra(menuterms.unqualified(m["name"]))),
-                  key=lambda m: m["kcal"])[:10]
+                  key=lambda m: m[field], reverse=(by == "protein"))[:10]
 
 
-def _menu_for_embed(slug):
+def _menu_for_embed(slug, by="kcal"):
     page = queries.get_shop_page(SITE_LANG, slug)
     if not page or not page.get("indexable"):
         raise HTTPException(status_code=404, detail="Not found")
     data = queries.get_shop_page_data(page)
-    items = menu_ranked(data["menu"])
+    items = menu_ranked(data["menu"], by)
     if not items:
         raise HTTPException(status_code=404, detail="Not found")
     return page, data["shop"].get("name", slug), items
 
 
+@lru_cache(maxsize=1)
+def embed_chains():
+    """(slug, name, lists) for every chain a list can be built for.
+
+    ponytail: computed once per process — about 2 s over the 11 indexable
+    chains, and the database only changes with a new image. If it ever changes
+    under a running server, drop the cache.
+    """
+    out = []
+    for shop in queries.shops_index(SITE_LANG):
+        page = queries.get_shop_page(SITE_LANG, shop["slug"]) if shop.get("indexable") else None
+        if not page or not page.get("indexable"):
+            continue
+        menu = queries.get_shop_page_data(page)["menu"]
+        lists = tuple(by for by in MENU_LISTS if menu_ranked(menu, by))
+        if lists:
+            out.append((page["slug"], shop["name"], lists))
+    return tuple(out)
+
+
 # The height each frame starts at, measured at a blog's column width. The widget
 # corrects it once loaded; starting close keeps the host page from jumping, which
 # is also what its own Core Web Vitals score is measuring.
-EMBED_HEIGHT = {"analyzer": 180, "food": 590, "nutrient": 660, "menu": 650, "yield": 320}
+EMBED_HEIGHT = {"analyzer": 180, "food": 590, "compare": 480, "nutrient": 660,
+                "menu_kcal": 650, "menu_protein": 880, "yield": 320}
+
+
+def _iframe_code(path, height, title, links):
+    return (t(SITE_LANG, "embed_kind_iframe"), embeds.iframe(path, height, title, links))
 
 
 def food_snippets(slug, data, name):
     url = seo.page_url(SITE_LANG, "food", slug)
-    return [(t(SITE_LANG, "embed_kind_iframe"),
-             embeds.iframe(f"/embed/food/{quote(slug)}", EMBED_HEIGHT["food"], name, url, name)),
+    return [_iframe_code(f"/embed/food/{quote(slug)}", EMBED_HEIGHT["food"], name, [(url, name)]),
             (t(SITE_LANG, "embed_kind_html"), embeds.food_table(data, name, url))]
+
+
+def compare_snippets(a, a_name, b, b_name):
+    heading = t(SITE_LANG, "embed_compare_heading", a=a_name, b=b_name)
+    links = [(seo.page_url(SITE_LANG, "food", a), a_name), (seo.page_url(SITE_LANG, "food", b), b_name)]
+    return [_iframe_code(f"/embed/compare/{quote(a)}/{quote(b)}", EMBED_HEIGHT["compare"], heading, links)]
 
 
 def nutrient_snippets(slug, heading):
     url = seo.base_url(SITE_LANG) + f"/nutrient/{slug}"
-    return [(t(SITE_LANG, "embed_kind_iframe"),
-             embeds.iframe(f"/embed/nutrient/{slug}", EMBED_HEIGHT["nutrient"], heading, url, heading))]
+    return [_iframe_code(f"/embed/nutrient/{slug}", EMBED_HEIGHT["nutrient"], heading, [(url, heading)])]
 
 
-def menu_snippets(page_slug, shop_name):
+def menu_snippets(page_slug, shop_name, lists):
+    """One code per list the chain can support, each headed by what it ranks."""
     url = seo.base_url(SITE_LANG) + f"/menu/{quote(page_slug)}"
-    heading = t(SITE_LANG, "embed_menu_heading", chain=shop_name)
-    return [(t(SITE_LANG, "embed_kind_iframe"),
-             embeds.iframe(f"/embed/menu/{quote(page_slug)}", EMBED_HEIGHT["menu"], heading, url, heading))]
+    out = []
+    for by in lists:
+        suffix, key, _field = MENU_LISTS[by]
+        heading = t(SITE_LANG, key, chain=shop_name)
+        out.append((heading, embeds.iframe(f"/embed/menu/{quote(page_slug)}{suffix}",
+                                           EMBED_HEIGHT["menu_" + by], heading, [(url, heading)])))
+    return out
 
 
 def yield_snippets():
     title = t(SITE_LANG, "yield_calc_title")
-    return [(t(SITE_LANG, "embed_kind_iframe"),
-             embeds.iframe("/embed/cooking-yield", EMBED_HEIGHT["yield"], title,
-                           seo.base_url(SITE_LANG) + "/cooking-yield", title))]
+    return [_iframe_code("/embed/cooking-yield", EMBED_HEIGHT["yield"], title,
+                         [(seo.base_url(SITE_LANG) + "/cooking-yield", title)])]
 
 
 @router.get("/embed/analyzer", response_class=HTMLResponse)
@@ -797,6 +840,18 @@ def embed_food(request: Request, slug: str):
                   {"d": data, "name": name, "rows": embeds.food_rows(data)})
 
 
+@router.get("/embed/compare/{a}/{b}", response_class=HTMLResponse)
+def embed_compare(request: Request, a: str, b: str):
+    """Two foods side by side, per 100 g. Canonical to the first; the snippet
+    cites both."""
+    if a == b:
+        raise HTTPException(status_code=404, detail="Not found")
+    (da, na), (db, nb) = _food_for_embed(a), _food_for_embed(b)
+    return _embed(request, "embed_compare.html", seo.page_url(SITE_LANG, "food", a), {
+        "foods": [(da, na), (db, nb)], "rows": embeds.compare_rows(da, db),
+        "heading": t(SITE_LANG, "embed_compare_heading", a=na, b=nb)})
+
+
 @router.get("/embed/nutrient/{slug}", response_class=HTMLResponse)
 def embed_nutrient(request: Request, slug: str):
     """The top ten of one nutrient ranking, measured values only."""
@@ -811,12 +866,22 @@ def embed_nutrient(request: Request, slug: str):
                   {"rows": rows, "term": term, "heading": nutrient_pages.title(term, SITE_LANG)})
 
 
+def _embed_menu(request, slug, by):
+    page, shop_name, items = _menu_for_embed(slug, by)
+    return _embed(request, "embed_menu.html", seo.base_url(SITE_LANG) + f"/menu/{quote(page['slug'])}",
+                  {"heading": t(SITE_LANG, MENU_LISTS[by][1], chain=shop_name), "items": items, "by": by})
+
+
 @router.get("/embed/menu/{slug}", response_class=HTMLResponse)
 def embed_menu(request: Request, slug: str):
-    """A chain's ten lowest-calorie dishes, each labelled with where its figure came from."""
-    page, shop_name, items = _menu_for_embed(slug)
-    return _embed(request, "embed_menu.html", seo.base_url(SITE_LANG) + f"/menu/{quote(page['slug'])}",
-                  {"shop": shop_name, "items": items})
+    """A chain's ten lowest-calorie dishes, on the figures it published."""
+    return _embed_menu(request, slug, "kcal")
+
+
+@router.get("/embed/menu/{slug}/protein", response_class=HTMLResponse)
+def embed_menu_protein(request: Request, slug: str):
+    """A chain's ten highest-protein dishes, for the chains that publish protein."""
+    return _embed_menu(request, slug, "protein")
 
 
 @router.get("/embed/cooking-yield", response_class=HTMLResponse)
@@ -826,51 +891,109 @@ def embed_cooking_yield(request: Request):
                   {"rows": queries.cooking_yields(SITE_LANG)})
 
 
-# The examples /embed shows. Real pages, so the preview is the actual widget.
-EXAMPLE_FOOD, EXAMPLE_NUTRIENT, EXAMPLE_CHAIN = "にわとり-若どり-むね-皮なし-生", "protein", "ガスト"
+# What /embed shows before anyone picks anything. Real pages, so each preview
+# is the actual widget.
+EXAMPLE_FOOD, EXAMPLE_COMPARE = "にわとり-若どり-むね-皮なし-生", "にわとり-若どり-もも-皮なし-生"
+EXAMPLE_NUTRIENT, EXAMPLE_CHAIN = "protein", "モスバーガー"
+
+
+def _pick_food(slug, q, default):
+    """(slug, data, name) for a picker: the food chosen, else the first food the
+    typed text finds, else the default. Text typed over a chosen food without
+    JavaScript — the hidden slug still holds the old one — goes by the text."""
+    q = (q or "").strip()
+    found = [r["slug"] for r in queries.search(q, SITE_LANG, limit=10)
+             if r["page_type"] == "food"] if q else []
+    for cand in ([slug] if slug else []) + found + [default]:
+        try:
+            data, name = _food_for_embed(cand)
+        except HTTPException:
+            continue
+        if cand == slug and q and q != name and found:
+            continue
+        return cand, data, name
+    raise HTTPException(status_code=404, detail="Not found")
+
+
+def _section(key, title, note, codes, previews=(), **extra):
+    return dict(key=key, title=title, note=note, codes=codes, previews=list(previews), **extra)
 
 
 @router.get("/embed", response_class=HTMLResponse)
-def embed_index(request: Request):
-    """Every widget, its code, and what it looks like."""
+def embed_index(request: Request, food: str = "", food_q: str = "", a: str = "", a_q: str = "",
+                b: str = "", b_q: str = "", nutrient: str = "", chain: str = "", rank: str = ""):
+    """Every widget, its code and a live preview — and for the ones that are not
+    tied to a single page, a picker that builds the code for any food, pair of
+    foods, nutrient or chain."""
     lang = SITE_LANG
     base = seo.base_url(lang)
-    url = base + "/embed"
     analyzer = t(lang, "ai_analyzer")
-    sections = [("analyzer", t(lang, "embed_analyzer_title"), t(lang, "embed_analyzer_note"),
-                 [(t(lang, "embed_kind_iframe"),
-                   embeds.iframe("/embed/analyzer", EMBED_HEIGHT["analyzer"], analyzer, base + "/analyzer", analyzer))],
-                 "/embed/analyzer", EMBED_HEIGHT["analyzer"])]
+    sections = [_section("analyzer", t(lang, "embed_analyzer_title"), t(lang, "embed_analyzer_note"),
+                         [_iframe_code("/embed/analyzer", EMBED_HEIGHT["analyzer"], analyzer,
+                                       [(base + "/analyzer", analyzer)])],
+                         [("/embed/analyzer", EMBED_HEIGHT["analyzer"], analyzer)])]
     try:
-        data, name = _food_for_embed(EXAMPLE_FOOD)
-        sections.append(("food", t(lang, "embed_food_title"), t(lang, "embed_food_note"),
-                         food_snippets(EXAMPLE_FOOD, data, name),
-                         f"/embed/food/{quote(EXAMPLE_FOOD)}", EMBED_HEIGHT["food"]))
+        fs, fd, fn = _pick_food(food, food_q, EXAMPLE_FOOD)
+        sections.append(_section(
+            "food", t(lang, "embed_food_title"), t(lang, "embed_food_note"), food_snippets(fs, fd, fn),
+            [(f"/embed/food/{quote(fs)}", EMBED_HEIGHT["food"], fn)],
+            builder="food", picks={"food": (fs, fn)}))
+        as_, _ad, an = _pick_food(a, a_q, EXAMPLE_FOOD)
+        bs, _bd, bn = _pick_food(b, b_q, EXAMPLE_COMPARE if as_ != EXAMPLE_COMPARE else EXAMPLE_FOOD)
+        if bs == as_:
+            bs, _bd, bn = _pick_food("", "", EXAMPLE_COMPARE if as_ != EXAMPLE_COMPARE else EXAMPLE_FOOD)
+        heading = t(lang, "embed_compare_heading", a=an, b=bn)
+        sections.append(_section(
+            "compare", t(lang, "embed_compare_title"), t(lang, "embed_compare_note"),
+            compare_snippets(as_, an, bs, bn),
+            [(f"/embed/compare/{quote(as_)}/{quote(bs)}", EMBED_HEIGHT["compare"], heading)],
+            builder="compare", picks={"a": (as_, an), "b": (bs, bn)}))
     except HTTPException:
-        pass    # the example food left the tables; the section goes with it
-    spec = nutrient_pages.get(EXAMPLE_NUTRIENT)
-    if spec:
-        heading = nutrient_pages.title(spec[2], lang)
-        sections.append(("nutrient", t(lang, "embed_nutrient_title"), t(lang, "embed_nutrient_note"),
-                         nutrient_snippets(EXAMPLE_NUTRIENT, heading),
-                         f"/embed/nutrient/{EXAMPLE_NUTRIENT}", EMBED_HEIGHT["nutrient"]))
-    try:
-        page, shop_name, _items = _menu_for_embed(EXAMPLE_CHAIN)
-        sections.append(("menu", t(lang, "embed_menu_title"), t(lang, "embed_menu_note_index"),
-                         menu_snippets(page["slug"], shop_name),
-                         f"/embed/menu/{quote(page['slug'])}", EMBED_HEIGHT["menu"]))
-    except HTTPException:
-        pass
-    sections.append(("yield", t(lang, "yield_calc_title"), t(lang, "embed_yield_note"),
-                     yield_snippets(), "/embed/cooking-yield", EMBED_HEIGHT["yield"]))
-    sections.append(("search", t(lang, "embed_search_title"), t(lang, "embed_search_note"),
-                     [(t(lang, "embed_kind_html"), embeds.search_box())], None, 0))
+        pass    # the example foods left the tables; their sections go with them
+
+    summary = queries.nutrient_index(lang, [c for c, *_ in nutrient_pages.NUTRIENTS])
+    nutrients = [(sl, tm) for c, sl, tm, _b in nutrient_pages.NUTRIENTS
+                 if (summary.get(c) or {}).get("n_foods")]
+    ns = nutrient if nutrient in dict(nutrients) else EXAMPLE_NUTRIENT
+    if ns in dict(nutrients):
+        heading = nutrient_pages.title(dict(nutrients)[ns], lang)
+        sections.append(_section(
+            "nutrient", t(lang, "embed_nutrient_title"), t(lang, "embed_nutrient_note"),
+            nutrient_snippets(ns, heading), [(f"/embed/nutrient/{ns}", EMBED_HEIGHT["nutrient"], heading)],
+            builder="nutrient", options=nutrients, chosen=ns))
+
+    chains = {slug: (name, lists) for slug, name, lists in embed_chains()}
+    cs = chain if chain in chains else EXAMPLE_CHAIN if EXAMPLE_CHAIN in chains else next(iter(chains), None)
+    if cs:
+        name, lists = chains[cs]
+        wanted = rank if rank in MENU_LISTS else "kcal"
+        # Before anyone chooses, show every list the example supports; after,
+        # just the one chosen (or what the chain can support instead).
+        shown = ((wanted,) if wanted in lists else lists[:1]) if (chain or rank) else lists
+        codes = menu_snippets(cs, name, shown)
+        suffix = {by: MENU_LISTS[by][0] for by in shown}
+        sections.append(_section(
+            "menu", t(lang, "embed_menu_title"), t(lang, "embed_menu_note_index"), codes,
+            [(f"/embed/menu/{quote(cs)}{suffix[by]}", EMBED_HEIGHT["menu_" + by], heading)
+             for by, (heading, _code) in zip(shown, codes)],
+            builder="menu", options=[(s, n, ls) for s, (n, ls) in chains.items()], chosen=cs,
+            chosen_list=wanted,
+            notice=t(lang, "embed_protein_missing", chain=name) if wanted not in lists else None))
+
+    sections.append(_section("yield", t(lang, "yield_calc_title"), t(lang, "embed_yield_note"),
+                             yield_snippets(),
+                             [("/embed/cooking-yield", EMBED_HEIGHT["yield"], t(lang, "yield_calc_title"))]))
+    sections.append(_section("search", t(lang, "embed_search_title"), t(lang, "embed_search_note"),
+                             [(t(lang, "embed_kind_html"), embeds.search_box())], live_html=True))
     crumbs = [(t(lang, "home"), base + "/"), (t(lang, "embed_title"), None)]
+    chose = any((food, food_q, a, a_q, b, b_q, nutrient, chain, rank))
     return _render(request, "embed.html", lang, {
         "seo_base": base,
         "sections": sections,
         "rate_limit": analyzer_limits()[0],
-        "canonical": url,
+        "canonical": base + "/embed",
+        # Every picked combination is the same page with other examples in it.
+        "noindex": chose,
         "crumbs": crumbs,
         "jsonld": [seo.jsonld_script(seo.breadcrumbs_jsonld(crumbs))],
         "meta_description": t(lang, "embed_lede"),

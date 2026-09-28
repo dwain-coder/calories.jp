@@ -2107,6 +2107,15 @@ button[data-copy].copied { background: var(--verified-bg, #e8f5e9); border-color
 .embed-preview { padding: 0.6rem; }
 .embed-offer summary { cursor: pointer; }
 .embed-offer summary h2 { display: inline; }
+.embed-toc { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.embed-builder {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem 0.9rem;
+  margin: 0.4rem 0 0.9rem;
+}
+.embed-pick { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; flex: 1 1 14rem; }
+.embed-pick input, .embed-pick select { width: 100%; }
+.embed-rank { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.2rem 0.8rem; font-size: 0.85rem; }
+.embed-rank legend { padding: 0; margin-bottom: 0.2rem; }
 
 @media (max-width: 640px) {
   .snippet-head { gap: 0.5rem; }

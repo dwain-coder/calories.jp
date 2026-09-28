@@ -1,33 +1,70 @@
 {% extends "base.html" %}
-{% from "partials/embed_code.html" import code_box with context %}
+{% from "partials/embed_code.html" import code_box, food_picker with context %}
 {% block title %}{{ t('embed_title') }} | {{ site_name }}{% endblock %}
 {% block content %}
 <h1>{{ t('embed_title') }}</h1>
 <p class="alt-name">{{ t('embed_lede') }}</p>
 
 <nav aria-label="{{ t('embed_title') }}">
-  <ul class="atlas-chips">
-    {% for key, title, _n, _s, _p, _h in sections %}
-      <li><a class="atlas-chip" href="#{{ key }}">{{ title }}</a></li>
+  <ul class="atlas-chips embed-toc">
+    {% for s in sections %}
+      <li><a class="atlas-chip" href="#{{ s.key }}">{{ s.title }}</a></li>
     {% endfor %}
   </ul>
 </nav>
 
-{% for key, title, note, snippets, preview, height in sections %}
-<section class="card" id="{{ key }}">
-  <h2>{{ title }}</h2>
-  <p class="license">{{ note }}</p>
-  {% for label, code in snippets %}{{ code_box('snip-' ~ key ~ '-' ~ loop.index, label, code) }}{% endfor %}
+{% for s in sections %}
+<section class="card" id="{{ s.key }}">
+  <h2>{{ s.title }}</h2>
+  <p class="license">{{ s.note }}</p>
+
+  {% if s.builder %}
+  {# A plain GET form: the server builds the code, so the snippet a picker
+     produces is the same text the pages themselves hand out. #}
+  <form class="embed-builder" method="get" action="/embed#{{ s.key }}">
+    {% if s.builder == 'food' %}
+      {{ food_picker('food', t('embed_pick_food'), s.picks.food[0], s.picks.food[1]) }}
+    {% elif s.builder == 'compare' %}
+      {{ food_picker('a', t('embed_pick_a'), s.picks.a[0], s.picks.a[1]) }}
+      {{ food_picker('b', t('embed_pick_b'), s.picks.b[0], s.picks.b[1]) }}
+    {% elif s.builder == 'nutrient' %}
+      <label class="embed-pick">{{ t('embed_pick_nutrient') }}
+        <select name="nutrient">
+          {% for slug, term in s.options %}
+            <option value="{{ slug }}"{% if slug == s.chosen %} selected{% endif %}>{{ term }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% elif s.builder == 'menu' %}
+      <label class="embed-pick">{{ t('embed_pick_chain') }}
+        <select name="chain">
+          {% for slug, name, lists in s.options %}
+            <option value="{{ slug }}"{% if slug == s.chosen %} selected{% endif %}>{{ name }}{% if 'protein' in lists %}{{ t('embed_has_protein') }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <fieldset class="embed-rank">
+        <legend>{{ t('embed_pick_rank') }}</legend>
+        <label><input type="radio" name="rank" value="kcal"{% if s.chosen_list != 'protein' %} checked{% endif %}> {{ t('embed_rank_kcal') }}</label>
+        <label><input type="radio" name="rank" value="protein"{% if s.chosen_list == 'protein' %} checked{% endif %}> {{ t('embed_rank_protein') }}</label>
+      </fieldset>
+    {% endif %}
+    <button type="submit" class="button-pill primary">{{ t('embed_make') }}</button>
+  </form>
+  {% if s.notice %}<p class="no-data">{{ s.notice }}</p>{% endif %}
+  {% endif %}
+
+  {% for label, code in s.codes %}{{ code_box('snip-' ~ s.key ~ '-' ~ loop.index, label, code) }}{% endfor %}
+
   <h3>{{ t('embed_preview_title') }}</h3>
   <div class="embed-preview">
-    {% if preview %}
-    <iframe src="{{ (seo_base if seo_base.startswith('https') else '') ~ preview }}"
+    {% for path, height, title in s.previews %}
+    <iframe src="{{ (seo_base if seo_base.startswith('https') else '') ~ path }}"
             style="width:100%;border:0;height:{{ height }}px" loading="lazy"
             title="{{ title }}" data-preview></iframe>
-    {% else %}
+    {% endfor %}
     {# No frame to preview: the snippet is plain HTML we generated, so show it as it is. #}
-    {{ snippets[0][1] | safe }}
-    {% endif %}
+    {% if s.live_html %}{{ s.codes[0][1] | safe }}{% endif %}
   </div>
 </section>
 {% endfor %}

@@ -29,21 +29,25 @@ addEventListener("message", function (e) {{
 }});
 </script>"""
 
-def _credit(url, text=None, extra=""):
-    """出典: <a>calories.jp「page title」</a>. The home page gets the bare name:
-    one keyword phrase repeated across every site that pastes a search box is
-    the widget-link pattern search engines discount, or worse."""
-    anchor = escape(SITE_NAME[LANG]) + (f"「{escape(text)}」" if text else "")
+def _credit(links, extra=""):
+    """出典: <a>calories.jp「page title」</a>, one link per page the figures
+    came from. The home page gets the bare name: one keyword phrase repeated
+    across every site that pastes a search box is the widget-link pattern
+    search engines discount, or worse."""
+    site = escape(SITE_NAME[LANG])
+    anchors = "、".join(f'<a href="{escape(url)}">{site}' + (f"「{escape(text)}」" if text else "")
+                       + "</a>" for url, text in links)
     return (f'<p style="margin:4px 0 0;font-size:12px">{escape(t(LANG, "source"))}: '
-            f'<a href="{escape(url)}">{anchor}</a>{extra}</p>')
+            f'{anchors}{extra}</p>')
 
 
-def iframe(path, height, title, link_url, link_text):
-    """An iframe of /embed/…, its citation, and the height listener."""
+def iframe(path, height, title, links):
+    """An iframe of /embed/…, its citation, and the height listener.
+    links: [(url, page title)] for every page whose figures the widget shows."""
     base = seo.base_url(LANG)
     return (f'<iframe src="{escape(base + path)}" style="width:100%;border:0;height:{height}px"\n'
             f'        loading="lazy" title="{escape(title)}"></iframe>\n'
-            f'{_credit(link_url, link_text)}\n'
+            f'{_credit(links)}\n'
             f'{_LISTENER.format(base=base)}')
 
 
@@ -57,7 +61,7 @@ def search_box():
             f' aria-label="{escape(t(LANG, "embed_search_title"))}" style="flex:1">\n'
             f'  <button type="submit">{escape(t(LANG, "search"))}</button>\n'
             f'</form>\n'
-            f'{_credit(base + "/")}')
+            f'{_credit([(base + "/", None)])}')
 
 
 # (label key, nutrition field, unit, decimals)
@@ -105,5 +109,14 @@ def food_table(d, name, url):
     note = escape(seo.source_label(d["item"]["source"], LANG))
     if any("(" in c for _l, *vals in rows for c in vals if c):
         note += escape(t(LANG, "embed_paren_note"))
-    lines.append(_credit(url, name, f"（{note}）"))
+    lines.append(_credit([(url, name)], f"（{note}）"))
     return "\n".join(lines)
+
+
+def compare_rows(*foods):
+    """[(label, one value per food)], per 100 g — the one basis two foods
+    share. A row only one of them has shows — for the other."""
+    tables = [{label: per100 for label, per100, _s in food_rows(d)[0]} for d in foods]
+    labels = [t(LANG, key) for key, *_ in _MACROS] + [t(LANG, "salt")]
+    return [(label, *(tb.get(label, "—") for tb in tables))
+            for label in labels if any(label in tb for tb in tables)]
