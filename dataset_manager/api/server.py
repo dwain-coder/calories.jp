@@ -346,10 +346,12 @@ from fastapi.staticfiles import StaticFiles
 from ..site.router import router as site_router
 from .search_api import router as search_router
 from .analyzer import router as analyzer_router
+from .writer_api import router as writer_router
 
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.include_router(search_router)
 app.include_router(analyzer_router)
+app.include_router(writer_router)
 app.include_router(site_router)
 # Python 3.12's mimetypes has no .webp, so every WebP on the site went out as
 # application/octet-stream beside X-Content-Type-Options: nosniff. Chrome draws
