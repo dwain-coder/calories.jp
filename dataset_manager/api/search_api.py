@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api")
 def api_search(
     q: str = Query(..., min_length=1, max_length=100),
     lang: str = Query("ja"),
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(20, ge=1, le=50),   # the /api page documents 20
 ):
     if lang not in LANGS:
         raise HTTPException(status_code=400, detail=f"lang must be one of {', '.join(LANGS)}")
