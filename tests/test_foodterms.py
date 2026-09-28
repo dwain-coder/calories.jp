@@ -44,6 +44,7 @@ EXPECTED = {
     "干ししいたけ": "乾しいたけ",
     "昆布": "こんぶ",
     "トマト缶": "トマト 加工品 ホール",
+    "ナチュラルチーズ": "ナチュラルチーズ ゴーダ",
 }
 
 
@@ -119,6 +120,44 @@ class TestIngredientVocabulary(unittest.TestCase):
         self.assertIn("全粒", foodterms.alias_target("いんげん豆"))
         pod = _match_food("いんげん", None, "ja")
         self.assertLess(pod["energy_kcal"], 60)
+
+    def test_alias_word_inside_another_foods_name_is_refused(self):
+        """Measured 2026-09-28 over every table food whose name holds an alias
+        word: すいか came back as squid, スライスハム as rice, 七面鳥ひき肉 as
+        beef mince. Each is a food the tables carry under its own name."""
+        misses = []
+        for name in ("すいか", "スライスハム", "甘納豆", "ポテトチップス", "メロンパン",
+                     "あんパン", "カレーパン", "ごまさば", "たけのこいも", "えごま油",
+                     "とんぶり", "おかひじき", "なぎなたこうじゅ", "たらのめ",
+                     "たらばがに", "七面鳥ひき肉", "そうめんかぼちゃ", "赤たまねぎ"):
+            match = _match_food(name, None, "ja")
+            got = match["name"] if match else None
+            if not got or name not in got:
+                misses.append(f"{name} -> {got!r}")
+        self.assertEqual(misses, [], "\n" + "\n".join(misses))
+
+    def test_alias_word_as_a_qualified_food_still_applies(self):
+        """The substring rule exists for these, and must keep reaching them."""
+        self.assertEqual(foodterms.search_terms("牛ひき肉 500g")[0], "うし ひき肉 生")
+        self.assertEqual(foodterms.search_terms("合いびき肉（牛豚）")[0], "うし ひき肉 生")
+        # ぶなしめじ holds しめじ, but it is the row the alias points at
+        self.assertEqual(foodterms.search_terms("しめじ")[0], "ぶなしめじ 生")
+
+    def test_a_group_label_cannot_veto_the_ingredient(self):
+        """【辛子酢みそ】 is the name of a table food and holds みそ; the 米みそ
+        written after it is still miso."""
+        self.assertEqual(foodterms.search_terms("【辛子酢みそ】米みそ")[0], "米みそ 淡色辛みそ")
+
+    def test_a_food_the_search_cannot_return_does_not_refuse(self):
+        """FDC has a ポークソーセージ row with no page. Refusing the ソーセージ
+        alias on its account left a grilled sausage matching nothing."""
+        match = _match_food("ポークソーセージ (焼き)", None, "ja")
+        self.assertIsNotNone(match)
+        self.assertIn("ソーセージ", match["name"])
+
+    def test_exact_only_words_still_skip_the_substring_rule(self):
+        self.assertEqual(foodterms.search_terms("ソース")[0], "ウスターソース")
+        self.assertNotIn("ウスターソース", foodterms.search_terms("チーズソース"))
 
     def test_a_longer_name_is_another_food(self):
         """The home page's own example read 「たけのこ（水煮・煮物）」 as
