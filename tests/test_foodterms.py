@@ -158,6 +158,24 @@ class TestIngredientVocabulary(unittest.TestCase):
         self.assertEqual(foodterms.search_terms("ソース")[0], "ウスターソース")
         self.assertNotIn("ウスターソース", foodterms.search_terms("チーズソース"))
 
+    def test_a_longer_name_is_another_food(self):
+        """The home page's own example read 「たけのこ（水煮・煮物）」 as
+        たけのこいも — a taro, 86 kcal/100 g against 22 — because both have a 水煮
+        row and the 缶詰 penalty pushed the bamboo shoot below it."""
+        self.assertEqual(
+            foodterms.prefer_state("たけのこ（水煮・煮物）",
+                                   ["たけのこ 水煮缶詰", "たけのこいも 球茎 水煮"])[0],
+            "たけのこ 水煮缶詰")
+        self.assertEqual(_match_food("たけのこ（水煮・煮物）", None, "ja")["name"],
+                         "たけのこ 水煮缶詰")
+
+    def test_karashi_is_the_paste_not_the_leaf(self):
+        """「からし」 on a plate is mustard paste; からしな is a leaf vegetable
+        and からし明太子 is roe. The alias is exact-only so neither is caught."""
+        self.assertEqual(_match_food("からし (ペースト)", None, "ja")["name"], "からし 練り")
+        self.assertIn("からしな", _match_food("からしな", None, "ja")["name"])
+        self.assertIn("めんたいこ", _match_food("からし明太子", None, "ja")["name"])
+
 
 if __name__ == "__main__":
     unittest.main()

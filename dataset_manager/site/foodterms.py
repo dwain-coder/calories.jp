@@ -87,7 +87,7 @@ ALIASES = {
     "いちごジャム": ["いちご ジャム 高糖度"],
     "オレンジジュース": ["オレンジ バレンシア 果実飲料 ストレートジュース"],
     "黒みつ": ["黒砂糖"], "黒蜜": ["黒砂糖"],
-    "ねりからし": ["からし 練り"], "練りからし": ["からし 練り"],
+    "ねりからし": ["からし 練り"], "練りからし": ["からし 練り"], "からし": ["からし 練り"],
     "銀だら": ["ぎんだら 生"], "銀ダラ": ["ぎんだら 生"],
     "大葉": ["しそ 葉 生"], "青じそ": ["しそ 葉 生"],
     "なると": ["なると"], "ナルト": ["なると"], "鳴門巻き": ["なると"],
@@ -390,7 +390,8 @@ def is_ignorable(name):
 
 # Words that are a whole ingredient on their own and a qualifier inside a longer
 # name. Matched exactly, never as a substring — see search_terms.
-EXACT_ONLY = frozenset({"ソース", "たれ", "ドレッシング", "スープ", "だし", "つゆ"})
+EXACT_ONLY = frozenset({"ソース", "たれ", "ドレッシング", "スープ", "だし", "つゆ",
+                        "からし"})      # not からしな, the leaf; not からし明太子
 
 
 def _strip_noise(s):
@@ -578,7 +579,7 @@ def _fat_side(text):
 
 
 def state_score(asked, candidate):
-    """How well a table row answers the state and cut the asker named."""
+    """How well a table row answers the food, state and cut the asker named."""
     # NFKC only: normalise() drops the parenthesis, and the parenthesis is
     # where the model puts the state — 「牛肉（薄切り、脂身つき、焼き）」.
     a = unicodedata.normalize("NFKC", str(asked or "")).replace(" ", "")
@@ -600,6 +601,14 @@ def state_score(asked, candidate):
             score += 2
         elif other is not None:
             score -= 2
+    # A row whose name merely BEGINS with the food asked for is another food:
+    # たけのこいも is a taro, not a bamboo shoot, and both have a 水煮 row. Asked
+    # for 「たけのこ（水煮・煮物）」, the 缶詰 penalty above let the taro win, and the
+    # home page showed 86 kcal of it. The tables hold 97 such pairs (あさ/あさり,
+    # しい/しいたけ, ごま/ごまさば) and in every one the longer name is different.
+    head, row_head = normalise(asked).split(" ")[0], normalise(candidate).split(" ")[0]
+    if head and row_head != head and row_head.startswith(head):
+        score -= 3
     return score
 
 

@@ -14,20 +14,21 @@ import math
 from .groups import color as group_color
 
 # Spokes, clockwise from the top. Codes are MEXT nutrient identifiers; the
-# reference values are the Japanese labelling standard (栄養素等表示基準値 2020).
+# reference values are 栄養素等表示基準値 (食品表示基準 別表第十, 2025 revision),
+# the same table as i18n.MACRO_DV / MICRO_DV.
 FINGERPRINT = [
-    ("PROT-", "protein", 81.0),
-    ("FAT-", "fat", 62.0),
+    ("PROT-", "protein", 85.0),
+    ("FAT-", "fat", 70.0),
     ("CHOCDF-", "carbohydrate", 320.0),
-    ("FIB-", "fibre", 19.0),
-    ("CA", "calcium", 680.0),
-    ("FE", "iron", 6.8),
+    ("FIB-", "fibre", 20.0),
+    ("CA", "calcium", 700.0),
+    ("FE", "iron", 6.5),
     ("K", "potassium", 2800.0),
     ("MG", "magnesium", 320.0),
-    ("ZN", "zinc", 8.8),
+    ("ZN", "zinc", 8.5),
     ("VITC", "vitamin C", 100.0),
     ("VITA_RAE", "vitamin A", 770.0),
-    ("THIA", "vitamin B1", 1.2),
+    ("THIA", "vitamin B1", 1.0),
 ]
 
 

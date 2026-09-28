@@ -64,7 +64,7 @@ STRINGS = {
         "claims_note": "Criteria are 食品表示基準 別表第十二, the thresholds a Japanese label must meet to claim a food is high in a nutrient or contains it. This compares the composition table's figure against them; it is not a statement about any particular product's label, and estimated values are excluded.",
         "notable_heading": "Highest in",
         "notable_line": "{label} {amount} {unit} — {pct}% of the daily labelling reference value per 100 g",
-        "context_note": "Comparisons are against the other foods in this group in the composition tables. Reference values are 栄養素等表示基準値 (2020).",
+        "context_note": "Comparisons are against the other foods in this group in the composition tables. Reference values are 栄養素等表示基準値 (食品表示基準 別表第十, 2025 revision).",
         "serving_calculator": "Serving calculator",
         "quantity": "Quantity",
         "source": "Source",
@@ -562,7 +562,7 @@ STRINGS = {
         "claims_note": "食品表示基準 別表第十二に定める「高い旨」「含む旨」の基準値と、成分表の数値を比較したものです。個別の商品の表示や栄養機能食品の要件を示すものではありません。推計値は対象外としています。",
         "notable_heading": "特に多く含む成分",
         "notable_line": "{label} {amount}{unit}（100gあたり、基準値の{pct}%）",
-        "context_note": "比較は成分表に収載された同じ食品分類の中でのものです。割合は栄養素等表示基準値（2020年版）に対する値で、摂取を勧めるものではありません。",
+        "context_note": "比較は成分表に収載された同じ食品分類の中でのものです。割合は栄養素等表示基準値（食品表示基準 別表第十、令和7年改正）に対する値で、摂取を勧めるものではありません。",
         "serving_calculator": "分量計算",
         "quantity": "分量",
         "source": "出典",
@@ -959,7 +959,7 @@ STRINGS = {
         "maintenance": "維持カロリー",
         "detected_foods": "検出された食品",
         "micronutrients": "ビタミン・ミネラル",
-        "micros_note": "照合された{n}品目のMEXT分析値から算出。%は栄養素等表示基準値(2020)に対する割合。",
+        "micros_note": "照合された{n}品目のMEXT分析値から算出。%は栄養素等表示基準値（食品表示基準 別表第十、令和7年改正）に対する割合。",
         "health_notes": "この食事のメモ",
         "print_report": "印刷 / PDF保存",
         "of_dv": "基準値比",
@@ -979,7 +979,7 @@ STRINGS = {
         "this_page": "表示中",
         "faq_heading": "よくある質問",
         "dv_col": "基準値比",
-        "dv_note": "基準値比は栄養素等表示基準値（2020年版）に対する割合。",
+        "dv_note": "基準値比は栄養素等表示基準値（食品表示基準 別表第十、令和7年改正）に対する割合。",
         "showing": "{n}件中 {a}〜{b}件",
         "prev": "前へ",
         "next": "次へ",
@@ -1013,11 +1013,12 @@ STRINGS = {
 }
 
 # Daily reference values for the report bars.
-# en: US FDA Daily Values (adults). ja: 栄養素等表示基準値(2020) — labeling
-# reference values. Deterministic display math only, not dietary advice.
+# en: US FDA Daily Values (adults). ja: 栄養素等表示基準値, 食品表示基準 別表第十
+# as revised by 令和7年内閣府令第26号 (e-Gov lawdata 427M60000002010). The same
+# table sits in cards.FINGERPRINT. Deterministic display math, not dietary advice.
 MACRO_DV = {
     "en": {"energy_kcal": 2000, "protein_g": 50, "fat_g": 78, "carbohydrate_g": 275, "salt_g": 5.8},
-    "ja": {"energy_kcal": 2200, "protein_g": 81, "fat_g": 62, "carbohydrate_g": 320, "salt_g": 7.5},
+    "ja": {"energy_kcal": 2200, "protein_g": 85, "fat_g": 70, "carbohydrate_g": 320, "salt_g": 7.0},
 }
 
 # Micronutrients shown in the analyzer report: MEXT code -> (label, DV, unit).
@@ -1031,11 +1032,11 @@ MICRO_DV = {
         "RIBF": ("Vitamin B2", 1.3, "mg"), "FOL": ("Folate", 400, "µg"),
     },
     "ja": {
-        "K": ("カリウム", 2800, "mg"), "CA": ("カルシウム", 684, "mg"),
-        "MG": ("マグネシウム", 320, "mg"), "FE": ("鉄", 6.8, "mg"),
-        "ZN": ("亜鉛", 8.8, "mg"), "VITC": ("ビタミンC", 100, "mg"),
-        "VITA_RAE": ("ビタミンA", 770, "µg"), "VITD": ("ビタミンD", 5.5, "µg"),
-        "VITB12": ("ビタミンB12", 2.4, "µg"), "THIA": ("ビタミンB1", 1.2, "mg"),
+        "K": ("カリウム", 2800, "mg"), "CA": ("カルシウム", 700, "mg"),
+        "MG": ("マグネシウム", 320, "mg"), "FE": ("鉄", 6.5, "mg"),
+        "ZN": ("亜鉛", 8.5, "mg"), "VITC": ("ビタミンC", 100, "mg"),
+        "VITA_RAE": ("ビタミンA", 770, "µg"), "VITD": ("ビタミンD", 9.0, "µg"),
+        "VITB12": ("ビタミンB12", 4.0, "µg"), "THIA": ("ビタミンB1", 1.0, "mg"),
         "RIBF": ("ビタミンB2", 1.4, "mg"), "FOL": ("葉酸", 240, "µg"),
     },
 }
