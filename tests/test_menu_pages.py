@@ -206,3 +206,39 @@ class TestAssetCacheBusting(unittest.TestCase):
         r = client.get("/static/site.css?v=deadbeef12")
         self.assertEqual(r.status_code, 200)
         self.assertGreater(len(r.content), 1000)
+
+
+class TestTheBuildIsSettled(unittest.TestCase):
+    """build-shops on the committed site.db must change nothing.
+
+    It fails two ways, both seen: the pick ranked on the previous build's counts,
+    so a second run of the same code moved two businesses to other menu rows;
+    and a menu rule changed without a rebuild leaves every stored 品数 and price
+    range stale against its page.
+    """
+
+    def test_a_rebuild_changes_no_page(self):
+        import contextlib
+        import io
+        import shutil
+        import sqlite3
+        import tempfile
+
+        from dataset_manager.api.database import DB_PATH
+        from dataset_manager.scripts.build_shops import build_pages
+
+        def pages(conn):
+            return sorted(tuple(r) for r in conn.execute(
+                "SELECT shop_id, slug, indexable, title, meta_description FROM shop_pages"))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = sqlite3.connect(shutil.copy(DB_PATH, tmp))
+            conn.row_factory = sqlite3.Row
+            try:
+                before = pages(conn)
+                with contextlib.redirect_stdout(io.StringIO()):
+                    build_pages(conn)
+                after = pages(conn)
+            finally:
+                conn.close()
+        self.assertEqual(before, after)

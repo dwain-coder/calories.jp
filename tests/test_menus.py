@@ -170,6 +170,42 @@ class TestNotADish(unittest.TestCase):
                      "US産リブアイステーキ 自家製醤油ソース [200g]"):
             self.assertFalse(menuterms.is_extra(name), name)
 
+    def test_condiments_the_whole_name_rule_missed(self):
+        """Each printed its chain's 「価格は○円〜」 once the range came from the
+        page: ジョナサン 55円 粉チーズ, から好し 30円, ステーキガスト 22円."""
+        from dataset_manager.site import menuterms
+        for name in ("粉チーズ", "タルタルソース", "マヨネーズ、かけ放題！！！",
+                     "チキンナゲット用ソース(追加)", "ホイップクリーム", "粒あん",
+                     "温泉卵", "温泉玉子", "濃厚肉汁ソース", "ハニーマスタードソース",
+                     "胡麻にんにくダレ＆甘とろダレ", "どっさり青ネギ", "海苔5枚"):
+            self.assertTrue(menuterms.is_extra(name), name)
+
+    def test_juice_and_ginger_ale_are_drinks_and_100_percent_beef_is_not(self):
+        """chawan's cheapest 「dish」 was orange juice; a bare 「100％」 rule would
+        have taken 18 hamburgers with it."""
+        from dataset_manager.site import menuterms
+        for name in ("オレンジ100％（濃縮還元）", "アップル果汁100％", "りんごストレート100％",
+                     "ジンジャーエール S", "ウィルキンソンジンジャーエール（辛口）",
+                     # Beer and shochu by brand or by the glass — each sat on an
+                     # indexable chain's menu as 「料理」.
+                     "アサヒスーパードライ（グラス）", "サントリーザ・プレミアムモルツ(ジョッキ)",
+                     "スーパードライ(生)", "ドライゼロ（缶）", "いいちこ（ボトル）",
+                     "黒霧島ボトル９００ml【ボトルキープできます！】", "菊水（300ml瓶）",
+                     "フルーツレモンスカッシュ"):
+            self.assertTrue(menuterms.is_drink(name), name)
+        for name in ("アンガスビーフ100％ステーキハンバーグデミグラスソース",
+                     "＜牛100％＞ジンジャーテリヤキハンバーグ 170g（サラダバー付）",
+                     "ドライカレー", "国産玉ねぎのオニオングラタンスープ",
+                     "お得！！ちょい盛りポテト＆生ビール（ジョッキ）セット"):
+            self.assertFalse(menuterms.is_drink(name) or menuterms.is_extra(name), name)
+
+    def test_real_sides_stay_dishes(self):
+        """The same shapes on a real side: a bowl of rice, soup, an egg for rice."""
+        from dataset_manager.site import menuterms
+        for name in ("御飯", "みそ汁", "生たまご", "納豆", "ハンバーグ、ライス付き",
+                     "タルタルチキン南蛮定食", "ホイップクリームパンケーキ"):
+            self.assertFalse(menuterms.is_extra(name), name)
+
     def test_a_qualifier_does_not_hide_a_topping(self):
         """ガスト lists its add-ons as 「【お料理ご注文のお客様限定】［追加］ケチャップ」.
         Matched from the first character, the 【…】 hid the topping, and 28 of
