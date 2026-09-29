@@ -44,6 +44,12 @@ class TestFonts(unittest.TestCase):
         self.assertIn("<noscript>" + blocking, html)
         self.assertIn('rel="preload" as="style" href="https://fonts.googleapis.com', html)
 
+    def test_a_late_font_never_moves_the_page(self):
+        """swap re-laid out the page as each subset landed: CLS 0.146."""
+        html = client.get("/").text
+        self.assertIn("display=optional", html)
+        self.assertNotIn("display=swap", html)
+
 
 if __name__ == "__main__":
     unittest.main()

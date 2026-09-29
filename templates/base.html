@@ -26,11 +26,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 {# Not render-blocking. A Japanese face is ~120 unicode-range subsets per weight,
    so this stylesheet was 114 KiB on the wire; as a plain <link> it held first
-   paint for 1.5 s on a phone (PageSpeed, 2026-09-29) while display=swap was
-   ready to draw the system font meanwhile. No script-src CSP, so the inline
-   onload is allowed. 500 is gone: one badge used it, and it was a quarter of
-   the stylesheet (456 KB of CSS before, 343 KB after). #}
-{% set fonts_css = "https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap" %}
+   paint for 1.5 s on a phone (PageSpeed, 2026-09-29). No script-src CSP, so
+   the inline onload is allowed. 500 is gone: one badge used it, and it was a
+   quarter of the stylesheet (456 KB of CSS before, 343 KB after).
+
+   display=optional, not swap. Once first paint stopped waiting for this, swap
+   drew the page in the system font and then re-laid it out as each of ~74
+   Zen Kaku subsets landed: CLS 0 -> 0.146. Optional uses the face only if it
+   is there within ~100 ms and never swaps later, so a first visit on a slow
+   phone stays in the system font and later pages get Zen Kaku from cache. #}
+{% set fonts_css = "https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=IBM+Plex+Mono:wght@400;600&display=optional" %}
 <link rel="preload" as="style" href="{{ fonts_css }}" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="{{ fonts_css }}"></noscript>
 <link rel="stylesheet" href="{{ asset('/static/site.css') }}">
