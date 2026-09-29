@@ -24,7 +24,15 @@
 <link rel="preconnect" href="https://upload.wikimedia.org" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap">
+{# Not render-blocking. A Japanese face is ~120 unicode-range subsets per weight,
+   so this stylesheet was 114 KiB on the wire; as a plain <link> it held first
+   paint for 1.5 s on a phone (PageSpeed, 2026-09-29) while display=swap was
+   ready to draw the system font meanwhile. No script-src CSP, so the inline
+   onload is allowed. 500 is gone: one badge used it, and it was a quarter of
+   the stylesheet (456 KB of CSS before, 343 KB after). #}
+{% set fonts_css = "https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap" %}
+<link rel="preload" as="style" href="{{ fonts_css }}" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="{{ fonts_css }}"></noscript>
 <link rel="stylesheet" href="{{ asset('/static/site.css') }}">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23B7282E'/><path d='M6 23h20c.6 0 1-.4 1-1s-.4-1-1-1H6c-.6 0-1 .4-1 1s.4 1 1 1z' fill='%23FFD700'/><path d='M8 20c0-5 3.6-9 8-9s8 4 8 9H8z' fill='%23FFFFFF'/><circle cx='16' cy='9.5' r='1.8' fill='%23FFD700'/><path d='M16 4.5c-.8 1-1 1.8-.4 2.8.4.6.4 1.2 0 1.7' stroke='%23FFD700' stroke-width='1.2' stroke-linecap='round' fill='none'/></svg>">
 </head>

@@ -57,6 +57,27 @@ def pick(photos):
     return max(pool, key=lambda p: p["width"] * p["height"]) if pool else None
 
 
+# The largest frame is a 360px circle; at 2x that wants a 720px short side. The
+# large2x rendition is ~1900px wide, so it went out at 283 KiB to fill a 309px
+# box on a phone (PageSpeed, 2026-09-29).
+MAX_SHORT_SIDE = 720
+
+
+def shrink(jpeg_bytes):
+    try:
+        from PIL import Image
+    except ImportError:
+        return jpeg_bytes
+    im = Image.open(io.BytesIO(jpeg_bytes)).convert("RGB")
+    scale = MAX_SHORT_SIDE / min(im.size)
+    if scale >= 1:
+        return jpeg_bytes
+    im = im.resize((round(im.width * scale), round(im.height * scale)), Image.LANCZOS)
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=82, optimize=True, progressive=True)
+    return out.getvalue()
+
+
 def to_webp(jpeg_bytes, dest):
     try:
         from PIL import Image
@@ -114,8 +135,9 @@ def main():
                 print("    ! no downloadable rendition; leaving previous file")
                 continue
             dest = MEDIA_DIR / f"{slot}.jpg"
-            dest.write_bytes(img.content)
-            if to_webp(img.content, MEDIA_DIR / f"{slot}.webp"):
+            data = shrink(img.content)
+            dest.write_bytes(data)
+            if to_webp(data, MEDIA_DIR / f"{slot}.webp"):
                 print("    + webp")
             else:
                 print("    (no Pillow: skipped webp)")
