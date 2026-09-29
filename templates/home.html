@@ -118,7 +118,7 @@
       </table>
       </div>
       {% if ex.unmatched %}
-      <h4 class="worked-unmatched-title">{{ t('home_unmatched_title') }}</h4>
+      <h3 class="worked-unmatched-title">{{ t('home_unmatched_title') }}</h3>
       <ul class="worked-unmatched">
         {% for u in ex.unmatched %}
         <li>{{ u.name }}{% if u.grams %} <small>≈{{ u.grams|round(0)|int }} g</small>{% endif %}</li>

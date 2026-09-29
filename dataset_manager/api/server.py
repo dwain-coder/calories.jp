@@ -83,6 +83,16 @@ async def security_headers(request: Request, call_next):
         response.headers.setdefault(
             "Content-Security-Policy",
             f"frame-ancestors {EMBED_FRAME_ANCESTORS}; object-src 'none'; base-uri 'self'")
+    # StaticFiles sends no Cache-Control, so a browser has to guess how long to
+    # keep a file, and PageSpeed counted 845 KiB of CSS, JS, photos and video
+    # on the home page as uncached (2026-09-29). A ?v= URL is named by its bytes
+    # (router.asset), so it can never go stale; the photos and videos are not,
+    # and a week bounds how long a replaced one can linger.
+    if request.url.path.startswith("/static/") and response.status_code < 400:
+        response.headers.setdefault(
+            "Cache-Control",
+            "public, max-age=31536000, immutable" if "v=" in request.url.query
+            else "public, max-age=604800")
     return response
 
 # --- WordPress publishes, this pulls ----------------------------------------
