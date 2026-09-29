@@ -13,14 +13,17 @@
   /* ink */
   --ink: #2B2118;
   --ink-soft: #6B5B50;
-  --ink-faint: #A2938A;
+  /* Was #A2938A: 2.8:1 on --paper. Now 5.0:1, 4.6:1 on --peach. */
+  --ink-faint: #78695F;
   --rule: #2B2118;
   --hairline: #F0E2D8;
-  /* accent */
-  --accent: #F26722;
-  --accent-dark: #D95312;
+  /* accent. Was #F26722, which carries text as well as fills: white on it
+     was 3.1:1 and it on --paper 3.0:1, against WCAG AA's 4.5:1 (PageSpeed,
+     2026-09-29). #C2410C is 5.2:1 under white text and 4.9:1 on --paper. */
+  --accent: #C2410C;
+  --accent-dark: #9A3412;
   --accent-soft: #FFF0E6;
-  --seal: #F26722;
+  --seal: #C2410C;
   /* PFC data hues, warmed to sit on cream */
   --p-hue: #3E7CA6;
   --f-hue: #E8A33D;
@@ -549,7 +552,7 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
 .chip-row a { border-radius: var(--pill); border-width: 1px; border-left-width: 4px; }
 .related-list a, .tile-list a { border-radius: var(--radius-sm); }
 .tool-card { border-radius: var(--radius); }
-.tool-card:hover { box-shadow: 0 8px 24px rgba(242, 103, 34, 0.16); border-color: var(--accent); }
+.tool-card:hover { box-shadow: 0 8px 24px rgba(194, 65, 12, 0.16); border-color: var(--accent); }
 .pager a, .print-btn, .upload-label { border-radius: var(--pill); }
 .upload-label { background: var(--accent); border: none; }
 .upload-label:hover { background: var(--accent-dark); }
@@ -1114,7 +1117,7 @@ details[open] summary { border-bottom: 1px solid var(--hairline); margin-bottom:
   border-radius: 999px;
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(242, 103, 34, 0.45);
+  box-shadow: 0 4px 14px rgba(194, 65, 12, 0.45);
   animation: fly-up-fade 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 @keyframes fly-up-fade {
