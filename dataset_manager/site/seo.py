@@ -91,14 +91,22 @@ def nutrition_jsonld(nutrition, grams=100):
 
 
 def breadcrumbs_jsonld(crumbs):
-    """crumbs: [(name, url|None)] — last item usually has no url."""
+    """crumbs: [(name, url|None)] — last item usually has no url.
+
+    Only the last ListItem may omit `item`; Google rejects the whole list when a
+    middle one does (Search Console: Missing field "item"). A crumb with no page
+    behind it, like 郷土料理 above a prefecture, stays visible on the page but is
+    left out of the markup.
+    """
+    kept = [(name, url) for i, (name, url) in enumerate(crumbs)
+            if url or i == len(crumbs) - 1]
     return {
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
         "itemListElement": [
             {"@type": "ListItem", "position": i + 1, "name": name,
              **({"item": url} if url else {})}
-            for i, (name, url) in enumerate(crumbs)
+            for i, (name, url) in enumerate(kept)
         ],
     }
 
@@ -118,19 +126,31 @@ def food_jsonld(lang, name, url, nutrition):
     return d
 
 
-def recipe_jsonld(lang, name, url, ingredients, steps, nutrition=None):
+def recipe_jsonld(lang, name, url, image, ingredients, steps, cuisine=None):
+    """A MAFF recipe. Google requires `image`, and it has to show this dish, so
+    the caller passes only a photograph of the dish itself, never the category
+    stand-in the page labels イメージ写真.
+
+    No `nutrition`. Google reads nutrition.calories as per serving and then
+    requires recipeYield, but only 13 of 1,364 MAFF recipes say how many they
+    serve. The totals are for the whole pot as written (けの汁 starts with 2 kg
+    of daikon), and printing them beside servingSize "100 g" stated a figure
+    that was wrong by an order of magnitude. No prepTime, cookTime, keywords
+    or aggregateRating either: MAFF publishes none of them, and they are not
+    made up here.
+    """
     d = {
         "@context": "https://schema.org",
         "@type": "Recipe",
         "name": name,
         "url": url,
+        "image": image,
         "inLanguage": lang,
         "recipeIngredient": ingredients,
         "recipeInstructions": [{"@type": "HowToStep", "text": s} for s in steps],
     }
-    nut = nutrition_jsonld(nutrition) if nutrition else None
-    if nut:
-        d["nutrition"] = nut
+    if cuisine:
+        d["recipeCuisine"] = cuisine
     return d
 
 

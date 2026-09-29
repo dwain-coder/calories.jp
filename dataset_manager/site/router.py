@@ -216,12 +216,21 @@ def dish_page(request: Request, slug: str):
     name = queries.display_name(data["names"], data["item"], lang)
     ing_lines = [l.strip() for l in (data["dish"].get("recipe_ingredients") or "").splitlines() if l.strip()]
     step_lines = [l.strip() for l in (data["dish"].get("recipe_steps") or "").splitlines() if l.strip()]
-    jsonld = [seo.recipe_jsonld(
-        lang, name, url, ing_lines, step_lines,
-        data["computed"]["totals"] if data["show_nutrition"] else None,
-    )]
+    prefecture = data["item"]["category"]
+    # Recipe markup only where there is a photograph of this dish. Google treats
+    # a Recipe without `image` as invalid, and 989 of the 1,364 dishes have only
+    # a category stand-in, which does not show the dish and cannot stand in for it.
+    image = data["image"]
+    jsonld = []
+    if image and not (image.get("matched_on") or "").startswith("category:"):
+        jsonld.append(seo.recipe_jsonld(
+            lang, name, url, image["url"], ing_lines, step_lines,
+            cuisine=t(lang, "pref_title", pref=prefecture) if prefecture else None,
+        ))
+    cslug = category_slug(lang, prefecture) if prefecture else None
     crumbs = [(t(lang, "home"), seo.base_url(lang) + "/"),
-              (data["item"]["category"] or t(lang, "dishes"), None),
+              (prefecture or t(lang, "dishes"),
+               seo.base_url(lang) + f"/category/{quote(cslug)}" if cslug else None),
               (name, None)]
     jsonld.append(seo.breadcrumbs_jsonld(crumbs))
     return _render(request, "dish.html", lang, {
